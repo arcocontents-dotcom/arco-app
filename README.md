@@ -21,7 +21,7 @@ Conteúdo criado direto no Notion só aparece para o cliente quando o **Status**
 ## Publicar (Cloudflare)
 
 1. **Notion**: notion.so/profile/integrations → New integration (Internal) → copie o segredo. Na página "Arco app": ••• → Conexões → adicione a integração.
-2. **R2**: Cloudflare → R2 → criar bucket `arco-midia`.
+2. **R2**: Cloudflare → R2 → criar bucket `arco-app`.
    - Settings → Public access → habilite o **r2.dev** (ou um domínio próprio) e copie a URL pública.
    - Settings → CORS policy:
      ```json
