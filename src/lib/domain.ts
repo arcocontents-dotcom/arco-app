@@ -191,3 +191,57 @@ export function chunk(text: string, size = 1900): string[] {
   for (let i = 0; i < text.length; i += size) out.push(text.slice(i, i + size));
   return out.length ? out : [];
 }
+
+// ---------- dashboard de produção ----------
+
+export type ProdGroup = 'Reels' | 'Post' | 'Story';
+export const PROD_GROUPS: ProdGroup[] = ['Reels', 'Post', 'Story'];
+export const groupOf = (t: ContentType): ProdGroup => (t === 'Carrossel' ? 'Post' : t);
+
+export interface ProdItem {
+  type: ContentType;
+  status: GeneralStatus;
+  day: string | null;
+  time: string | null;
+  answeredAt: string | null;
+  hadAdjust: boolean;
+}
+
+export interface ProdNumbers {
+  planned: number;
+  posted: number;
+  late: number;
+  approvedClean: number;
+  approvedAdjusted: number;
+  waiting: number;
+}
+
+const zero = (): ProdNumbers => ({ planned: 0, posted: 0, late: 0, approvedClean: 0, approvedAdjusted: 0, waiting: 0 });
+
+/**
+ * Regras:
+ * - planejados: tudo que não é rascunho, com data no período
+ * - postados: status Postado
+ * - atrasados: data já passou (antes de hoje, ou hoje com horário vencido) e ainda não foi postado
+ * - aprovados sem ajuste / com ajuste: aprovados pelo cliente (status Aprovado, ou Postado depois de responder),
+ *   separados pelo histórico "Teve ajuste"
+ */
+export function production(items: ProdItem[], today: string, nowTime: string): Record<ProdGroup | 'Total', ProdNumbers> {
+  const out = { Reels: zero(), Post: zero(), Story: zero(), Total: zero() } as Record<ProdGroup | 'Total', ProdNumbers>;
+  for (const c of items) {
+    if (c.status === 'Rascunho' || !c.day) continue;
+    const g = groupOf(c.type);
+    const add = (k: keyof ProdNumbers) => {
+      out[g][k]++;
+      out.Total[k]++;
+    };
+    add('planned');
+    if (c.status === 'Postado') add('posted');
+    const past = c.day < today || (c.day === today && !!c.time && c.time < nowTime);
+    if (c.status !== 'Postado' && past) add('late');
+    const approved = c.status === 'Aprovado' || (c.status === 'Postado' && !!c.answeredAt);
+    if (approved) add(c.hadAdjust ? 'approvedAdjusted' : 'approvedClean');
+    if (c.status === 'Aguardando') add('waiting');
+  }
+  return out;
+}

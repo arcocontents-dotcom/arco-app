@@ -68,6 +68,8 @@ export interface ContentRecord {
   answeredBy: string | null;
   answeredAt: string | null;
   postedAt: string | null;
+  hadAdjust: boolean;
+  adjustRounds: number;
 }
 
 // ---------------- leitura de propriedades ----------------
@@ -168,7 +170,12 @@ function toContent(p: PageObjectResponse): ContentRecord {
     items,
     answeredBy: text(pr[K.answeredBy]) || null,
     answeredAt: date(pr[K.answeredAt]),
-    postedAt: date(pr[K.postedAt])
+    postedAt: date(pr[K.postedAt]),
+    hadAdjust: checkbox(pr[K.hadAdjust]),
+    adjustRounds: (() => {
+      const p = pr[K.adjustRounds];
+      return p && p.type === 'number' && typeof p.number === 'number' ? p.number : 0;
+    })()
   };
 }
 
@@ -293,7 +300,7 @@ export async function listClientsWithInstagram(): Promise<{ id: string; expires:
 const contentsTag = (clientId: string) => `contents:${normId(clientId)}:`;
 function invalidateContents(clientId: string) {
   invalidate(contentsTag(clientId));
-  invalidate('contents:all-open');
+  invalidate('contents:all-');
 }
 
 export function listContentsInRange(clientId: string, fromDay: string, toDay: string): Promise<ContentRecord[]> {
@@ -433,6 +440,11 @@ export async function saveDecisions(content: ContentRecord, decisions: Record<st
     properties[K.itemNote[k]] = rich(items[k]!.note);
   }
   properties[K.status] = { select: { name: generalStatus(content.type, items) } };
+  // Histórico para o dashboard: uma vez com ajuste, sempre "com ajuste".
+  if (keys.some((k) => decisions[k].status !== 'Aprovado')) {
+    properties[K.hadAdjust] = { checkbox: true };
+    properties[K.adjustRounds] = { number: (content.adjustRounds || 0) + 1 };
+  }
   properties[K.answeredBy] = { email };
   properties[K.answeredAt] = { date: { start: new Date().toISOString() } };
   await notion().pages.update({ page_id: content.id, properties: properties as never });
@@ -481,5 +493,21 @@ export function listAllOpenContents(): Promise<ContentRecord[]> {
       sorts: [{ property: K.date, direction: 'ascending' }]
     });
     return pages.filter((p) => !p.archived).map(toContent);
+  });
+}
+
+/** Conteúdos de todos os clientes num período (para o dashboard). */
+export function listAllContentsInRange(fromDay: string, toDay: string): Promise<ContentRecord[]> {
+  return memo(`contents:all-range:${fromDay}:${toDay}`, 30_000, async () => {
+    const pages = await queryAll(env.contentsDb, {
+      filter: {
+        and: [
+          { property: K.date, date: { on_or_after: addDays(fromDay, -1) } },
+          { property: K.date, date: { on_or_before: addDays(toDay, 1) } }
+        ]
+      },
+      sorts: [{ property: K.date, direction: 'ascending' }]
+    });
+    return pages.filter((p) => !p.archived).map(toContent).filter((c) => c.day && c.day >= fromDay && c.day <= toDay);
   });
 }

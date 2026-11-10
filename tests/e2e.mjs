@@ -270,10 +270,27 @@ try {
     await pd.goto(`${APP}/admin/gestao`);
     await pd.getByRole('heading', { name: 'Gestão' }).waitFor();
     await pd.getByRole('link', { name: /Studio Alfa/ }).first().waitFor();
-    await pd.getByText('Precisa de você').waitFor();
-    await pd.getByText('Depoimento de cliente').waitFor(); // reprovado pelo cliente
+    await pd.getByRole('link', { name: 'Clientes', exact: true }).waitFor();
+    await pd.getByText(/Todos os clientes/).waitFor();
     await pd.waitForTimeout(800);
     await shot(pd, '10-gestao');
+  });
+
+  await step('Dashboard de produção conta por formato e guarda o histórico de ajuste', async () => {
+    assert.equal(page(REELS).properties['Teve ajuste'].checkbox, true);
+    assert.equal(page(REELS).properties['Rodadas de ajuste'].number, 1);
+    assert.equal(page(CARR).properties['Teve ajuste'].checkbox, false);
+    await pd.goto(`${APP}/admin/gestao/dashboard?m=2026-11-01`);
+    await pd.getByRole('link', { name: 'Dashboard', exact: true }).waitFor();
+    await pd.getByText('Novembro 2026').waitFor();
+    const row = (label) => pd.locator('tr', { has: pd.getByText(label, { exact: true }) });
+    const cells = async (label) => (await row(label).locator('td').allInnerTexts()).slice(1).map((t) => t.trim());
+    assert.deepEqual(await cells('Planejados'), ['1', '2', '1', '4']); // Reels, Post/Carrossel, Story, Total
+    assert.deepEqual(await cells('Aprovados sem ajuste'), ['0', '1', '0', '1']);
+    await pd.getByText('Precisa de você').waitFor();
+    await pd.getByText('Depoimento de cliente').first().waitFor(); // reprovado pelo cliente
+    await pd.waitForTimeout(800);
+    await shot(pd, '10b-dashboard');
   });
 
   await step('admin também aprova, pede ajuste ou reprova', async () => {

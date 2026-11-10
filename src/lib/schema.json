@@ -38,6 +38,8 @@
     },
     "answeredBy": "Respondido por",
     "answeredAt": "Respondido em",
-    "postedAt": "Postado em"
+    "postedAt": "Postado em",
+    "hadAdjust": "Teve ajuste",
+    "adjustRounds": "Rodadas de ajuste"
   }
 }

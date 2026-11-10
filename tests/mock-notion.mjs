@@ -18,7 +18,7 @@ const TYPES = {
   [CONTENTS_DB]: {
     [K.title]: 'title', [K.client]: 'relation', [K.date]: 'date', [K.type]: 'select', [K.status]: 'select',
     [K.video]: 'url', [K.cover]: 'url', [K.arts]: 'files', [K.storyImage]: 'url', [K.caption]: 'rich_text',
-    [K.answeredBy]: 'email', [K.answeredAt]: 'date', [K.postedAt]: 'date',
+    [K.answeredBy]: 'email', [K.answeredAt]: 'date', [K.postedAt]: 'date', [K.hadAdjust]: 'checkbox', [K.adjustRounds]: 'number',
     ...Object.fromEntries(Object.values(K.itemStatus).map((n) => [n, 'select'])),
     ...Object.fromEntries(Object.values(K.itemNote).map((n) => [n, 'rich_text']))
   }
@@ -38,6 +38,7 @@ function toResponse(type, v) {
     case 'url': return { type, url: v.url ?? null };
     case 'email': return { type, email: v.email ?? null };
     case 'checkbox': return { type, checkbox: !!v.checkbox };
+    case 'number': return { type, number: typeof v.number === 'number' ? v.number : null };
     case 'relation': return { type, relation: (v.relation ?? []).map((r) => ({ id: fmtId(norm(r.id)) })), has_more: false };
     case 'files': return { type, files: v.files ?? [] };
     case 'date': {
@@ -53,7 +54,7 @@ function toResponse(type, v) {
 function emptyProps(db) {
   const out = {};
   for (const [name, type] of Object.entries(TYPES[db])) {
-    out[name] = toResponse(type, type === 'title' || type === 'rich_text' ? { [type]: [] } : type === 'relation' ? { relation: [] } : type === 'files' ? { files: [] } : type === 'checkbox' ? { checkbox: false } : type === 'date' ? { date: null } : {});
+    out[name] = toResponse(type, type === 'title' || type === 'rich_text' ? { [type]: [] } : type === 'relation' ? { relation: [] } : type === 'files' ? { files: [] } : type === 'checkbox' ? { checkbox: false } : type === 'number' ? { number: null } : type === 'date' ? { date: null } : {});
   }
   return out;
 }

@@ -1,7 +1,7 @@
 import { requireAdmin } from '@/lib/access';
 import { listAllOpenContents, listClients, sameId } from '@/lib/notion';
-import { dayLabel } from '@/lib/domain';
 import AdminShell from '@/components/AdminShell';
+import GestaoTabs from '@/components/GestaoTabs';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,16 +11,6 @@ export default async function Gestao() {
   const active = all.filter((c) => !c.cancelled);
   const removed = all.filter((c) => c.cancelled);
   const count = (id: string, st: string) => open.filter((x) => sameId(x.clientId, id) && x.status === st).length;
-  const totals = {
-    aguardando: open.filter((x) => x.status === 'Aguardando').length,
-    ajustes: open.filter((x) => x.status === 'Ajustes').length,
-    reprovados: open.filter((x) => x.status === 'Reprovado').length,
-    semAcesso: active.filter((c) => !c.approvers.length && !c.viewers.length).length
-  };
-  const attention = open
-    .filter((x) => (x.status === 'Ajustes' || x.status === 'Reprovado') && active.some((c) => sameId(c.id, x.clientId)))
-    .slice(0, 30);
-  const nameOf = (id: string | null) => all.find((c) => sameId(c.id, id))?.name ?? '';
 
   return (
     <AdminShell section="gestao">
@@ -34,35 +24,10 @@ export default async function Gestao() {
         </div>
       </div>
 
-      <div className="tiles rise" style={{ ['--d' as string]: '150ms' }}>
-        <div className="tile-stat"><span className="label">Clientes ativos</span><strong>{active.length}</strong></div>
-        <div className="tile-stat"><span className="label">Aguardando cliente</span><strong className="s-Aguardando">{totals.aguardando}</strong></div>
-        <div className="tile-stat"><span className="label">Ajustes pedidos</span><strong className="s-Ajustes">{totals.ajustes}</strong></div>
-        <div className="tile-stat"><span className="label">Reprovados</span><strong className="s-Reprovado">{totals.reprovados}</strong></div>
-        <div className="tile-stat"><span className="label">Clientes sem acesso liberado</span><strong>{totals.semAcesso}</strong></div>
-      </div>
-
-      {attention.length > 0 && (
-        <section className="panel rise" style={{ ['--d' as string]: '200ms' }}>
-          <h2 className="label">Precisa de você · ajustes e reprovados</h2>
-          <ul className="people">
-            {attention.map((x) => (
-              <li key={x.id}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600 }}>{x.title}</div>
-                  <span className="label">{nameOf(x.clientId)} · {x.type} · {x.day ? dayLabel(x.day) : 'sem data'}</span>
-                </div>
-                <span className={`status s-${x.status}`}>{x.status}</span>
-                <a className="btn small outline" href={`/c/${x.clientId}/${x.id}`}>Ver</a>
-                <a className="btn small" href={`/admin/conteudo/${x.id}`}>Corrigir</a>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <GestaoTabs tab="clientes" />
 
       <section className="rise" style={{ ['--d' as string]: '240ms' }}>
-        <h2 className="label" style={{ marginBottom: 10 }}>Clientes</h2>
+        <h2 className="label" style={{ marginBottom: 10 }}>Todos os clientes · {active.length}</h2>
         <div className="cal-wrap">
           <table className="gtable">
             <thead>
