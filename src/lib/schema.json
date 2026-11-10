@@ -1,0 +1,41 @@
+{
+  "clients": {
+    "name": "Nome",
+    "approvers": "E-mails que aprovam",
+    "viewers": "E-mails que só visualizam",
+    "instagram": "Instagram",
+    "igConnected": "IG conectado",
+    "igUserId": "IG user id",
+    "igToken": "IG token (criptografado)",
+    "igTokenExpires": "IG token expira"
+  },
+  "contents": {
+    "title": "Título",
+    "client": "Cliente",
+    "date": "Data",
+    "type": "Tipo",
+    "status": "Status",
+    "video": "Vídeo",
+    "cover": "Capa",
+    "arts": "Artes",
+    "storyImage": "Imagem do story",
+    "caption": "Legenda",
+    "itemStatus": {
+      "video": "Status · Vídeo",
+      "capa": "Status · Capa",
+      "legenda": "Status · Legenda",
+      "arte": "Status · Arte",
+      "story": "Status · Story"
+    },
+    "itemNote": {
+      "video": "Ajuste · Vídeo",
+      "capa": "Ajuste · Capa",
+      "legenda": "Ajuste · Legenda",
+      "arte": "Ajuste · Arte",
+      "story": "Ajuste · Story"
+    },
+    "answeredBy": "Respondido por",
+    "answeredAt": "Respondido em",
+    "postedAt": "Postado em"
+  }
+}

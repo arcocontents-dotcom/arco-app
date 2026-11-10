@@ -1,0 +1,6 @@
+Gotham é uma fonte paga (Hoefler&Co / Monotype). Para usar no app é preciso a licença "web".
+Com os arquivos em mãos, coloque aqui:
+  Gotham-Book.woff2   (peso 400)
+  Gotham-Medium.woff2 (peso 500)
+  Gotham-Bold.woff2   (peso 700)
+e descomente a linha de import em src/app/layout.tsx. Até lá o app usa Montserrat, a alternativa gratuita mais parecida.
