@@ -356,6 +356,10 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .dash-filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
 .dash-filters .select { width: auto; min-width: 190px; }
 .dash-total { background: var(--paper); padding: clamp(32px, 6vw, 64px) 20px; display: flex; flex-direction: column; align-items: center; gap: 28px; text-align: center; }
+.seg { display: inline-flex; padding: 3px; background: var(--bg); gap: 2px; flex-wrap: wrap; justify-content: center; }
+.seg a { padding: 10px 18px; font-size: 10px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); text-decoration: none; transition: background 0.2s ease, color 0.2s ease; }
+.seg a:hover { color: var(--ink); }
+.seg a[aria-current='page'] { background: var(--ink); color: #fff; }
 .dash-nums { display: flex; gap: clamp(28px, 8vw, 80px); }
 .dash-nums div { display: flex; flex-direction: column; gap: 8px; align-items: center; }
 .dash-nums strong { font-family: var(--display); font-size: clamp(32px, 5vw, 48px); font-weight: 600; line-height: 1; }

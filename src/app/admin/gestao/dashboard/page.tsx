@@ -33,6 +33,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const month = `${MONTHS[monthIdx(first)]} ${yearNum(first)}`;
   const clientName = client?.name ?? 'Todos os clientes';
   const q = (m: string) => `/admin/gestao/dashboard?m=${m}${client ? `&c=${client.id}` : ''}${type !== 'Total' ? `&t=${type}` : ''}`;
+  const tq = (g: ProdGroup | 'Total') => `/admin/gestao/dashboard?m=${first}${client ? `&c=${client.id}` : ''}${g !== 'Total' ? `&t=${g}` : ''}`;
   const fileName = `producao-${slug(month)}${client ? `-${slug(client.name)}` : ''}${type !== 'Total' ? `-${slug(type)}` : ''}.pdf`;
 
   return (
@@ -55,7 +56,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       </div>
 
       <section className="dash-total rise" style={{ ['--d' as string]: '140ms' }}>
-        <span className="label">{clientName} · {TYPE_LABEL[type]}</span>
+        <nav className="seg" aria-label="Categoria">
+          {(['Total', ...PROD_GROUPS] as const).map((g) => (
+            <a key={g} href={tq(g)} aria-current={g === type ? 'page' : undefined}>{g === 'Total' ? 'Todos' : g}</a>
+          ))}
+        </nav>
         <Ring posted={n.posted} late={n.late} planned={n.planned} size={240} />
         <div className="dash-nums">
           <div><strong className="s-Aprovado">{n.posted}</strong><span className="label">Postados</span></div>

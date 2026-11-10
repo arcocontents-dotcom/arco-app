@@ -287,7 +287,7 @@ try {
     assert.equal(await num('Planejados'), '4');
     await pd.getByRole('img', { name: '0% postado' }).waitFor();
     assert.equal(await pd.getByText('Aprovados sem ajuste').count(), 0);
-    await pd.getByLabel('Formato', { exact: true }).selectOption('Post');
+    await pd.getByRole('navigation', { name: 'Categoria' }).getByRole('link', { name: 'Post', exact: true }).click();
     await pd.waitForURL(/t=Post/);
     assert.equal(await num('Planejados'), '2');
     await pd.getByLabel('Cliente', { exact: true }).selectOption({ label: 'Beta Ltda' });

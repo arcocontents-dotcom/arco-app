@@ -17,12 +17,7 @@ export default function DashFilters({ month, client, type, clients }: {
         <option value="">Todos os clientes</option>
         {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
       </select>
-      <select name="t" className="select" aria-label="Formato" defaultValue={type} onChange={go}>
-        <option value="">Todos os formatos</option>
-        <option value="Reels">Reels</option>
-        <option value="Post">Post e carrossel</option>
-        <option value="Story">Story</option>
-      </select>
+      {type && <input type="hidden" name="t" value={type} />}
       <noscript><button className="btn small" type="submit">Ver</button></noscript>
     </form>
   );
