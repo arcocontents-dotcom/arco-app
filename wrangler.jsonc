@@ -5,5 +5,17 @@
   "compatibility_date": "2026-09-01",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  // Mantém as variáveis cadastradas no painel da Cloudflare a cada nova publicação.
+  "keep_vars": true,
+  // Configurações que não são segredo. Os segredos ficam só no painel da Cloudflare.
+  "vars": {
+    "APP_URL": "https://arco-app.arcocontents.workers.dev",
+    "ADMIN_EMAIL": "arcocontents@gmail.com",
+    "APP_TIME_ZONE": "America/Cuiaba",
+    "NOTION_CLIENTS_DB": "ceac9ee1dca648358c77f10c8ea6b4b3",
+    "NOTION_CONTENTS_DB": "b00d76b662fb467893761f9a289d168d",
+    "CF_ACCOUNT_ID": "a8a9667e570316853be4a82acb0a34a9",
+    "R2_BUCKET": "arco-app"
+  }
 }
