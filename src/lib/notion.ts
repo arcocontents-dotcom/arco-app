@@ -191,11 +191,19 @@ const titleProp = (s: string) => ({ title: [{ type: 'text' as const, text: { con
 
 // ---------------- clientes ----------------
 
+async function fetchClients(): Promise<ClientRecord[]> {
+  const pages = await queryAll(env.clientsDb, { sorts: [{ property: C.name, direction: 'ascending' }] });
+  return pages.filter((p) => !p.archived).map(toClient);
+}
+
 export function listClients(): Promise<ClientRecord[]> {
-  return memo('clients', 15_000, async () => {
-    const pages = await queryAll(env.clientsDb, { sorts: [{ property: C.name, direction: 'ascending' }] });
-    return pages.filter((p) => !p.archived).map(toClient);
-  });
+  return memo('clients', 15_000, fetchClients);
+}
+
+/** Sem cache: o cache fica em memória de cada servidor, então um acesso recém-liberado pode não estar nele. */
+export async function listClientsFresh(): Promise<ClientRecord[]> {
+  invalidate('clients');
+  return listClients();
 }
 
 export async function getClient(id: string): Promise<ClientRecord | null> {

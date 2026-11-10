@@ -7,6 +7,7 @@ import { env } from '@/lib/env';
 import {
   archiveContent,
   listClients,
+  listClientsFresh,
   sameId,
   createClient,
   createContent,
@@ -19,16 +20,57 @@ import {
 } from '@/lib/notion';
 import { CONTENT_TYPES, EMAIL_RE, normalizeEmail, parseDay, type ContentType, type GeneralStatus } from '@/lib/domain';
 import { isOwnMediaUrl } from '@/lib/media';
+import { signLoginToken } from '@/lib/session';
 
 // ---------- clientes ----------
 
-export async function createClientAction(form: FormData) {
+export type CreateClientResult = { ok: true; id: string; link: string | null } | { ok: false; error: string };
+
+/** Cria o cliente já com e-mail liberado e logo (opcionais) e devolve o link de acesso. */
+export async function createClientFullAction(input: {
+  name: string;
+  instagram: string;
+  email: string;
+  role: 'approver' | 'viewer';
+  logoUrl: string | null;
+}): Promise<CreateClientResult> {
   await requireAdmin();
-  const name = String(form.get('name') ?? '').trim().slice(0, 120);
-  const instagram = String(form.get('instagram') ?? '').trim().replace(/^@/, '').slice(0, 60);
-  if (!name) redirect('/admin/clientes/novo?e=nome');
-  const id = await createClient({ name, instagram });
-  redirect(`/admin/clientes/${id}?ok=criado`);
+  const name = String(input.name ?? '').trim().slice(0, 120);
+  const instagram = String(input.instagram ?? '').trim().replace(/^@/, '').slice(0, 60);
+  const email = normalizeEmail(String(input.email ?? ''));
+  if (!name) return { ok: false, error: 'Dê um nome ao cliente.' };
+  if (email) {
+    if (!EMAIL_RE.test(email)) return { ok: false, error: 'Digite um e-mail válido.' };
+    if (email === env.adminEmail) return { ok: false, error: 'Esse é o e-mail do administrador.' };
+    const owner = (await listClientsFresh()).find((x) => x.approvers.includes(email) || x.viewers.includes(email));
+    if (owner) return { ok: false, error: `Esse e-mail já está liberado no cliente ${owner.name}. Cada e-mail só pode acessar um cliente.` };
+  }
+  if (input.logoUrl && !isOwnMediaUrl(input.logoUrl)) return { ok: false, error: 'Logo inválida.' };
+  try {
+    const id = await createClient({ name, instagram });
+    if (email || input.logoUrl) {
+      await updateClient(id, {
+        ...(email ? (input.role === 'viewer' ? { approvers: [], viewers: [email] } : { approvers: [email], viewers: [] }) : {}),
+        ...(input.logoUrl ? { logoUrl: input.logoUrl } : {})
+      });
+    }
+    const link = email ? `${env.appUrl}/entrar/confirmar?t=${encodeURIComponent(await signLoginToken(email, '24h'))}` : null;
+    return { ok: true, id, link };
+  } catch (e) {
+    console.error('[cliente]', e);
+    return { ok: false, error: 'Não foi possível salvar no Notion. Tente de novo.' };
+  }
+}
+
+export type LinkResult = { ok: true; link: string } | { ok: false; error: string };
+
+/** Gera um link de acesso (vale 24h) para mandar ao cliente por WhatsApp. */
+export async function accessLinkAction(clientId: string, email: string): Promise<LinkResult> {
+  await requireAdmin();
+  const e = normalizeEmail(email);
+  const c = await getClientFresh(clientId);
+  if (!c || !(c.approvers.includes(e) || c.viewers.includes(e))) return { ok: false, error: 'Esse e-mail não está liberado neste cliente.' };
+  return { ok: true, link: `${env.appUrl}/entrar/confirmar?t=${encodeURIComponent(await signLoginToken(e, '24h'))}` };
 }
 
 export async function updateClientAction(form: FormData) {
@@ -52,7 +94,7 @@ export async function addAccessAction(form: FormData) {
   const c = await getClientFresh(id);
   if (!c) redirect('/admin');
   // Cada e-mail de cliente pertence a um único cliente: assim ninguém vê a página de outro.
-  const owner = (await listClients()).find((x) => !sameId(x.id, id) && (x.approvers.includes(email) || x.viewers.includes(email)));
+  const owner = (await listClientsFresh()).find((x) => !sameId(x.id, id) && (x.approvers.includes(email) || x.viewers.includes(email)));
   if (owner) redirect(`/admin/clientes/${id}?e=outro&quem=${encodeURIComponent(owner.name)}`);
   const approvers = c.approvers.filter((e) => e !== email);
   const viewers = c.viewers.filter((e) => e !== email);

@@ -296,6 +296,33 @@ try {
     assert.doesNotMatch(textOf(B, 'E-mails que aprovam'), /a@x\.com/);
   });
 
+  await step('novo cliente já com e-mail liberado gera o link de acesso que funciona', async () => {
+    await pd.goto(`${APP}/admin/clientes/novo`);
+    await pd.fill('#name', 'Gama Studio');
+    await pd.fill('#email', 'gama@x.com');
+    await pd.click('button:has-text("Criar cliente")');
+    await pd.getByText('Cliente criado').waitFor();
+    const link = await pd.locator('input[aria-label="Link de acesso"]').inputValue();
+    assert.match(link, /\/entrar\/confirmar\?t=/);
+    const gama = [...store.values()].find((p) => p.properties.Nome?.title?.[0]?.plain_text === 'Gama Studio');
+    assert.equal(gama.properties['E-mails que aprovam'].rich_text[0].plain_text, 'gama@x.com');
+    const ctx = await browser.newContext();
+    const pg = await ctx.newPage();
+    await pg.goto(link);
+    await pg.click('button:has-text("Entrar")');
+    await pg.waitForURL(/\/c\//, { timeout: 10000 }).catch(async () => {
+      throw new Error(`parou em ${pg.url()} :: ${(await pg.locator('body').innerText()).slice(0, 150)}`);
+    });
+    await pg.getByText('Gama Studio').first().waitFor();
+    await ctx.close();
+  });
+
+  await step('gerar link de acesso para e-mail já liberado', async () => {
+    await pd.goto(`${APP}/admin/clientes/${A}`);
+    await pd.getByRole('button', { name: 'Gerar link de acesso' }).first().click();
+    await pd.locator('input[aria-label="Link de acesso"]').waitFor();
+  });
+
   await step('logo do cliente aparece no feed', async () => {
     page(A).properties.Logo = { type: 'url', url: 'https://midia.test/logo-alfa.png' };
     await new Promise((r) => setTimeout(r, 16000)); // cache de 15s da lista de clientes

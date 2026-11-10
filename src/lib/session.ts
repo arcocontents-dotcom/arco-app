@@ -7,11 +7,11 @@ import { normalizeEmail } from './domain';
 const COOKIE = 'arco_session';
 const SESSION_DAYS = 30;
 
-export async function signLoginToken(email: string): Promise<string> {
+export async function signLoginToken(email: string, ttl = '20m'): Promise<string> {
   return new SignJWT({ email: normalizeEmail(email), p: 'login' })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime('20m')
+    .setExpirationTime(ttl)
     .sign(env.sessionSecret);
 }
 

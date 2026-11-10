@@ -2,7 +2,7 @@ import 'server-only';
 import { notFound, redirect } from 'next/navigation';
 import { env } from './env';
 import { sessionEmail } from './session';
-import { getClientFresh, listClients, sameId, type ClientRecord } from './notion';
+import { getClientFresh, listClients, listClientsFresh, sameId, type ClientRecord } from './notion';
 import { normalizeEmail } from './domain';
 
 export type Viewer =
@@ -17,10 +17,13 @@ export function isAdminEmail(email: string): boolean {
 export async function resolveViewer(email: string): Promise<Viewer | null> {
   const e = normalizeEmail(email);
   if (isAdminEmail(e)) return { email: e, role: 'admin' };
-  const clients = await listClients();
-  const mine = clients
-    .filter((c) => c.approvers.includes(e) || c.viewers.includes(e))
-    .map((c) => ({ id: c.id, name: c.name, canApprove: c.approvers.includes(e) }));
+  const pick = (clients: ClientRecord[]) =>
+    clients
+      .filter((c) => c.approvers.includes(e) || c.viewers.includes(e))
+      .map((c) => ({ id: c.id, name: c.name, canApprove: c.approvers.includes(e) }));
+  let mine = pick(await listClients());
+  // Acesso liberado há instantes pode ainda não estar no cache: confere direto no Notion.
+  if (!mine.length) mine = pick(await listClientsFresh());
   if (!mine.length) return null;
   return { email: e, role: 'client', clients: mine };
 }

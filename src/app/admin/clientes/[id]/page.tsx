@@ -6,6 +6,7 @@ import { instagramConfigured } from '@/lib/instagram';
 import AdminShell from '@/components/AdminShell';
 import { XIcon } from '@/components/icons';
 import LogoUploader from '@/components/LogoUploader';
+import AccessLink from '@/components/AccessLink';
 import { addAccessAction, disconnectInstagramAction, removeAccessAction, updateClientAction } from '../../actions';
 
 const OK: Record<string, string> = {
@@ -64,6 +65,11 @@ export default async function ClienteAcessos({
         </p>
       )}
 
+      <section className="panel rise" style={{ ['--d' as string]: '100ms' }}>
+        <h2 className="label">Logo do cliente</h2>
+        <LogoUploader clientId={c.id} logoUrl={c.logoUrl} />
+      </section>
+
       <div className="form-grid" style={{ alignItems: 'start' }}>
         <section className="panel rise" style={{ ['--d' as string]: '120ms' }}>
           <h2 className="label">Quem acessa a página deste cliente</h2>
@@ -77,11 +83,12 @@ export default async function ClienteAcessos({
               </div>
             </li>
             {people.map((p) => (
-              <li key={p.email}>
+              <li key={p.email} style={{ flexWrap: 'wrap' }}>
                 <span className="initial">{p.email[0]}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.email}</div>
                   <span className="label">{p.role}</span>
+                  <AccessLink clientId={c.id} email={p.email} />
                 </div>
                 <form action={removeAccessAction}>
                   <input type="hidden" name="id" value={c.id} />
@@ -111,10 +118,6 @@ export default async function ClienteAcessos({
         </section>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-          <section className="panel rise" style={{ ['--d' as string]: '150ms' }}>
-            <h2 className="label">Logo do cliente</h2>
-            <LogoUploader clientId={c.id} logoUrl={c.logoUrl} />
-          </section>
           <section className="panel rise" style={{ ['--d' as string]: '180ms' }}>
             <h2 className="label">Instagram</h2>
             {c.igConnected ? (
