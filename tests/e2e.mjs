@@ -288,6 +288,21 @@ try {
     assert.doesNotMatch(textOf(A, 'E-mails que aprovam'), /novo@x\.com/);
   });
 
+  await step('o mesmo e-mail não pode ser liberado em dois clientes', async () => {
+    await pd.goto(`${APP}/admin/clientes/${B}`);
+    await pd.fill('#email', 'a@x.com');
+    await pd.click('button:has-text("Liberar acesso")');
+    await pd.getByText('já está liberado no cliente Studio Alfa').waitFor();
+    assert.doesNotMatch(textOf(B, 'E-mails que aprovam'), /a@x\.com/);
+  });
+
+  await step('logo do cliente aparece no feed', async () => {
+    page(A).properties.Logo = { type: 'url', url: 'https://midia.test/logo-alfa.png' };
+    await new Promise((r) => setTimeout(r, 16000)); // cache de 15s da lista de clientes
+    await pd.goto(`${APP}/c/${A}?v=feed`);
+    await pd.locator('img[alt="Logo de Studio Alfa"]').waitFor();
+  });
+
   await step('admin cria conteúdo (rascunho) pelo app e ele vai para o Notion', async () => {
     await pd.goto(`${APP}/admin/conteudo/novo?c=${A}&d=2026-11-20`);
     await pd.fill('#ti', 'Lançamento de dezembro');

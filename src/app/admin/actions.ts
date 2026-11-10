@@ -3,8 +3,11 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { requireAdmin } from '@/lib/access';
+import { env } from '@/lib/env';
 import {
   archiveContent,
+  listClients,
+  sameId,
   createClient,
   createContent,
   getClientFresh,
@@ -45,8 +48,12 @@ export async function addAccessAction(form: FormData) {
   const email = normalizeEmail(String(form.get('email') ?? ''));
   const role = form.get('role') === 'viewer' ? 'viewer' : 'approver';
   if (!EMAIL_RE.test(email)) redirect(`/admin/clientes/${id}?e=email`);
+  if (email === env.adminEmail) redirect(`/admin/clientes/${id}?e=admin`);
   const c = await getClientFresh(id);
   if (!c) redirect('/admin');
+  // Cada e-mail de cliente pertence a um único cliente: assim ninguém vê a página de outro.
+  const owner = (await listClients()).find((x) => !sameId(x.id, id) && (x.approvers.includes(email) || x.viewers.includes(email)));
+  if (owner) redirect(`/admin/clientes/${id}?e=outro&quem=${encodeURIComponent(owner.name)}`);
   const approvers = c.approvers.filter((e) => e !== email);
   const viewers = c.viewers.filter((e) => e !== email);
   (role === 'approver' ? approvers : viewers).push(email);
@@ -145,5 +152,14 @@ export async function deleteContentAction(id: string): Promise<SaveResult> {
   const c = await getContentFresh(id);
   if (!c) return { ok: false, error: 'Conteúdo não encontrado.' };
   await archiveContent(id, c.clientId);
+  return { ok: true, id };
+}
+
+export async function setClientLogoAction(id: string, logoUrl: string | null): Promise<SaveResult> {
+  await requireAdmin();
+  if (logoUrl && !isOwnMediaUrl(logoUrl)) return { ok: false, error: 'Imagem inválida.' };
+  const c = await getClientFresh(id);
+  if (!c) return { ok: false, error: 'Cliente não encontrado.' };
+  await updateClient(id, { logoUrl });
   return { ok: true, id };
 }

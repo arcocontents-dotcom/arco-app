@@ -7,7 +7,8 @@
     "igConnected": "IG conectado",
     "igUserId": "IG user id",
     "igToken": "IG token (criptografado)",
-    "igTokenExpires": "IG token expira"
+    "igTokenExpires": "IG token expira",
+    "logo": "Logo"
   },
   "contents": {
     "title": "Título",

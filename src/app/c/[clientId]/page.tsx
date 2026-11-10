@@ -49,7 +49,7 @@ export default async function ClientPage({
       <ClientTop name={client.name} isAdmin={viewer.role === 'admin'} />
       {view === 'semana' && <Week {...{ client: client.id, day, today, href, waiting, canApprove, base }} />}
       {view === 'mes' && <Month {...{ client: client.id, day, today, href, base }} />}
-      {view === 'feed' && <Feed {...{ client: client.id, href, base, open, igUser: client.instagram, igOn: client.igConnected }} />}
+      {view === 'feed' && <Feed {...{ client: client.id, href, base, open, igUser: client.instagram, igOn: client.igConnected, logo: client.logoUrl, name: client.name }} />}
     </main>
   );
 }
@@ -168,8 +168,11 @@ async function Month({
 }
 
 async function Feed({
-  client, href, base, open, igUser, igOn
-}: { client: string; href: (v: View, d?: string) => string; base: string; open: ContentRecord[]; igUser: string; igOn: boolean }) {
+  client, href, base, open, igUser, igOn, logo, name
+}: {
+  client: string; href: (v: View, d?: string) => string; base: string; open: ContentRecord[];
+  igUser: string; igOn: boolean; logo: string | null; name: string;
+}) {
   const scheduled = open
     .filter((c) => c.type !== 'Story')
     .sort((a, b) => (b.dateIso ?? '').localeCompare(a.dateIso ?? ''));
@@ -183,9 +186,17 @@ async function Feed({
       </div>
       <Tabs view="feed" href={href} day="" />
       <div className="profile rise" style={{ ['--d' as string]: '160ms' }}>
-        <div className="avatar"><span><img src="/icon-white.png" alt="" width={30} style={{ width: 30, height: 'auto' }} /></span></div>
+        <div className="avatar">
+          <span style={{ background: logo ? '#fff' : 'var(--ink)', overflow: 'hidden' }}>
+            {logo ? (
+              <img src={logo} alt={`Logo de ${name}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <img src="/icon-white.png" alt="" width={30} style={{ width: 30, height: 'auto' }} />
+            )}
+          </span>
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span style={{ fontWeight: 600 }}>{igUser ? `@${igUser}` : 'Perfil do Instagram'}</span>
+          <span style={{ fontWeight: 600 }}>{igUser ? `@${igUser}` : name}</span>
           {igOn ? (
             <span className="status s-Aprovado">Instagram conectado</span>
           ) : (

@@ -5,6 +5,7 @@ import { getClientFresh } from '@/lib/notion';
 import { instagramConfigured } from '@/lib/instagram';
 import AdminShell from '@/components/AdminShell';
 import { XIcon } from '@/components/icons';
+import LogoUploader from '@/components/LogoUploader';
 import { addAccessAction, disconnectInstagramAction, removeAccessAction, updateClientAction } from '../../actions';
 
 const OK: Record<string, string> = {
@@ -18,7 +19,8 @@ const OK: Record<string, string> = {
 const ERR: Record<string, string> = {
   email: 'Digite um e-mail válido.',
   nome: 'Dê um nome ao cliente.',
-  ig: 'Não foi possível conectar o Instagram. Confirme que a conta é Profissional e tente de novo.'
+  ig: 'Não foi possível conectar o Instagram. Confirme que a conta é Profissional e tente de novo.',
+  admin: 'Esse é o e-mail do administrador: ele já vê todos os clientes.'
 };
 
 export const dynamic = 'force-dynamic';
@@ -28,7 +30,7 @@ export default async function ClienteAcessos({
   searchParams
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ ok?: string; e?: string }>;
+  searchParams: Promise<{ ok?: string; e?: string; quem?: string }>;
 }) {
   await requireAdmin();
   const { id } = await params;
@@ -56,11 +58,16 @@ export default async function ClienteAcessos({
 
       {sp.ok && OK[sp.ok] && <p className="toast" role="status">{OK[sp.ok]}</p>}
       {sp.e && ERR[sp.e] && <p className="error" role="alert">{ERR[sp.e]}</p>}
+      {sp.e === 'outro' && (
+        <p className="error" role="alert">
+          Esse e-mail já está liberado no cliente {sp.quem ?? 'outro'}. Cada e-mail só pode acessar um cliente. Remova de lá antes, ou use outro e-mail.
+        </p>
+      )}
 
       <div className="form-grid" style={{ alignItems: 'start' }}>
         <section className="panel rise" style={{ ['--d' as string]: '120ms' }}>
           <h2 className="label">Quem acessa a página deste cliente</h2>
-          <p className="hint">Só os e-mails desta lista entram, e cada um vê apenas este cliente. Eles entram por {appLink}.</p>
+          <p className="hint">Só os e-mails desta lista entram, e cada um vê apenas este cliente. Um mesmo e-mail não pode ser liberado em dois clientes. Eles entram por {appLink}.</p>
           <ul className="people">
             <li>
               <span className="initial"><img src="/icon-white.png" alt="" style={{ width: 18, height: 'auto' }} /></span>
@@ -104,6 +111,10 @@ export default async function ClienteAcessos({
         </section>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+          <section className="panel rise" style={{ ['--d' as string]: '150ms' }}>
+            <h2 className="label">Logo do cliente</h2>
+            <LogoUploader clientId={c.id} logoUrl={c.logoUrl} />
+          </section>
           <section className="panel rise" style={{ ['--d' as string]: '180ms' }}>
             <h2 className="label">Instagram</h2>
             {c.igConnected ? (
