@@ -351,3 +351,31 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .gtable .who { display: flex; align-items: center; gap: 12px; }
 .gtable .who .mini-logo { width: 34px; height: 34px; background: var(--ink); }
 .pill { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; font-size: 10px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; border: 1px solid currentColor; }
+
+/* ---------- dashboard ---------- */
+.rings { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.ring-card { background: var(--paper); padding: 26px 20px 22px; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
+.ring-card .count { font-size: 14px; }
+.ring-card .count strong { font-weight: 600; }
+.ring-card .late { font-size: 12px; color: var(--muted); }
+.ring-card .late.on { color: var(--rej); font-weight: 600; }
+.ring-pct { font-family: var(--display); font-size: 26px; font-weight: 600; fill: var(--ink); }
+.pring circle { transition: stroke-dasharray 0.8s cubic-bezier(.2,.7,.2,1); }
+.client-rows { display: flex; flex-direction: column; }
+.client-rows > a { display: flex; align-items: center; gap: 14px; padding: 12px 4px; border-bottom: 1px solid var(--line); color: inherit; text-decoration: none; }
+.client-rows .grow { flex: 1; min-width: 0; font-weight: 600; }
+.client-rows .num { font-size: 13px; color: var(--muted); min-width: 64px; text-align: right; }
+.client-rows .num.on { color: var(--rej); font-weight: 600; }
+.print-only { display: none; }
+@media print {
+  @page { size: A4; margin: 14mm; }
+  body { background: #fff !important; }
+  .admin aside, .no-print, .tabs { display: none !important; }
+  .admin main { padding: 0 !important; gap: 18px !important; }
+  .print-only { display: block; }
+  .rings { grid-template-columns: repeat(4, 1fr) !important; gap: 8px !important; }
+  .ring-card { padding: 18px 10px !important; }
+  .rise { animation: none !important; opacity: 1 !important; transform: none !important; }
+  .ring-card { background: #f4f3f1 !important; break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .pring circle { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

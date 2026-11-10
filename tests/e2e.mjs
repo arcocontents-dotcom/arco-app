@@ -282,13 +282,17 @@ try {
     assert.equal(page(CARR).properties['Teve ajuste'].checkbox, false);
     await pd.goto(`${APP}/admin/gestao/dashboard?m=2026-11-01`);
     await pd.getByRole('link', { name: 'Dashboard', exact: true }).waitFor();
-    await pd.getByText('Novembro 2026').waitFor();
-    const row = (label) => pd.locator('tr', { has: pd.getByText(label, { exact: true }) });
-    const cells = async (label) => (await row(label).locator('td').allInnerTexts()).slice(1).map((t) => t.trim());
-    assert.deepEqual(await cells('Planejados'), ['1', '2', '1', '4']); // Reels, Post/Carrossel, Story, Total
-    assert.deepEqual(await cells('Aprovados sem ajuste'), ['0', '1', '0', '1']);
-    await pd.getByText('Precisa de você').waitFor();
-    await pd.getByText('Depoimento de cliente').first().waitFor(); // reprovado pelo cliente
+    await pd.getByRole('heading', { name: 'Novembro 2026', level: 2 }).waitFor();
+    const card = (t) => pd.locator('.ring-card', { has: pd.getByText(t, { exact: true }) });
+    await card('Total').getByText('de 4 postados').waitFor();
+    await card('Post').getByText('de 2 postados').waitFor();
+    await card('Reels').getByRole('img', { name: '0% postado' }).waitFor();
+    assert.equal(await pd.getByText('Aprovados sem ajuste').count(), 0);
+    await pd.getByRole('button', { name: 'Exportar PDF' }).waitFor();
+    await pd.emulateMedia({ media: 'print' });
+    assert.equal(await pd.locator('aside').isVisible(), false);
+    if (SHOTS) await pd.pdf({ path: `${SHOTS}/10c-dashboard.pdf`, format: 'A4', printBackground: true });
+    await pd.emulateMedia({ media: 'screen' });
     await pd.waitForTimeout(800);
     await shot(pd, '10b-dashboard');
   });
