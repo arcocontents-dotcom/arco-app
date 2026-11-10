@@ -85,7 +85,7 @@ export async function accessLinkAction(clientId: string, email: string, kind: Li
   const e = normalizeEmail(email);
   const c = await getClientFresh(clientId);
   if (!c || !(c.approvers.includes(e) || c.viewers.includes(e))) return { ok: false, error: 'Esse e-mail não está liberado neste cliente.' };
-  if (c.cancelled) return { ok: false, error: 'Este cliente está removido do app. Reative antes.' };
+  if (c.cancelled) return { ok: false, error: 'Este cliente está removido. Reative antes.' };
   return { ok: true, link: await buildLink(e, c.id, kind === 'semana' ? 'semana' : 'mes') };
 }
 

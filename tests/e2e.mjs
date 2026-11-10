@@ -345,7 +345,7 @@ try {
   await step('cliente removido some do painel e perde o acesso', async () => {
     const gama = [...store.values()].find((p) => p.properties.Nome?.title?.[0]?.plain_text === 'Gama Studio');
     await pd.goto(`${APP}/admin/clientes/${gama.id}`);
-    await pd.getByRole('button', { name: 'Remover do app' }).click();
+    await pd.getByRole('button', { name: 'Remover', exact: true }).click();
     await pd.getByRole('button', { name: 'Sim, remover' }).click();
     await pd.waitForURL(/\/admin$/);
     assert.equal(page(gama.id).properties.Cancelado.checkbox, true);

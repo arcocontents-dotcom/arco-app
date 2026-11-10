@@ -22,7 +22,7 @@ export default function CancelClient({ clientId, name, cancelled }: { clientId: 
   if (cancelled) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <span className="status s-Reprovado">Removido do app</span>
+        <span className="status s-Reprovado">Removido</span>
         <p className="hint">Ninguém deste cliente consegue entrar. Os conteúdos continuam guardados no Notion.</p>
         <button type="button" className="btn small outline" style={{ alignSelf: 'flex-start' }} disabled={pending} onClick={() => run(false)}>
           Reativar cliente
@@ -36,11 +36,11 @@ export default function CancelClient({ clientId, name, cancelled }: { clientId: 
       <p className="hint">Para clientes que cancelaram: some do painel e todos os e-mails dele perdem o acesso na hora. Nada é apagado do Notion, e dá para reativar depois.</p>
       {!confirm ? (
         <button type="button" className="btn small outline" style={{ alignSelf: 'flex-start' }} onClick={() => setConfirm(true)}>
-          Remover do app
+          Remover
         </button>
       ) : (
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span className="hint">Remover {name} do app?</span>
+          <span className="hint">Remover {name}?</span>
           <button type="button" className="btn small" disabled={pending} onClick={() => run(true)}>{pending ? 'Removendo…' : 'Sim, remover'}</button>
           <button type="button" className="link-btn" onClick={() => setConfirm(false)}>Cancelar</button>
         </div>

@@ -139,11 +139,6 @@ export default function ContentForm({ clients, initial, videoThumb }: ContentFor
                   <span className="label" style={{ position: 'absolute', top: 8, left: 8, color: '#fff' }}>Vídeo enviado</span>
                   <div className="tools"><button type="button" onClick={() => set('videoUrl', '')} aria-label="Remover vídeo"><XIcon size={14} /></button></div>
                 </div>
-              ) : null}
-              {f.videoUrl ? (
-                <button type="button" className="btn small outline" style={{ alignSelf: 'flex-end' }} onClick={() => set('videoUrl', '')}>
-                  Trocar vídeo
-                </button>
               ) : (
                 <Picker accept="video/mp4,video/quicktime" tall label="Enviar vídeo" onFile={async ([file]) => {
                   const u = await up.run((p, st) => uploadVideo(file, p, st));
