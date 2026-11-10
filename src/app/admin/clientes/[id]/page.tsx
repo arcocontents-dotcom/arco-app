@@ -124,7 +124,7 @@ export default async function ClienteAcessos({
             {c.igConnected ? (
               <>
                 <span className="status s-Aprovado">Conectado{c.instagram ? ` · @${c.instagram}` : ''}</span>
-                <p className="hint">Os posts publicados aparecem sozinhos na aba Feed, atualizados a cada 15 minutos.</p>
+                <p className="hint">Os posts publicados desde 01/01/2026 aparecem sozinhos na aba Feed e se atualizam a cada 10 minutos.</p>
                 <form action={disconnectInstagramAction}>
                   <input type="hidden" name="id" value={c.id} />
                   <button className="btn outline small" type="submit">Desconectar</button>
@@ -136,7 +136,7 @@ export default async function ClienteAcessos({
                 <a className="btn" href={`/api/instagram/connect?c=${c.id}`}>Conectar Instagram</a>
               </>
             ) : (
-              <p className="hint">A conexão com o Instagram fica disponível quando o app da Meta estiver configurado.</p>
+              <p className="hint">A conexão com o Instagram fica disponível quando o app da Meta estiver configurado. Enquanto isso, o Feed mostra o que foi marcado como postado no app desde 01/01/2026.</p>
             )}
           </section>
 

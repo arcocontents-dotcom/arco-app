@@ -91,39 +91,52 @@ export interface IgMedia {
   timestamp: string;
 }
 
-/** Posts publicados no perfil. Atualiza sozinho a cada 15 minutos. */
+/** O feed mostra os posts publicados a partir desta data. */
+export const FEED_SINCE = '2026-01-01';
+
+type RawMedia = { id: string; media_type: IgMedia['type']; media_url?: string; thumbnail_url?: string; permalink: string; timestamp: string };
+
+/** Posts publicados no perfil desde FEED_SINCE. Atualiza sozinho a cada 10 minutos. */
 export function getPublishedMedia(clientId: string): Promise<IgMedia[]> {
-  return memo(`ig:${clientId.replace(/-/g, '').toLowerCase()}:media`, 900_000, async () => {
-      if (!instagramConfigured()) return [];
-      let s = await getClientInstagramSecrets(clientId).catch(() => null);
-      if (!s) return [];
-      // Renova o token sozinho quando faltar menos de 20 dias (dispensa agendador).
-      if (s.expires && new Date(s.expires).getTime() - Date.now() < 20 * 24 * 3600 * 1000) {
-        if (await refreshToken(clientId).catch(() => false)) s = (await getClientInstagramSecrets(clientId).catch(() => null)) ?? s;
-      }
-      const res = await fetch(
-        `https://graph.instagram.com/me/media?${new URLSearchParams({
-          fields: 'id,media_type,media_url,thumbnail_url,permalink,timestamp',
-          limit: '30',
-          access_token: decrypt(s.token)
-        })}`,
-        { cache: 'no-store' }
-      );
+  return memo(`ig:${clientId.replace(/-/g, '').toLowerCase()}:media`, 600_000, async () => {
+    if (!instagramConfigured()) return [];
+    let s = await getClientInstagramSecrets(clientId).catch(() => null);
+    if (!s) return [];
+    // Renova o token sozinho quando faltar menos de 20 dias (dispensa agendador).
+    if (s.expires && new Date(s.expires).getTime() - Date.now() < 20 * 24 * 3600 * 1000) {
+      if (await refreshToken(clientId).catch(() => false)) s = (await getClientInstagramSecrets(clientId).catch(() => null)) ?? s;
+    }
+    const since = Math.floor(new Date(`${FEED_SINCE}T00:00:00-04:00`).getTime() / 1000);
+    let url: string | null = `https://graph.instagram.com/me/media?${new URLSearchParams({
+      fields: 'id,media_type,media_url,thumbnail_url,permalink,timestamp',
+      limit: '100',
+      since: String(since),
+      access_token: decrypt(s.token)
+    })}`;
+    const out: RawMedia[] = [];
+    // Segue as páginas até chegar em FEED_SINCE (no máximo 1.000 posts).
+    for (let page = 0; url && page < 10; page++) {
+      const res: Response = await fetch(url, { cache: 'no-store' });
       if (!res.ok) {
         console.error('[instagram] falha ao ler mídia', res.status);
-        return [];
+        if (!out.length) return [];
+        break;
       }
-      const j = (await res.json()) as {
-        data?: { id: string; media_type: IgMedia['type']; media_url?: string; thumbnail_url?: string; permalink: string; timestamp: string }[];
-      };
-      return (j.data ?? [])
-        .map((m) => ({
-          id: m.id,
-          type: m.media_type,
-          thumb: (m.media_type === 'VIDEO' ? m.thumbnail_url : m.media_url) ?? m.thumbnail_url ?? '',
-          permalink: m.permalink,
-          timestamp: m.timestamp
-        }))
-        .filter((m) => m.thumb);
+      const j = (await res.json()) as { data?: RawMedia[]; paging?: { next?: string } };
+      const data = j.data ?? [];
+      out.push(...data);
+      const oldest = data[data.length - 1]?.timestamp;
+      url = j.paging?.next && oldest && new Date(oldest).getTime() / 1000 >= since ? j.paging.next : null;
+    }
+    return out
+      .filter((m) => new Date(m.timestamp).getTime() / 1000 >= since)
+      .map((m) => ({
+        id: m.id,
+        type: m.media_type,
+        thumb: (m.media_type === 'VIDEO' ? m.thumbnail_url : m.media_url) ?? m.thumbnail_url ?? '',
+        permalink: m.permalink,
+        timestamp: m.timestamp
+      }))
+      .filter((m) => m.thumb);
   });
 }

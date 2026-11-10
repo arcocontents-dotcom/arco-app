@@ -461,21 +461,21 @@ export async function setPosted(content: ContentRecord, posted: boolean) {
   if (content.clientId) invalidateContents(content.clientId);
 }
 
-export function listPostedContents(clientId: string): Promise<ContentRecord[]> {
-  return memo(contentsTag(clientId) + 'contents-posted', 60000, async () => {
-      const res = await notion().databases.query({
-        database_id: env.contentsDb,
-        page_size: 30,
-        filter: {
-          and: [
-            { property: K.client, relation: { contains: clientId } },
-            { property: K.status, select: { equals: 'Postado' } }
-          ]
-        },
-        sorts: [{ property: K.date, direction: 'descending' }]
-      });
-      return res.results.filter(isPage).filter((p) => !p.archived).map(toContent);
+/** Conteúdos já postados desde 01/01/2026 (feed quando o Instagram não está conectado). */
+export function listPostedContents(clientId: string, since = '2026-01-01'): Promise<ContentRecord[]> {
+  return memo(contentsTag(clientId) + 'contents-posted:' + since, 60000, async () => {
+    const pages = await queryAll(env.contentsDb, {
+      filter: {
+        and: [
+          { property: K.client, relation: { contains: clientId } },
+          { property: K.status, select: { equals: 'Postado' } },
+          { property: K.date, date: { on_or_after: since } }
+        ]
+      },
+      sorts: [{ property: K.date, direction: 'descending' }]
     });
+    return pages.filter((p) => !p.archived).map(toContent);
+  });
 }
 
 /** Todos os conteúdos em aberto de todos os clientes (para a Gestão). */
