@@ -14,7 +14,10 @@ export default async function AdminShell({ current, children }: { current?: stri
         <nav className="clients-scroll" aria-label="Clientes">
           {clients.map((c) => (
             <a key={c.id} href={`/admin?c=${c.id}`} className="client" aria-current={sameId(current, c.id) ? 'page' : undefined}>
-              {c.name}
+              <span className="mini-logo" aria-hidden="true">
+                {c.logoUrl ? <img src={c.logoUrl} alt="" loading="lazy" /> : <span>{c.name.charAt(0)}</span>}
+              </span>
+              <span className="client-name">{c.name}</span>
             </a>
           ))}
           {gone.length > 0 && (
@@ -22,7 +25,10 @@ export default async function AdminShell({ current, children }: { current?: stri
               <summary className="label" style={{ color: '#a8a5a0', padding: '8px', cursor: 'pointer' }}>Removidos · {gone.length}</summary>
               {gone.map((c) => (
                 <a key={c.id} href={`/admin/clientes/${c.id}`} className="client" style={{ opacity: 0.6 }} aria-current={sameId(current, c.id) ? 'page' : undefined}>
-                  {c.name}
+                  <span className="mini-logo" aria-hidden="true">
+                    {c.logoUrl ? <img src={c.logoUrl} alt="" loading="lazy" /> : <span>{c.name.charAt(0)}</span>}
+                  </span>
+                  <span className="client-name">{c.name}</span>
                 </a>
               ))}
             </details>

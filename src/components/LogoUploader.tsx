@@ -45,7 +45,7 @@ export default function LogoUploader({ clientId, logoUrl }: { clientId: string; 
         </div>
         {up.progress !== null && <span className="hint">Enviando… {Math.round(up.progress * 100)}%</span>}
         {(error || up.error) && <span className="error" role="alert">{error ?? up.error}</span>}
-        <span className="hint">Aparece redonda, como a foto do Instagram. Use uma imagem quadrada.</span>
+        <span className="hint">Aparece redonda, como a foto do Instagram. Use uma imagem quadrada de 500 × 500 px (JPG ou PNG).</span>
       </div>
       <input
         ref={input}
