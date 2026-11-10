@@ -46,11 +46,11 @@ export default async function ClienteAcessos({
   const appLink = `${env.appUrl}/entrar`;
 
   return (
-    <AdminShell current={c.id}>
+    <AdminShell current={c.id} section="gestao">
       <div className="toolbar">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <p className="label rise">{c.name}</p>
-          <h1 className="display rise" style={{ fontSize: 'clamp(40px, 6vw, 72px)', ['--d' as string]: '60ms' }}>Acessos</h1>
+          <a href="/admin/gestao" className="label rise" style={{ textDecoration: 'none' }}>← Gestão</a>
+          <h1 className="display rise" style={{ fontSize: 'clamp(36px, 5.5vw, 68px)', ['--d' as string]: '60ms' }}>{c.name}</h1>
         </div>
         <div className="actions">
           <a className="btn outline small" href={`/admin?c=${c.id}`}>Calendário</a>

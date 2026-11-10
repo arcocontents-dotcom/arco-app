@@ -2,7 +2,9 @@ import type { ReactNode } from 'react';
 import { listClients } from '@/lib/notion';
 import { sameId } from '@/lib/notion';
 
-export default async function AdminShell({ current, children }: { current?: string | null; children: ReactNode }) {
+export default async function AdminShell({
+  current, children, section = 'calendario'
+}: { current?: string | null; children: ReactNode; section?: 'calendario' | 'gestao' }) {
   const all = await listClients().catch(() => []);
   const clients = all.filter((c) => !c.cancelled);
   const gone = all.filter((c) => c.cancelled);
@@ -10,10 +12,14 @@ export default async function AdminShell({ current, children }: { current?: stri
     <div className="admin">
       <aside>
         <a href="/admin" aria-label="Painel"><img src="/logo-white.png" alt="Arco Contents" className="logo" /></a>
+        <nav className="admin-nav" aria-label="Áreas">
+          <a href="/admin" aria-current={section === 'calendario' ? 'page' : undefined}>Calendário</a>
+          <a href="/admin/gestao" aria-current={section === 'gestao' ? 'page' : undefined}>Gestão</a>
+        </nav>
         <span className="label" style={{ color: '#a8a5a0', padding: '0 8px 10px' }}>Clientes · {clients.length}</span>
         <nav className="clients-scroll" aria-label="Clientes">
           {clients.map((c) => (
-            <a key={c.id} href={`/admin?c=${c.id}`} className="client" aria-current={sameId(current, c.id) ? 'page' : undefined}>
+            <a key={c.id} href={section === 'gestao' ? `/admin/clientes/${c.id}` : `/admin?c=${c.id}`} className="client" aria-current={sameId(current, c.id) ? 'page' : undefined}>
               <span className="mini-logo" aria-hidden="true">
                 {c.logoUrl ? <img src={c.logoUrl} alt="" loading="lazy" /> : <span>{c.name.charAt(0)}</span>}
               </span>
@@ -34,7 +40,6 @@ export default async function AdminShell({ current, children }: { current?: stri
             </details>
           )}
         </nav>
-        <a href="/admin/clientes/novo" className="new">+ Novo cliente</a>
         <div style={{ flex: 1 }} />
         <form action="/sair" method="post" style={{ padding: '16px 8px 0' }}>
           <button type="submit" className="link-btn" style={{ color: '#a8a5a0' }}>Sair</button>

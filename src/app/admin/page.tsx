@@ -43,7 +43,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         </div>
         <div className="actions rise" style={{ ['--d' as string]: '120ms' }}>
           <a className="btn outline small" href={`/c/${client.id}`}>Ver como cliente</a>
-          <a className="btn outline small" href={`/admin/clientes/${client.id}`}>Acessos</a>
           <a className="btn small" href={`/admin/conteudo/novo?c=${client.id}`}>+ Novo conteúdo</a>
         </div>
       </div>

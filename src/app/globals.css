@@ -337,3 +337,17 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .mini-logo span { font-family: var(--display); font-size: 12px; font-weight: 600; text-transform: uppercase; color: #d9d6d1; }
 .admin aside a.client[aria-current='page'] .mini-logo { border-color: var(--ink); }
 .client-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.admin-nav { display: flex; gap: 4px; margin: 0 0 22px; padding: 3px; background: #1f1e1c; }
+.admin-nav a { flex: 1; text-align: center; padding: 10px 6px; font-size: 10px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: #a8a5a0; text-decoration: none; transition: background 0.2s ease, color 0.2s ease; }
+.admin-nav a[aria-current='page'] { background: #fff; color: var(--ink); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.tile-stat { background: var(--paper); padding: 18px; display: flex; flex-direction: column; gap: 6px; text-decoration: none; color: inherit; }
+.tile-stat strong { font-family: var(--display); font-size: 40px; font-weight: 600; line-height: 1; }
+.gtable { width: 100%; border-collapse: collapse; min-width: 760px; }
+.gtable th { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--ink); }
+.gtable td { padding: 12px; border-bottom: 1px solid var(--line); vertical-align: middle; font-size: 14px; }
+.gtable tr:hover td { background: var(--paper); }
+.gtable .who { display: flex; align-items: center; gap: 12px; }
+.gtable .who .mini-logo { width: 34px; height: 34px; background: var(--ink); }
+.pill { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; font-size: 10px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; border: 1px solid currentColor; }

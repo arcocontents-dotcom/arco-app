@@ -291,6 +291,10 @@ export async function listClientsWithInstagram(): Promise<{ id: string; expires:
 // ---------------- conteúdos ----------------
 
 const contentsTag = (clientId: string) => `contents:${normId(clientId)}:`;
+function invalidateContents(clientId: string) {
+  invalidate(contentsTag(clientId));
+  invalidate('contents:all-open');
+}
 
 export function listContentsInRange(clientId: string, fromDay: string, toDay: string): Promise<ContentRecord[]> {
   return memo(contentsTag(clientId) + 'contents-range:' + fromDay + ':' + toDay, 30000, async () => {
@@ -403,19 +407,19 @@ export async function createContent(input: ContentInput): Promise<string> {
     parent: { database_id: env.contentsDb },
     properties: contentProps({ ...input, resetApprovals: true }) as never
   });
-  invalidate(contentsTag(input.clientId));
+  invalidateContents(input.clientId);
   return page.id;
 }
 
 export async function updateContent(id: string, input: ContentInput, previousClientId: string | null) {
   await notion().pages.update({ page_id: id, properties: contentProps(input) as never });
-  invalidate(contentsTag(input.clientId));
-  if (previousClientId && !sameId(previousClientId, input.clientId)) invalidate(contentsTag(previousClientId));
+  invalidateContents(input.clientId);
+  if (previousClientId && !sameId(previousClientId, input.clientId)) invalidateContents(previousClientId);
 }
 
 export async function archiveContent(id: string, clientId: string | null) {
   await notion().pages.update({ page_id: id, archived: true });
-  if (clientId) invalidate(contentsTag(clientId));
+  if (clientId) invalidateContents(clientId);
 }
 
 export async function saveDecisions(content: ContentRecord, decisions: Record<string, Decision>, email: string) {
@@ -432,7 +436,7 @@ export async function saveDecisions(content: ContentRecord, decisions: Record<st
   properties[K.answeredBy] = { email };
   properties[K.answeredAt] = { date: { start: new Date().toISOString() } };
   await notion().pages.update({ page_id: content.id, properties: properties as never });
-  if (content.clientId) invalidate(contentsTag(content.clientId));
+  if (content.clientId) invalidateContents(content.clientId);
 }
 
 export async function setPosted(content: ContentRecord, posted: boolean) {
@@ -442,7 +446,7 @@ export async function setPosted(content: ContentRecord, posted: boolean) {
     [K.postedAt]: { date: posted ? { start: new Date().toISOString() } : null }
   };
   await notion().pages.update({ page_id: content.id, properties: properties as never });
-  if (content.clientId) invalidate(contentsTag(content.clientId));
+  if (content.clientId) invalidateContents(content.clientId);
 }
 
 export function listPostedContents(clientId: string): Promise<ContentRecord[]> {
@@ -460,4 +464,22 @@ export function listPostedContents(clientId: string): Promise<ContentRecord[]> {
       });
       return res.results.filter(isPage).filter((p) => !p.archived).map(toContent);
     });
+}
+
+/** Todos os conteúdos em aberto de todos os clientes (para a Gestão). */
+export function listAllOpenContents(): Promise<ContentRecord[]> {
+  return memo('contents:all-open', 20_000, async () => {
+    const pages = await queryAll(env.contentsDb, {
+      filter: {
+        or: [
+          { property: K.status, select: { equals: 'Aguardando' } },
+          { property: K.status, select: { equals: 'Ajustes' } },
+          { property: K.status, select: { equals: 'Reprovado' } },
+          { property: K.status, select: { equals: 'Aprovado' } }
+        ]
+      },
+      sorts: [{ property: K.date, direction: 'ascending' }]
+    });
+    return pages.filter((p) => !p.archived).map(toContent);
+  });
 }

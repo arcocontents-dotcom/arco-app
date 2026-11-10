@@ -15,7 +15,7 @@ export default function CancelClient({ clientId, name, cancelled }: { clientId: 
       const r = await setClientCancelledAction(clientId, v);
       if (!r.ok) return setError(r.error);
       setConfirm(false);
-      router.push(v ? '/admin' : `/admin/clientes/${clientId}`);
+      router.push(v ? '/admin/gestao' : `/admin/clientes/${clientId}`);
       router.refresh();
     });
 

@@ -266,6 +266,16 @@ try {
     await shot(pd, '08-admin');
   });
 
+  await step('Gestão separada mostra clientes e o que precisa de atenção', async () => {
+    await pd.goto(`${APP}/admin/gestao`);
+    await pd.getByRole('heading', { name: 'Gestão' }).waitFor();
+    await pd.getByRole('link', { name: /Studio Alfa/ }).first().waitFor();
+    await pd.getByText('Precisa de você').waitFor();
+    await pd.getByText('Depoimento de cliente').waitFor(); // reprovado pelo cliente
+    await pd.waitForTimeout(800);
+    await shot(pd, '10-gestao');
+  });
+
   await step('admin também aprova, pede ajuste ou reprova', async () => {
     await pd.goto(`${APP}/c/${A}/${STORY}`);
     await pd.getByRole('button', { name: 'Aprovar Story' }).click();
@@ -347,7 +357,7 @@ try {
     await pd.goto(`${APP}/admin/clientes/${gama.id}`);
     await pd.getByRole('button', { name: 'Remover', exact: true }).click();
     await pd.getByRole('button', { name: 'Sim, remover' }).click();
-    await pd.waitForURL(/\/admin$/);
+    await pd.waitForURL(/\/admin\/gestao$/);
     assert.equal(page(gama.id).properties.Cancelado.checkbox, true);
     assert.equal(await pd.locator('nav[aria-label="Clientes"] > a', { hasText: 'Gama Studio' }).count(), 0);
     const ctx = await sessionFor('gama@x.com');
