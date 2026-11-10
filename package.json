@@ -4,14 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "opennextjs-cloudflare build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "cf:build": "opennextjs-cloudflare build",
-    "test:e2e": "next build && node tests/e2e.mjs"
+    "test:e2e": "next build && node tests/e2e.mjs",
+    "build:next": "next build"
   },
   "dependencies": {
     "@notionhq/client": "2.3.0",
