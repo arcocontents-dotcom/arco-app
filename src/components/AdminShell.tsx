@@ -3,7 +3,9 @@ import { listClients } from '@/lib/notion';
 import { sameId } from '@/lib/notion';
 
 export default async function AdminShell({ current, children }: { current?: string | null; children: ReactNode }) {
-  const clients = await listClients().catch(() => []);
+  const all = await listClients().catch(() => []);
+  const clients = all.filter((c) => !c.cancelled);
+  const gone = all.filter((c) => c.cancelled);
   return (
     <div className="admin">
       <aside>
@@ -15,6 +17,16 @@ export default async function AdminShell({ current, children }: { current?: stri
               {c.name}
             </a>
           ))}
+          {gone.length > 0 && (
+            <details style={{ marginTop: 18 }}>
+              <summary className="label" style={{ color: '#a8a5a0', padding: '8px', cursor: 'pointer' }}>Removidos · {gone.length}</summary>
+              {gone.map((c) => (
+                <a key={c.id} href={`/admin/clientes/${c.id}`} className="client" style={{ opacity: 0.6 }} aria-current={sameId(current, c.id) ? 'page' : undefined}>
+                  {c.name}
+                </a>
+              ))}
+            </details>
+          )}
         </nav>
         <a href="/admin/clientes/novo" className="new">+ Novo cliente</a>
         <div style={{ flex: 1 }} />

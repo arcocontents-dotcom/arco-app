@@ -12,7 +12,7 @@ export default function NewClientForm() {
   const [role, setRole] = useState<'approver' | 'viewer'>('approver');
   const [logo, setLogo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ id: string; link: string | null } | null>(null);
+  const [done, setDone] = useState<{ id: string; links: { mes: string; semana: string } | null } | null>(null);
   const [pending, start] = useTransition();
   const up = useUploader();
   const file = useRef<HTMLInputElement>(null);
@@ -22,10 +22,11 @@ export default function NewClientForm() {
       <div className="panel rise" style={{ maxWidth: 620 }}>
         <span className="label">Cliente criado</span>
         <h2 className="display md">{name}</h2>
-        {done.link ? (
+        {done.links ? (
           <>
-            <p className="hint">{email} já está liberado. Mande o link abaixo para o cliente entrar.</p>
-            <LinkBox link={done.link} name={name} />
+            <p className="hint">{email} já está liberado. Mande um dos links para o cliente. Depois do primeiro toque em Entrar, ele não precisa entrar de novo.</p>
+            <LinkBox link={done.links.mes} name={name} kind="mes" />
+            <LinkBox link={done.links.semana} name={name} kind="semana" />
           </>
         ) : (
           <p className="hint">Nenhum e-mail liberado ainda. Você pode liberar na página de acessos.</p>
@@ -48,7 +49,7 @@ export default function NewClientForm() {
         start(async () => {
           const r = await createClientFullAction({ name, instagram, email, role, logoUrl: logo });
           if (!r.ok) return setError(r.error);
-          setDone({ id: r.id, link: r.link });
+          setDone({ id: r.id, links: r.links });
         });
       }}
     >

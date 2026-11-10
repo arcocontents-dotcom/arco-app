@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ c?: string; m?: string }> }) {
   await requireAdmin();
   const sp = await searchParams;
-  const clients = await listClients();
+  const clients = (await listClients()).filter((c) => !c.cancelled);
   const client = clients.find((c) => sameId(c.id, sp.c ?? '')) ?? clients[0] ?? null;
   const today = todayIn(env.timeZone);
   const day = parseDay(sp.m) ?? today;

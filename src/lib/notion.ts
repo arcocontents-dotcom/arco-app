@@ -46,6 +46,7 @@ export interface ClientRecord {
   instagram: string;
   igConnected: boolean;
   logoUrl: string | null;
+  cancelled: boolean;
 }
 
 export interface ContentRecord {
@@ -128,7 +129,8 @@ function toClient(p: PageObjectResponse): ClientRecord {
     viewers: parseEmails(text(pr[C.viewers])),
     instagram: text(pr[C.instagram]).replace(/^@/, ''),
     igConnected: checkbox(pr[C.igConnected]),
-    logoUrl: url(pr[C.logo])
+    logoUrl: url(pr[C.logo]),
+    cancelled: checkbox(pr[C.cancelled])
   };
 }
 
@@ -245,9 +247,10 @@ export async function createClient(input: { name: string; instagram: string }): 
 
 export async function updateClient(
   id: string,
-  input: { name?: string; instagram?: string; approvers?: string[]; viewers?: string[]; logoUrl?: string | null }
+  input: { name?: string; instagram?: string; approvers?: string[]; viewers?: string[]; logoUrl?: string | null; cancelled?: boolean }
 ) {
   const properties: Record<string, unknown> = {};
+  if (input.cancelled !== undefined) properties[C.cancelled] = { checkbox: input.cancelled };
   if (input.logoUrl !== undefined) properties[C.logo] = { url: input.logoUrl || null };
   if (input.name !== undefined) properties[C.name] = titleProp(input.name);
   if (input.instagram !== undefined) properties[C.instagram] = rich(input.instagram.replace(/^@/, ''));

@@ -13,7 +13,7 @@ export const CONTENTS_DB = '22222222222222222222222222222222';
 const TYPES = {
   [CLIENTS_DB]: {
     [C.name]: 'title', [C.approvers]: 'rich_text', [C.viewers]: 'rich_text', [C.instagram]: 'rich_text',
-    [C.igConnected]: 'checkbox', [C.igUserId]: 'rich_text', [C.igToken]: 'rich_text', [C.igTokenExpires]: 'date', [C.logo]: 'url'
+    [C.igConnected]: 'checkbox', [C.igUserId]: 'rich_text', [C.igToken]: 'rich_text', [C.igTokenExpires]: 'date', [C.logo]: 'url', [C.cancelled]: 'checkbox'
   },
   [CONTENTS_DB]: {
     [K.title]: 'title', [K.client]: 'relation', [K.date]: 'date', [K.type]: 'select', [K.status]: 'select',

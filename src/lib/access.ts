@@ -19,7 +19,7 @@ export async function resolveViewer(email: string): Promise<Viewer | null> {
   if (isAdminEmail(e)) return { email: e, role: 'admin' };
   const pick = (clients: ClientRecord[]) =>
     clients
-      .filter((c) => c.approvers.includes(e) || c.viewers.includes(e))
+      .filter((c) => !c.cancelled && (c.approvers.includes(e) || c.viewers.includes(e)))
       .map((c) => ({ id: c.id, name: c.name, canApprove: c.approvers.includes(e) }));
   let mine = pick(await listClients());
   // Acesso liberado há instantes pode ainda não estar no cache: confere direto no Notion.
@@ -60,6 +60,7 @@ export async function requireClientAccess(
   const client = fresh ? await getClientFresh(clientId) : (await listClients()).find((c) => sameId(c.id, clientId)) ?? null;
   if (!client) notFound();
   if (viewer.role === 'admin') return { viewer, client, canApprove: true };
+  if (client.cancelled) notFound();
   const canApprove = client.approvers.includes(viewer.email);
   const canView = canApprove || client.viewers.includes(viewer.email);
   if (!canView) notFound();

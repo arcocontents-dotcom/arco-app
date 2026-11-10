@@ -16,7 +16,7 @@ export async function submitReview(contentId: string, decisions: Record<string, 
   // Permissão relida direto do Notion, sem cache.
   if (viewer.role !== 'admin') {
     const client = await getClientFresh(content.clientId);
-    if (!client || !client.approvers.includes(viewer.email)) {
+    if (!client || client.cancelled || !client.approvers.includes(viewer.email)) {
       return { ok: false, error: 'Seu acesso é só de visualização.' };
     }
     if (content.status === 'Rascunho') return { ok: false, error: 'Conteúdo não encontrado.' };

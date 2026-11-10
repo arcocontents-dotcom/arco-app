@@ -302,3 +302,31 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .login .input::placeholder { color: #7d7a75; }
 .login .label { color: #a8a5a0; }
 .login .hint { color: #a8a5a0; }
+
+/* ---------- revisão em blocos grandes ---------- */
+.review-stack { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 34px; padding: 0 16px 48px; }
+.review-block { display: flex; flex-direction: column; gap: 14px; }
+.review-block .block-title { display: flex; align-items: baseline; gap: 10px; padding: 0 4px; }
+.review-block .block-title .num { font-family: var(--display); font-size: 13px; color: var(--muted); }
+.review-block .approval-row { padding: 14px 4px 4px; border-bottom: 0; }
+.zoomable { position: relative; display: block; width: 100%; padding: 0; border: 0; background: #d6d3ce; cursor: zoom-in; overflow: hidden; }
+.zoomable img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 0.6s var(--ease); }
+.zoomable:hover img { transform: scale(1.02); }
+.zoomable.fill { position: absolute; inset: 0; }
+.max-hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); padding: 6px 12px; background: rgba(17, 17, 17, 0.7); color: #fff; font-style: normal; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; white-space: nowrap; pointer-events: none; }
+.caption-big { padding: 22px; background: var(--paper); font-size: 16px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; margin: 0; }
+.lightbox { position: fixed; inset: 0; z-index: 100; background: #000; animation: fade 0.25s ease both; }
+.lb-track { position: absolute; inset: 0; }
+.lb-slide { flex: 0 0 100%; height: 100%; display: flex; align-items: center; justify-content: center; scroll-snap-align: start; }
+.lb-slide img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.lb-close { position: absolute; top: max(14px, env(safe-area-inset-top)); right: 14px; width: 48px; height: 48px; border-radius: 999px; border: 0; background: rgba(255, 255, 255, 0.14); display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2; }
+.lb-count { position: absolute; top: max(26px, env(safe-area-inset-top)); left: 18px; color: #fff; font-size: 12px; letter-spacing: 0.1em; z-index: 2; }
+.lightbox .arrow { z-index: 2; }
+/* No celular, vídeo, capa e artes ocupam a largura toda da tela. */
+@media (max-width: 640px) {
+  .review-stack { padding: 0 0 48px; }
+  .review-stack > :not(.review-block) { margin-left: 16px; margin-right: 16px; }
+  .review-block > .block-title,
+  .review-block > .approval-row { margin: 0 16px; }
+  .review-block > .approval-row { padding-left: 0; padding-right: 0; }
+}

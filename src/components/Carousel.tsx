@@ -2,10 +2,12 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight } from './icons';
+import Lightbox from './Lightbox';
 
 export default function Carousel({ images, title }: { images: string[]; title: string }) {
   const track = useRef<HTMLDivElement>(null);
   const [i, setI] = useState(0);
+  const [zoom, setZoom] = useState<number | null>(null);
   const n = images.length;
 
   const go = useCallback((j: number) => {
@@ -39,7 +41,9 @@ export default function Carousel({ images, title }: { images: string[]; title: s
         >
           {images.map((src, k) => (
             <div key={src + k} className="frame-45" role="group" aria-label={`Arte ${k + 1} de ${n}`}>
-              <img src={src} alt={`${title} — arte ${k + 1}`} loading={k === 0 ? 'eager' : 'lazy'} decoding="async" />
+              <button type="button" className="zoomable fill" onClick={() => setZoom(k)} aria-label={`Ampliar arte ${k + 1}`}>
+                <img src={src} alt={`${title} — arte ${k + 1}`} loading={k === 0 ? 'eager' : 'lazy'} decoding="async" />
+              </button>
             </div>
           ))}
         </div>
@@ -51,6 +55,7 @@ export default function Carousel({ images, title }: { images: string[]; title: s
           </>
         )}
       </div>
+      {zoom !== null && <Lightbox images={images} index={zoom} title={title} onClose={() => setZoom(null)} />}
       {n > 1 && (
         <>
           <div className="dots-nav">
@@ -60,7 +65,7 @@ export default function Carousel({ images, title }: { images: string[]; title: s
               </button>
             ))}
           </div>
-          <p className="label" style={{ textAlign: 'center' }}>Deslize para o lado</p>
+          <p className="label" style={{ textAlign: 'center' }}>Deslize para o lado · toque para ampliar</p>
         </>
       )}
     </div>

@@ -7,6 +7,7 @@ import AdminShell from '@/components/AdminShell';
 import { XIcon } from '@/components/icons';
 import LogoUploader from '@/components/LogoUploader';
 import AccessLink from '@/components/AccessLink';
+import CancelClient from '@/components/CancelClient';
 import { addAccessAction, disconnectInstagramAction, removeAccessAction, updateClientAction } from '../../actions';
 
 const OK: Record<string, string> = {
@@ -152,6 +153,11 @@ export default async function ClienteAcessos({
             </div>
             <button className="btn outline" type="submit">Salvar</button>
           </form>
+
+          <section className="panel rise" style={{ ['--d' as string]: '300ms' }}>
+            <h2 className="label">Cliente cancelou?</h2>
+            <CancelClient clientId={c.id} name={c.name} cancelled={c.cancelled} />
+          </section>
         </div>
       </div>
     </AdminShell>

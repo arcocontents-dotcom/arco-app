@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useMemo, useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { submitReview, togglePosted } from '@/app/actions/review';
 import { CheckIcon, XIcon } from './icons';
@@ -13,6 +13,8 @@ export interface PanelItem {
   label: string;
   status: ItemStatus;
   note: string;
+  /** Mídia grande mostrada acima da aprovação deste item (vídeo, capa, legenda…). */
+  media?: ReactNode;
 }
 
 type Draft = Record<string, { status: DecisionStatus | null; note: string }>;
@@ -96,10 +98,7 @@ export default function ReviewPanel({
   };
 
   return (
-    <section aria-labelledby="aprov">
-      <h2 id="aprov" className="label rise" style={{ ['--d' as string]: '320ms', marginBottom: 4 }}>
-        {canApprove ? 'Sua aprovação' : 'Status'}
-      </h2>
+    <section aria-label={canApprove ? 'Sua aprovação' : 'Status'} className="review-stack">
 
       {!canApprove && !isAdmin && (
         <p className="hint" style={{ padding: '8px 0' }}>Seu acesso é só de visualização. Quem aprova recebe o mesmo link.</p>
@@ -114,7 +113,15 @@ export default function ReviewPanel({
         const showNote = editable && (d.status === 'Ajuste' || d.status === 'Reprovado');
         const savedNote = !editable && it.note && (it.status === 'Ajuste' || it.status === 'Reprovado');
         return (
-          <div key={it.key} className="approval-row rise" style={{ ['--d' as string]: `${380 + idx * 90}ms` }}>
+          <div key={it.key} className="review-block rise" style={{ ['--d' as string]: `${120 + idx * 110}ms` }}>
+            {items.length > 1 && (
+              <div className="block-title">
+                <span className="num">{String(idx + 1).padStart(2, '0')}</span>
+                <span className="label strong">{it.label}</span>
+              </div>
+            )}
+            {it.media}
+          <div className="approval-row">
             <div className="approval-head">
               <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span className="display md">{it.label}</span>
@@ -165,6 +172,7 @@ export default function ReviewPanel({
               </div>
             )}
             {savedNote && <p className="hint" style={{ paddingTop: 10, whiteSpace: 'pre-wrap' }}>“{it.note}”</p>}
+          </div>
           </div>
         );
       })}

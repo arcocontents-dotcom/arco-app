@@ -4,7 +4,8 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { EMAIL_RE, normalizeEmail } from '@/lib/domain';
 import { env } from '@/lib/env';
-import { resolveViewer } from '@/lib/access';
+import { currentViewer, resolveViewer } from '@/lib/access';
+import { safeNext } from '@/lib/next-path';
 import { sendLoginEmail } from '@/lib/mail';
 import { signLoginToken, startSession, verifyLoginToken } from '@/lib/session';
 
@@ -37,10 +38,15 @@ export async function requestLink(_prev: LoginState, form: FormData): Promise<Lo
 
 export async function confirmLogin(form: FormData) {
   const token = String(form.get('t') ?? '');
+  const next = safeNext(form.get('next'));
   const email = await verifyLoginToken(token);
-  if (!email) redirect('/entrar?e=expirado');
+  if (!email) {
+    // Link antigo, mas a pessoa já entrou neste aparelho antes: segue direto.
+    if (await currentViewer()) redirect(next);
+    redirect('/entrar?e=expirado');
+  }
   const viewer = await resolveViewer(email);
   if (!viewer) redirect('/entrar?e=sem-acesso');
   await startSession(email);
-  redirect('/');
+  redirect(next);
 }

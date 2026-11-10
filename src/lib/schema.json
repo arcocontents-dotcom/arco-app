@@ -8,7 +8,8 @@
     "igUserId": "IG user id",
     "igToken": "IG token (criptografado)",
     "igTokenExpires": "IG token expira",
-    "logo": "Logo"
+    "logo": "Logo",
+    "cancelled": "Cancelado"
   },
   "contents": {
     "title": "Título",

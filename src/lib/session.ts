@@ -5,7 +5,9 @@ import { env, isProd } from './env';
 import { normalizeEmail } from './domain';
 
 const COOKIE = 'arco_session';
-const SESSION_DAYS = 30;
+// Depois de entrar uma vez, a pessoa não precisa entrar de novo (o acesso continua
+// sendo conferido no Notion a cada visita, então remover o e-mail corta na hora).
+const SESSION_DAYS = 400;
 
 export async function signLoginToken(email: string, ttl = '20m'): Promise<string> {
   return new SignJWT({ email: normalizeEmail(email), p: 'login' })

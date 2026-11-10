@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 export default async function NovoConteudo({ searchParams }: { searchParams: Promise<{ c?: string; d?: string }> }) {
   await requireAdmin();
   const sp = await searchParams;
-  const clients = await listClients();
+  const clients = (await listClients()).filter((c) => !c.cancelled);
   const client = clients.find((c) => sameId(c.id, sp.c ?? '')) ?? clients[0];
   if (!client) {
     return (

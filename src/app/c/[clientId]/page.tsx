@@ -19,6 +19,7 @@ import { getPublishedMedia } from '@/lib/instagram';
 import { contentThumb, cssUrl, dayStatus } from '@/lib/view';
 import ClientTop from '@/components/ClientTop';
 import ContentRow from '@/components/ContentRow';
+import ScrollToDay from '@/components/ScrollToDay';
 import { ArrowLeft, ArrowRight, PlayIcon, StackIcon } from '@/components/icons';
 
 export const dynamic = 'force-dynamic';
@@ -37,12 +38,21 @@ export default async function ClientPage({
   const { viewer, client, canApprove } = await requireClientAccess(clientId);
   const view: View = sp.v === 'mes' || sp.v === 'feed' ? sp.v : 'semana';
   const today = todayIn(env.timeZone);
-  const day = parseDay(sp.d) ?? today;
+  let day = parseDay(sp.d) ?? today;
   const base = `/c/${client.id}`;
   const href = (v: View, d?: string) => `${base}?v=${v}${d ? `&d=${d}` : ''}`;
 
   const open = await listOpenContents(client.id).catch(() => []);
   const waiting = open.filter((c) => c.status === 'Aguardando');
+
+  // Sem data escolhida: abre na semana que tem o próximo conteúdo (a atual, se houver algo nela).
+  if (!sp.d && view === 'semana') {
+    const ws = startOfWeek(today);
+    const we = addDays(ws, 6);
+    const thisWeek = open.some((c) => c.day && c.day >= ws && c.day <= we);
+    const next = open.filter((c) => c.day && c.day >= today).sort((a, b) => a.day!.localeCompare(b.day!))[0];
+    if (!thisWeek && next?.day) day = next.day;
+  }
 
   return (
     <main className="shell">
@@ -74,6 +84,8 @@ async function Week({
   const end = addDays(start, 6);
   const items = await listContentsInRange(client, start, end).catch(() => []);
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  // Dia em foco: hoje, se tiver conteúdo; senão o próximo dia com conteúdo nesta semana.
+  const focus = days.find((d) => d >= today && items.some((c) => c.day === d)) ?? null;
   const rangeLabel = `${dayNum(start)} ${MONTHS[monthIdx(start)].slice(0, 3).toLowerCase()} — ${dayNum(end)} ${MONTHS[monthIdx(end)].slice(0, 3).toLowerCase()} ${yearNum(end)}`;
 
   return (
@@ -105,6 +117,7 @@ async function Week({
           <span>{waiting.length} aguardando você</span><span>Revisar →</span>
         </a>
       )}
+      <ScrollToDay id={focus ? `dia-${focus}` : null} />
       <div className="list">
         {items.length === 0 && <p className="empty rise">Nada programado nesta semana.</p>}
         {days.map((d) =>

@@ -208,6 +208,14 @@ try {
     await shot(pa, '06-reels-enviado');
   });
 
+  await step('capa abre em tela cheia ao tocar', async () => {
+    await pa.goto(`${APP}/c/${A}/${REELS}`);
+    await pa.getByRole('button', { name: 'Ampliar Capa do Reels' }).click();
+    await pa.getByRole('dialog', { name: 'Capa do Reels' }).waitFor();
+    await pa.getByRole('button', { name: 'Fechar' }).click();
+    assert.equal(await pa.getByRole('dialog').count(), 0);
+  });
+
   await step('Carrossel desliza com setas e contador; aprovação completa vira Aprovado', async () => {
     await pa.goto(`${APP}/c/${A}/${CARR}`);
     await pa.locator('.counter').waitFor();
@@ -302,7 +310,8 @@ try {
     await pd.fill('#email', 'gama@x.com');
     await pd.click('button:has-text("Criar cliente")');
     await pd.getByText('Cliente criado').waitFor();
-    const link = await pd.locator('input[aria-label="Link de acesso"]').inputValue();
+    assert.equal(await pd.locator('input[aria-label="Link de acesso"]').count(), 2, 'deve mostrar link do mês e da semana');
+    const link = await pd.locator('input[aria-label="Link de acesso"]').first().inputValue();
     assert.match(link, /\/entrar\/confirmar\?t=/);
     const gama = [...store.values()].find((p) => p.properties.Nome?.title?.[0]?.plain_text === 'Gama Studio');
     assert.equal(gama.properties['E-mails que aprovam'].rich_text[0].plain_text, 'gama@x.com');
@@ -310,17 +319,42 @@ try {
     const pg = await ctx.newPage();
     await pg.goto(link);
     await pg.click('button:has-text("Entrar")');
-    await pg.waitForURL(/\/c\//, { timeout: 10000 }).catch(async () => {
+    await pg.waitForURL(/\/c\/.*v=mes/, { timeout: 10000 }).catch(async () => {
       throw new Error(`parou em ${pg.url()} :: ${(await pg.locator('body').innerText()).slice(0, 150)}`);
     });
     await pg.getByText('Gama Studio').first().waitFor();
     await ctx.close();
   });
 
-  await step('gerar link de acesso para e-mail já liberado', async () => {
+  await step('link da semana leva direto à semana e, já logado, não pede para entrar de novo', async () => {
     await pd.goto(`${APP}/admin/clientes/${A}`);
-    await pd.getByRole('button', { name: 'Gerar link de acesso' }).first().click();
-    await pd.locator('input[aria-label="Link de acesso"]').waitFor();
+    await pd.getByRole('button', { name: 'Link da semana atual' }).first().click();
+    const link = await pd.locator('input[aria-label="Link de acesso"]').inputValue();
+    assert.match(link, /next=/);
+    const ctx = await browser.newContext();
+    const pg = await ctx.newPage();
+    await pg.goto(link);
+    await pg.click('button:has-text("Entrar")');
+    await pg.waitForURL(/v=semana/);
+    await pg.getByRole('heading', { name: 'Semana' }).waitFor();
+    await pg.goto(link); // segunda vez: entra direto
+    await pg.waitForURL(/\/c\/.*v=semana/);
+    await ctx.close();
+  });
+
+  await step('cliente removido some do painel e perde o acesso', async () => {
+    const gama = [...store.values()].find((p) => p.properties.Nome?.title?.[0]?.plain_text === 'Gama Studio');
+    await pd.goto(`${APP}/admin/clientes/${gama.id}`);
+    await pd.getByRole('button', { name: 'Remover do app' }).click();
+    await pd.getByRole('button', { name: 'Sim, remover' }).click();
+    await pd.waitForURL(/\/admin$/);
+    assert.equal(page(gama.id).properties.Cancelado.checkbox, true);
+    assert.equal(await pd.locator('nav[aria-label="Clientes"] > a', { hasText: 'Gama Studio' }).count(), 0);
+    const ctx = await sessionFor('gama@x.com');
+    const pg = await ctx.newPage();
+    const r = await pg.goto(`${APP}/c/${gama.id}`);
+    assert.ok(r.status() === 404 || /\/entrar/.test(pg.url()), `ainda entrou (${r.status()})`);
+    await ctx.close();
   });
 
   await step('logo do cliente aparece no feed', async () => {
