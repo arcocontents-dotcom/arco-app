@@ -1,7 +1,11 @@
+import Icon from '@/components/Icon';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireAdmin } from '@/lib/access';
 import { env } from '@/lib/env';
-import { getClientFresh } from '@/lib/notion';
+import { getClientFresh, listContentsInRangeAdmin } from '@/lib/notion';
+import { addDays, todayIn } from '@/lib/domain';
+import ContentRow from '@/components/ContentRow';
 import { instagramConfigured } from '@/lib/instagram';
 import AdminShell from '@/components/AdminShell';
 import { XIcon } from '@/components/icons';
@@ -44,17 +48,21 @@ export default async function ClienteAcessos({
     ...c.viewers.map((e) => ({ email: e, role: 'Só visualiza' }))
   ];
   const appLink = `${env.appUrl}/entrar`;
+  const today = todayIn(env.timeZone);
+  const history = (await listContentsInRangeAdmin(c.id, '2026-01-01', addDays(today, 120)).catch(() => []))
+    .sort((a, b) => (b.dateIso ?? b.day ?? '').localeCompare(a.dateIso ?? a.day ?? ''));
+  const posted = history.filter((x) => x.status === 'Postado').length;
 
   return (
     <AdminShell current={c.id} section="gestao">
       <div className="toolbar">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <a href="/admin/gestao" className="label rise" style={{ textDecoration: 'none' }}>← Gestão</a>
+          <Link href="/admin/gestao" className="label rise ic-inline" style={{ textDecoration: 'none' }}><Icon name="left" size={14} />Gestão</Link>
           <h1 className="display rise" style={{ fontSize: 'clamp(36px, 5.5vw, 68px)', ['--d' as string]: '60ms' }}>{c.name}</h1>
         </div>
         <div className="actions">
-          <a className="btn outline small" href={`/admin?c=${c.id}`}>Calendário</a>
-          <a className="btn outline small" href={`/c/${c.id}`}>Ver como cliente</a>
+          <Link className="btn outline small" href={`/admin?c=${c.id}`}><Icon name="calendar" size={16} />Calendário</Link>
+          <Link className="btn outline small" href={`/c/${c.id}`}><Icon name="eye" size={16} />Ver como cliente</Link>
         </div>
       </div>
 
@@ -160,6 +168,19 @@ export default async function ClienteAcessos({
           </section>
         </div>
       </div>
+
+      <section className="panel rise" style={{ ['--d' as string]: '320ms' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <h2 className="label ic-inline"><Icon name="clock" size={14} />Histórico · {history.length} conteúdos · {posted} postados</h2>
+          <Link className="btn small" href={`/admin/conteudo/novo?c=${c.id}`}><Icon name="plus" size={15} />Novo conteúdo</Link>
+        </div>
+        {history.length ? (
+          <div>{history.slice(0, 12).map((x, i) => <ContentRow key={x.id} c={x} href={`/c/${c.id}/${x.id}`} delay={i * 30} />)}</div>
+        ) : (
+          <p className="empty">Nenhum conteúdo ainda.</p>
+        )}
+        {history.length > 12 && <Link className="link-btn" href={`/admin?c=${c.id}`}>Ver tudo no calendário</Link>}
+      </section>
     </AdminShell>
   );
 }

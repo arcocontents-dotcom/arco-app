@@ -1,3 +1,5 @@
+import Icon from '@/components/Icon';
+import Link from 'next/link';
 import { requireClientAccess } from '@/lib/access';
 import { env } from '@/lib/env';
 import {
@@ -67,9 +69,9 @@ export default async function ClientPage({
 function Tabs({ view, href, day }: { view: View; href: (v: View, d?: string) => string; day: string }) {
   return (
     <nav className="tabs rise" aria-label="Visualização" style={{ ['--d' as string]: '120ms' }}>
-      <a href={href('semana', day)} aria-current={view === 'semana' ? 'page' : undefined}>Semana</a>
-      <a href={href('mes', day)} aria-current={view === 'mes' ? 'page' : undefined}>Mês</a>
-      <a href={href('feed')} aria-current={view === 'feed' ? 'page' : undefined}>Feed</a>
+      <Link href={href('semana', day)} aria-current={view === 'semana' ? 'page' : undefined}><Icon name="week" size={15} />Semana</Link>
+      <Link href={href('mes', day)} aria-current={view === 'mes' ? 'page' : undefined}><Icon name="month" size={15} />Mês</Link>
+      <Link href={href('feed')} aria-current={view === 'feed' ? 'page' : undefined}><Icon name="feed" size={15} />Feed</Link>
     </nav>
   );
 }
@@ -96,8 +98,8 @@ async function Week({
           <h1 className="display xl rise" style={{ ['--d' as string]: '60ms' }}>Semana</h1>
         </div>
         <div style={{ display: 'flex' }}>
-          <a className="icon-btn" href={href('semana', addDays(start, -7))} aria-label="Semana anterior"><ArrowLeft /></a>
-          <a className="icon-btn" href={href('semana', addDays(start, 7))} aria-label="Próxima semana"><ArrowRight /></a>
+          <Link className="icon-btn" href={href('semana', addDays(start, -7))} aria-label="Semana anterior"><ArrowLeft /></Link>
+          <Link className="icon-btn" href={href('semana', addDays(start, 7))} aria-label="Próxima semana"><ArrowRight /></Link>
         </div>
       </div>
       <Tabs view="semana" href={href} day={day} />
@@ -113,9 +115,9 @@ async function Week({
         })}
       </div>
       {canApprove && waiting.length > 0 && (
-        <a className="banner rise" href={`${base}/${waiting[0].id}`} style={{ ['--d' as string]: '260ms' }}>
+        <Link className="banner rise" href={`${base}/${waiting[0].id}`} style={{ ['--d' as string]: '260ms' }}>
           <span>{waiting.length} aguardando você</span><span>Revisar →</span>
-        </a>
+        </Link>
       )}
       <ScrollToDay id={focus ? `dia-${focus}` : null} />
       <div className="list">
@@ -148,8 +150,8 @@ async function Month({
           <h1 className="display xl rise" style={{ ['--d' as string]: '60ms' }}>{MONTHS[monthIdx(day)]}</h1>
         </div>
         <div style={{ display: 'flex' }}>
-          <a className="icon-btn" href={href('mes', addMonths(day, -1))} aria-label="Mês anterior"><ArrowLeft /></a>
-          <a className="icon-btn" href={href('mes', addMonths(day, 1))} aria-label="Próximo mês"><ArrowRight /></a>
+          <Link className="icon-btn" href={href('mes', addMonths(day, -1))} aria-label="Mês anterior"><ArrowLeft /></Link>
+          <Link className="icon-btn" href={href('mes', addMonths(day, 1))} aria-label="Próximo mês"><ArrowRight /></Link>
         </div>
       </div>
       <Tabs view="mes" href={href} day={day} />
@@ -160,10 +162,10 @@ async function Month({
             const list = items.filter((x) => x.day === c.day);
             const cls = ['mcell', c.inMonth ? '' : 'out', c.day === today ? 'today' : '', c.day === day ? 'sel' : ''].join(' ');
             return (
-              <a key={c.day} href={href('mes', c.day)} className={cls} aria-label={`${dayLabel(c.day)}${list.length ? `, ${list.length} conteúdo(s)` : ''}`} aria-current={c.day === day ? 'date' : undefined}>
+              <Link key={c.day} href={href('mes', c.day)} className={cls} aria-label={`${dayLabel(c.day)}${list.length ? `, ${list.length} conteúdo(s)` : ''}`} aria-current={c.day === day ? 'date' : undefined}>
                 <span className="n">{dayNum(c.day)}</span>
                 <span className="dots">{list.slice(0, 3).map((x) => <i key={x.id} className={`c-${x.status}`} />)}</span>
-              </a>
+              </Link>
             );
           })}
         </div>
@@ -219,12 +221,12 @@ async function Feed({
       </div>
       <div className="grid3">
         {scheduled.map((c, i) => (
-          <a key={c.id} href={`${base}/${c.id}`} className="tile rise" style={{ ['--d' as string]: `${200 + i * 40}ms` }} aria-label={`${c.title}, ${c.type}, ${c.status}`}>
+          <Link key={c.id} href={`${base}/${c.id}`} className="tile rise" style={{ ['--d' as string]: `${200 + i * 40}ms` }} aria-label={`${c.title}, ${c.type}, ${c.status}`}>
             {contentThumb(c) ? <img src={contentThumb(c)!} alt="" loading="lazy" decoding="async" /> : null}
             {c.type === 'Reels' && <span className="kind"><PlayIcon size={14} /></span>}
             {c.type === 'Carrossel' && <span className="kind"><StackIcon /></span>}
             <span className={`badge s-${c.status}`}>{c.status}</span>
-          </a>
+          </Link>
         ))}
         {ig.map((m, i) => (
           <a key={m.id} href={m.permalink} target="_blank" rel="noopener noreferrer" className="tile rise" style={{ ['--d' as string]: `${240 + (scheduled.length + i) * 30}ms` }} aria-label="Post publicado no Instagram (abre em nova aba)">
@@ -234,11 +236,11 @@ async function Feed({
           </a>
         ))}
         {posted.filter((c) => c.type !== 'Story').map((c, i) => (
-          <a key={c.id} href={`${base}/${c.id}`} className="tile rise" style={{ ...cssUrl(null), ['--d' as string]: `${240 + (scheduled.length + i) * 30}ms` }} aria-label={`${c.title}, postado`}>
+          <Link key={c.id} href={`${base}/${c.id}`} className="tile rise" style={{ ...cssUrl(null), ['--d' as string]: `${240 + (scheduled.length + i) * 30}ms` }} aria-label={`${c.title}, postado`}>
             {contentThumb(c) ? <img src={contentThumb(c)!} alt="" loading="lazy" decoding="async" /> : null}
             {c.type === 'Reels' && <span className="kind"><PlayIcon size={14} /></span>}
             {c.type === 'Carrossel' && <span className="kind"><StackIcon /></span>}
-          </a>
+          </Link>
         ))}
       </div>
       {!scheduled.length && !ig.length && !posted.length && <p className="empty" style={{ padding: '28px 24px' }}>Ainda não há posts por aqui.</p>}

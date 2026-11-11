@@ -75,6 +75,13 @@ async function step(name, fn) {
   } catch (e) {
     results.push(['falhou', name, e.message]);
     console.log('  ✗', name, '\n    ', e.message.split('\n')[0]);
+    const pd = globalThis.__pd;
+    if (process.env.SHOTS_DIR && pd) {
+      try {
+        console.log('     url:', pd.url());
+        await pd.screenshot({ path: `${process.env.SHOTS_DIR}/falha-${results.length}.png` });
+      } catch {}
+    }
   }
 }
 async function sessionFor(email) {
@@ -256,6 +263,7 @@ try {
 
   const ctxAdm = await sessionFor('arcocontents@gmail.com');
   const pd = await ctxAdm.newPage();
+  globalThis.__pd = pd;
 
   await step('admin vê todos os clientes e o rascunho', async () => {
     await pd.setViewportSize({ width: 1440, height: 900 });
@@ -288,10 +296,12 @@ try {
     await pd.getByRole('img', { name: '0% postado' }).waitFor();
     assert.equal(await pd.getByText('Aprovados sem ajuste').count(), 0);
     await pd.getByRole('navigation', { name: 'Categoria' }).getByRole('link', { name: 'Post', exact: true }).click();
-    await pd.waitForURL(/t=Post/);
+    await pd.waitForURL(/t=Post/, { waitUntil: 'commit' });
+    await pd.locator('.seg a[aria-current="page"]', { hasText: 'Post' }).waitFor();
     assert.equal(await num('Planejados'), '2');
     await pd.getByLabel('Cliente', { exact: true }).selectOption({ label: 'Beta Ltda' });
-    await pd.waitForURL(/c=[^&]+.*t=Post|t=Post.*c=[^&]+/);
+    await pd.waitForURL(/c=[^&]+.*t=Post|t=Post.*c=[^&]+/, { waitUntil: 'commit' });
+    await pd.waitForFunction(() => document.querySelector('.dash-nums div:nth-child(2) strong')?.textContent === '1');
     assert.equal(await num('Planejados'), '1');
     const [dl] = await Promise.all([pd.waitForEvent('download'), pd.getByRole('button', { name: 'Baixar PDF' }).click()]);
     assert.equal(dl.suggestedFilename(), 'producao-novembro-2026-beta-ltda-post.pdf');
@@ -299,6 +309,42 @@ try {
     await pd.goto(`${APP}/admin/gestao/dashboard?m=2026-11-01`);
     await pd.waitForTimeout(800);
     await shot(pd, '10b-dashboard');
+  });
+
+  await step('Pendências, busca ⌘K e histórico do cliente', async () => {
+    await pd.goto(`${APP}/admin/pendencias`);
+    await pd.getByRole('heading', { name: 'Pendências', level: 1 }).waitFor();
+    const fixRow = pd.locator('.todo', { hasText: 'Depoimento de cliente' });
+    await fixRow.waitFor();
+    assert.equal(await fixRow.getByRole('link', { name: /Corrigir/ }).getAttribute('href'), `/admin/conteudo/${page(REELS).id}`);
+    const badge = await pd.locator('.side-nav .count').innerText();
+    assert.ok(Number(badge) >= 1, 'contador de pendências no menu');
+    await shot(pd, '11-pendencias');
+    // busca rápida
+    await pd.keyboard.press('Control+k');
+    await pd.getByRole('dialog', { name: 'Buscar' }).waitFor();
+    await pd.keyboard.type('beta');
+    await pd.waitForTimeout(400);
+    await shot(pd, '12-busca');
+    await pd.keyboard.press('Control+a');
+    await pd.keyboard.type('gerenciar beta');
+    await pd.keyboard.press('Enter');
+    await pd.waitForURL(/\/admin\/clientes\//, { waitUntil: 'commit' });
+    await pd.getByRole('heading', { name: 'Beta Ltda' }).waitFor();
+    await pd.getByText(/Histórico · \d+ conteúdos/).waitFor();
+    await pd.locator('.row-item', { hasText: 'Post do Beta' }).first().waitFor();
+    // lápis de editar direto no calendário
+    await pd.goto(`${APP}/admin?c=${A}`);
+    assert.equal(await pd.getByRole('link', { name: 'Editar Depoimento de cliente' }).getAttribute('href'), `/admin/conteudo/${page(REELS).id}`);
+    // painel no celular
+    await pd.setViewportSize({ width: 390, height: 844 });
+    await pd.goto(`${APP}/admin?c=${A}`);
+    await pd.waitForTimeout(900);
+    await shot(pd, '13-admin-celular');
+    await pd.locator('.sc-label').click();
+    await pd.locator('.clients-scroll a', { hasText: 'Beta Ltda' }).waitFor();
+    await shot(pd, '13b-admin-celular-clientes');
+    await pd.setViewportSize({ width: 1440, height: 900 });
   });
 
   await step('admin também aprova, pede ajuste ou reprova', async () => {

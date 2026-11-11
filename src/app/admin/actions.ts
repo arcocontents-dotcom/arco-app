@@ -14,6 +14,7 @@ import {
   getClientFresh,
   getContentFresh,
   setClientInstagram,
+  setPosted,
   updateClient,
   updateContent,
   type ContentInput
@@ -220,4 +221,15 @@ export async function setClientLogoAction(id: string, logoUrl: string | null): P
   if (!c) return { ok: false, error: 'Cliente não encontrado.' };
   await updateClient(id, { logoUrl });
   return { ok: true, id };
+}
+
+
+/** Ação rápida das Pendências: marca como postado sem abrir o conteúdo. */
+export async function markPostedAction(form: FormData) {
+  await requireAdmin();
+  const id = String(form.get('id') ?? '');
+  const content = await getContentFresh(id);
+  if (content) await setPosted(content, true);
+  revalidatePath('/admin/pendencias');
+  redirect('/admin/pendencias?ok=postado');
 }

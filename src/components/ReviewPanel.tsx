@@ -1,5 +1,6 @@
 'use client';
 
+import Icon from './Icon';
 import { useMemo, useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { submitReview, togglePosted } from '@/app/actions/review';
@@ -140,7 +141,7 @@ export default function ReviewPanel({
                     <XIcon />
                   </button>
                   <button type="button" className="adj-btn" aria-pressed={d.status === 'Ajuste'} onClick={() => toggle(it.key, 'Ajuste')}>
-                    Ajustar
+                    <Icon name="pencil" size={14} />Ajustar
                   </button>
                   <button
                     type="button"
@@ -187,7 +188,7 @@ export default function ReviewPanel({
           </div>
           <div className="progress"><i style={{ width: `${Math.round((decided / items.length) * 100)}%` }} /></div>
           <button type="button" className="btn block" onClick={send} disabled={!ready || pending} aria-disabled={!ready || pending}>
-            {pending ? 'Enviando…' : isAdmin ? 'Salvar respostas' : 'Enviar para a Arco'}
+            <Icon name="send" size={16} className={pending ? 'ic-play' : ''} />{pending ? 'Enviando…' : isAdmin ? 'Salvar respostas' : 'Enviar para a Arco'}
           </button>
           <p className="hint" style={{ textAlign: 'center' }}>{helper}</p>
           {answered && (
@@ -198,6 +199,7 @@ export default function ReviewPanel({
 
       {!editing && !posted && (
         <div className="done-card rise" style={{ marginTop: 24 }}>
+          <Icon name="check" size={30} className="ic-play done-ic" />
           <span className="label" style={{ color: '#bdbab4' }}>Respondido{answeredBy ? ` por ${answeredBy}` : ''}</span>
           <span className="display" style={{ fontSize: 26 }}>
             {current === 'Aprovado' ? 'Tudo aprovado' : current === 'Reprovado' ? 'Reprovado' : current === 'Ajustes' ? 'Ajustes pedidos' : 'Enviado'}
@@ -215,6 +217,7 @@ export default function ReviewPanel({
 
       {posted && (
         <div className="done-card rise" style={{ marginTop: 24 }}>
+          <Icon name="send" size={28} className="ic-play done-ic" />
           <span className="label" style={{ color: '#bdbab4' }}>Publicado</span>
           <span className="display" style={{ fontSize: 26 }}>Conteúdo postado</span>
         </div>
@@ -223,7 +226,7 @@ export default function ReviewPanel({
       {isAdmin && (
         <div style={{ paddingTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <button type="button" className={`btn block ${posted ? 'outline' : ''}`} onClick={() => markPosted(!posted)} disabled={pending}>
-            {posted ? 'Desmarcar postado' : 'Marcar como postado'}
+            <Icon name={posted ? 'undo' : 'send'} size={16} />{posted ? 'Desmarcar postado' : 'Marcar como postado'}
           </button>
           <p className="hint" style={{ textAlign: 'center' }}>Só o administrador vê esta opção.</p>
         </div>

@@ -1,3 +1,5 @@
+import Icon from '@/components/Icon';
+import Link from 'next/link';
 import { requireAdmin } from '@/lib/access';
 import { listAllOpenContents, listClients, sameId } from '@/lib/notion';
 import AdminShell from '@/components/AdminShell';
@@ -20,7 +22,7 @@ export default async function Gestao() {
           <h1 className="display rise" style={{ fontSize: 'clamp(44px, 7vw, 88px)', ['--d' as string]: '60ms' }}>Gestão</h1>
         </div>
         <div className="actions rise" style={{ ['--d' as string]: '120ms' }}>
-          <a className="btn small" href="/admin/clientes/novo">+ Novo cliente</a>
+          <Link className="btn small" href="/admin/clientes/novo"><Icon name="plus" size={16} />Novo cliente</Link>
         </div>
       </div>
 
@@ -47,12 +49,12 @@ export default async function Gestao() {
                 return (
                   <tr key={c.id}>
                     <td>
-                      <a className="who" href={`/admin/clientes/${c.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                      <Link className="who" href={`/admin/clientes/${c.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                         <span className="mini-logo" aria-hidden="true">
                           {c.logoUrl ? <img src={c.logoUrl} alt="" loading="lazy" /> : <span>{c.name.charAt(0)}</span>}
                         </span>
                         <strong>{c.name}</strong>
-                      </a>
+                      </Link>
                     </td>
                     <td>{emails ? `${emails} e-mail${emails > 1 ? 's' : ''}` : <span className="s-Ajustes">Sem acesso</span>}</td>
                     <td>{c.igConnected ? <span className="s-Aprovado">Conectado</span> : c.instagram ? `@${c.instagram}` : '—'}</td>
@@ -64,8 +66,8 @@ export default async function Gestao() {
                       </div>
                     </td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      <a className="btn small outline" href={`/admin?c=${c.id}`}>Calendário</a>{' '}
-                      <a className="btn small" href={`/admin/clientes/${c.id}`}>Gerenciar</a>
+                      <Link className="btn small outline" href={`/admin?c=${c.id}`}><Icon name="calendar" size={15} />Calendário</Link>{' '}
+                      <Link className="btn small" href={`/admin/clientes/${c.id}`}><Icon name="users" size={15} />Gerenciar</Link>
                     </td>
                   </tr>
                 );
@@ -82,7 +84,7 @@ export default async function Gestao() {
             {removed.map((c) => (
               <li key={c.id}>
                 <div style={{ flex: 1 }}>{c.name}</div>
-                <a className="btn small outline" href={`/admin/clientes/${c.id}`}>Reativar ou ver</a>
+                <Link className="btn small outline" href={`/admin/clientes/${c.id}`}>Reativar ou ver</Link>
               </li>
             ))}
           </ul>

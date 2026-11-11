@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRef, useState, useTransition } from 'react';
 import { createClientFullAction } from '@/app/admin/actions';
 import { uploadImage, useUploader } from './upload';
@@ -32,8 +33,8 @@ export default function NewClientForm() {
           <p className="hint">Nenhum e-mail liberado ainda. Você pode liberar na página de acessos.</p>
         )}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <a className="btn" href={`/admin/conteudo/novo?c=${done.id}`}>+ Primeiro conteúdo</a>
-          <a className="btn outline" href={`/admin/clientes/${done.id}`}>Acessos e logo</a>
+          <Link className="btn" href={`/admin/conteudo/novo?c=${done.id}`}>+ Primeiro conteúdo</Link>
+          <Link className="btn outline" href={`/admin/clientes/${done.id}`}>Acessos e logo</Link>
         </div>
       </div>
     );

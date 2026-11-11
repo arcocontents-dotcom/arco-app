@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { requireAdmin } from '@/lib/access';
 import { env } from '@/lib/env';
 import { listAllContentsInRange, listClients, sameId } from '@/lib/notion';
@@ -45,9 +46,9 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
       <div className="toolbar rise" style={{ ['--d' as string]: '80ms' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <a className="icon-btn" href={q(addMonths(first, -1))} aria-label="Mês anterior"><ArrowLeft /></a>
+          <Link className="icon-btn" href={q(addMonths(first, -1))} aria-label="Mês anterior"><ArrowLeft /></Link>
           <h2 className="display" style={{ fontSize: 'clamp(26px, 3.6vw, 40px)' }}>{month}</h2>
-          <a className="icon-btn" href={q(addMonths(first, 1))} aria-label="Próximo mês"><ArrowRight /></a>
+          <Link className="icon-btn" href={q(addMonths(first, 1))} aria-label="Próximo mês"><ArrowRight /></Link>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <DashFilters month={first} client={client?.id ?? ''} type={type === 'Total' ? '' : type} clients={active.map((c) => ({ id: c.id, name: c.name }))} />
@@ -58,7 +59,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       <section className="dash-total rise" style={{ ['--d' as string]: '140ms' }}>
         <nav className="seg" aria-label="Categoria">
           {(['Total', ...PROD_GROUPS] as const).map((g) => (
-            <a key={g} href={tq(g)} aria-current={g === type ? 'page' : undefined}>{g === 'Total' ? 'Todos' : g}</a>
+            <Link key={g} href={tq(g)} aria-current={g === type ? 'page' : undefined}>{g === 'Total' ? 'Todos' : g}</Link>
           ))}
         </nav>
         <Ring posted={n.posted} late={n.late} planned={n.planned} size={240} />

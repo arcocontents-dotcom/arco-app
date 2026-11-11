@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireAdmin } from '@/lib/access';
 import { getContentFresh, listClients } from '@/lib/notion';
@@ -22,7 +23,7 @@ export default async function EditarConteudo({ params }: { params: Promise<{ id:
           <p className="label rise">Editar · <span className={`status s-${c.status}`}>{c.status}</span></p>
           <h1 className="display rise" style={{ fontSize: 'clamp(36px, 5vw, 64px)', ['--d' as string]: '60ms' }}>{c.title}</h1>
         </div>
-        <a className="btn outline small" href={`/c/${c.clientId}/${c.id}`}>Ver aprovação</a>
+        <Link className="btn outline small" href={`/c/${c.clientId}/${c.id}`}>Ver aprovação</Link>
       </div>
       <ContentForm
         clients={clients.map((x) => ({ id: x.id, name: x.name }))}

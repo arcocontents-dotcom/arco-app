@@ -1,5 +1,6 @@
 'use client';
 
+import Icon from './Icon';
 import { useState, useTransition } from 'react';
 import { accessLinkAction, type LinkKind } from '@/app/admin/actions';
 
@@ -27,10 +28,10 @@ export function LinkBox({ link, name, kind = 'mes' }: { link: string; name?: str
             }
           }}
         >
-          {copied ? 'Copiado' : 'Copiar link'}
+          <Icon name={copied ? 'check' : 'copy'} size={15} className={copied ? 'ic-play' : ''} />{copied ? 'Copiado' : 'Copiar link'}
         </button>
         <a className="btn small outline" href={`https://wa.me/?text=${encodeURIComponent(msg)}`} target="_blank" rel="noopener noreferrer">
-          Enviar no WhatsApp
+          <Icon name="chat" size={15} />Enviar no WhatsApp
         </a>
       </div>
       <span className="hint">Mande só para essa pessoa: quem abrir o link entra como ela.</span>

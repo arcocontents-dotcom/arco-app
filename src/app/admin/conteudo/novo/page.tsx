@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { requireAdmin } from '@/lib/access';
 import { env } from '@/lib/env';
 import { listClients, sameId } from '@/lib/notion';
@@ -16,7 +17,7 @@ export default async function NovoConteudo({ searchParams }: { searchParams: Pro
     return (
       <AdminShell>
         <p>Crie um cliente primeiro.</p>
-        <a className="btn" href="/admin/clientes/novo" style={{ alignSelf: 'flex-start' }}>+ Novo cliente</a>
+        <Link className="btn" href="/admin/clientes/novo" style={{ alignSelf: 'flex-start' }}>+ Novo cliente</Link>
       </AdminShell>
     );
   }

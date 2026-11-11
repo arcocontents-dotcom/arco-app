@@ -1,5 +1,6 @@
 'use client';
 
+import Icon from './Icon';
 import { useState } from 'react';
 
 interface Props {
@@ -109,7 +110,7 @@ export default function DownloadPdf(p: Props) {
 
   return (
     <button type="button" className="btn small" onClick={run} disabled={busy}>
-      {busy ? 'Gerando…' : 'Baixar PDF'}
+      <Icon name="download" size={16} className={busy ? 'ic-play' : ''} />{busy ? 'Gerando…' : 'Baixar PDF'}
     </button>
   );
 }

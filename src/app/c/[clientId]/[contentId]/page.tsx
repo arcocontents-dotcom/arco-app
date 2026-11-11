@@ -1,6 +1,6 @@
-import { notFound } from 'next/navigation';
-import { requireClientAccess } from '@/lib/access';
-import { getContentFresh, sameId, type ContentRecord } from '@/lib/notion';
+import Link from 'next/link';
+import { requireContentAccess } from '@/lib/access';
+import type { ContentRecord } from '@/lib/notion';
 import { dayLabel, itemLabel, itemsFor, type ItemKey } from '@/lib/domain';
 import { videoEmbedUrl, videoThumbUrl } from '@/lib/media';
 import ClientTop from '@/components/ClientTop';
@@ -52,12 +52,8 @@ function mediaFor(c: ContentRecord, key: ItemKey) {
 
 export default async function ReviewPage({ params }: { params: Promise<{ clientId: string; contentId: string }> }) {
   const { clientId, contentId } = await params;
-  const { viewer, client, canApprove } = await requireClientAccess(clientId);
-  const c = await getContentFresh(contentId);
-  // O conteúdo precisa pertencer a ESTE cliente. Sem isso, nada aparece.
-  if (!c || !sameId(c.clientId, client.id)) notFound();
+  const { viewer, client, canApprove, content: c } = await requireContentAccess(clientId, contentId);
   const isAdmin = viewer.role === 'admin';
-  if (c.status === 'Rascunho' && !isAdmin) notFound();
 
   const items = itemsFor(c.type).map((k) => ({
     key: k,
@@ -71,7 +67,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ clientI
     <main className="shell">
       <ClientTop name={client.name} isAdmin={isAdmin} />
       <div className="rise" style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '14px 20px 0 8px' }}>
-        <a href={`/c/${client.id}${c.day ? `?v=semana&d=${c.day}` : ''}`} className="icon-btn" aria-label="Voltar"><ArrowLeft /></a>
+        <Link href={`/c/${client.id}${c.day ? `?v=semana&d=${c.day}` : ''}`} className="icon-btn" aria-label="Voltar"><ArrowLeft /></Link>
         <span className="label" style={{ flex: 1 }}>{c.day ? dayLabel(c.day) : 'Sem data'}{c.time ? ` · ${c.time}` : ''}</span>
         <span className="label strong">{c.type}</span>
       </div>
@@ -88,7 +84,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ clientI
       />
       {isAdmin && (
         <div style={{ maxWidth: 640, width: '100%', margin: '0 auto', padding: '0 16px 48px' }}>
-          <a href={`/admin/conteudo/${c.id}`} className="btn outline block">Editar conteúdo</a>
+          <Link href={`/admin/conteudo/${c.id}`} className="btn outline block">Editar conteúdo</Link>
         </div>
       )}
     </main>
