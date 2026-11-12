@@ -391,7 +391,7 @@ try {
     await pd.fill('#email', 'gama@x.com');
     await pd.click('button:has-text("Criar cliente")');
     await pd.getByText('Cliente criado').waitFor();
-    assert.equal(await pd.locator('input[aria-label="Link de acesso"]').count(), 2, 'deve mostrar link do mês e da semana');
+    assert.equal(await pd.locator('input[aria-label="Link de acesso"]').count(), 1, 'um link só, direto no calendário');
     const link = await pd.locator('input[aria-label="Link de acesso"]').first().inputValue();
     assert.match(link, /\/entrar\/confirmar\?t=/);
     const gama = [...store.values()].find((p) => p.properties.Nome?.title?.[0]?.plain_text === 'Gama Studio');
@@ -400,26 +400,27 @@ try {
     const pg = await ctx.newPage();
     await pg.goto(link);
     await pg.click('button:has-text("Entrar")');
-    await pg.waitForURL(/\/c\/.*v=mes/, { timeout: 10000 }).catch(async () => {
+    await pg.waitForURL(/\/c\/[^/?]+$/, { timeout: 10000 }).catch(async () => {
       throw new Error(`parou em ${pg.url()} :: ${(await pg.locator('body').innerText()).slice(0, 150)}`);
     });
     await pg.getByText('Gama Studio').first().waitFor();
     await ctx.close();
   });
 
-  await step('link da semana leva direto à semana e, já logado, não pede para entrar de novo', async () => {
+  await step('link de acesso leva direto ao calendário e, já logado, não pede para entrar de novo', async () => {
     await pd.goto(`${APP}/admin/clientes/${A}`);
-    await pd.getByRole('button', { name: 'Link da semana atual' }).first().click();
+    assert.equal(await pd.getByRole('button', { name: /Link do mês|Link da semana/ }).count(), 0);
+    await pd.getByRole('button', { name: 'Gerar link de acesso' }).first().click();
     const link = await pd.locator('input[aria-label="Link de acesso"]').inputValue();
     assert.match(link, /next=/);
     const ctx = await browser.newContext();
     const pg = await ctx.newPage();
     await pg.goto(link);
     await pg.click('button:has-text("Entrar")');
-    await pg.waitForURL(/v=semana/);
+    await pg.waitForURL(new RegExp(`/c/${A}$`));
     await pg.getByRole('heading', { name: 'Semana' }).waitFor();
     await pg.goto(link); // segunda vez: entra direto
-    await pg.waitForURL(/\/c\/.*v=semana/);
+    await pg.waitForURL(new RegExp(`/c/${A}$`));
     await ctx.close();
   });
 

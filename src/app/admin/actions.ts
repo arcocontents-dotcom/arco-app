@@ -25,7 +25,7 @@ import { signLoginToken } from '@/lib/session';
 
 // ---------- clientes ----------
 
-export type CreateClientResult = { ok: true; id: string; links: { mes: string; semana: string } | null } | { ok: false; error: string };
+export type CreateClientResult = { ok: true; id: string; link: string | null } | { ok: false; error: string };
 
 /** Cria o cliente já com e-mail liberado e logo (opcionais) e devolve o link de acesso. */
 export async function createClientFullAction(input: {
@@ -55,20 +55,20 @@ export async function createClientFullAction(input: {
         ...(input.logoUrl ? { logoUrl: input.logoUrl } : {})
       });
     }
-    const links = email ? { mes: await buildLink(email, id, 'mes'), semana: await buildLink(email, id, 'semana') } : null;
-    return { ok: true, id, links };
+    const link = email ? await buildLink(email, id) : null;
+    return { ok: true, id, link };
   } catch (e) {
     console.error('[cliente]', e);
     return { ok: false, error: 'Não foi possível salvar no Notion. Tente de novo.' };
   }
 }
 
-export type LinkKind = 'mes' | 'semana';
 export type LinkResult = { ok: true; link: string } | { ok: false; error: string };
 
-async function buildLink(email: string, clientId: string, kind: LinkKind) {
+/** Um link só: entra direto no calendário do cliente, na semana que tem conteúdo. */
+async function buildLink(email: string, clientId: string) {
   const token = await signLoginToken(email, '24h');
-  const next = `/c/${clientId}?v=${kind}`;
+  const next = `/c/${clientId}`;
   return `${env.appUrl}/entrar/confirmar?t=${encodeURIComponent(token)}&next=${encodeURIComponent(next)}`;
 }
 
@@ -81,13 +81,13 @@ export async function setClientCancelledAction(id: string, cancelled: boolean): 
 }
 
 /** Gera um link de acesso (vale 24h) para mandar ao cliente por WhatsApp. */
-export async function accessLinkAction(clientId: string, email: string, kind: LinkKind): Promise<LinkResult> {
+export async function accessLinkAction(clientId: string, email: string): Promise<LinkResult> {
   await requireAdmin();
   const e = normalizeEmail(email);
   const c = await getClientFresh(clientId);
   if (!c || !(c.approvers.includes(e) || c.viewers.includes(e))) return { ok: false, error: 'Esse e-mail não está liberado neste cliente.' };
   if (c.cancelled) return { ok: false, error: 'Este cliente está removido. Reative antes.' };
-  return { ok: true, link: await buildLink(e, c.id, kind === 'semana' ? 'semana' : 'mes') };
+  return { ok: true, link: await buildLink(e, c.id) };
 }
 
 export async function updateClientAction(form: FormData) {
