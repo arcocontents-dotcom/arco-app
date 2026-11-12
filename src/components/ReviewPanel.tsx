@@ -1,8 +1,9 @@
 'use client';
 
 import Icon from './Icon';
-import { useMemo, useState, useTransition, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import { createPortal } from 'react-dom';
 import { submitReview, togglePosted } from '@/app/actions/review';
 import { CheckIcon, XIcon } from './icons';
 import type { DecisionStatus, GeneralStatus, ItemStatus } from '@/lib/domain';
@@ -16,7 +17,14 @@ export interface PanelItem {
   note: string;
   /** Mídia grande mostrada acima da aprovação deste item (vídeo, capa, legenda…). */
   media?: ReactNode;
+  /** O que o cliente precisa fazer antes de aprovar: assistir ao vídeo ou passar todas as artes. */
+  mustSee?: 'play' | 'swipe' | null;
 }
+
+const MUST_SEE_TEXT = { play: 'Assista ao vídeo antes de aprovar.', swipe: 'Passe todas as artes do carrossel antes de aprovar.' };
+
+/** "Capa", "Capa e Legenda", "Vídeo, Capa e Legenda" */
+const joinPt = (xs: string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} e ${xs[xs.length - 1]}`);
 
 type Draft = Record<string, { status: DecisionStatus | null; note: string }>;
 
@@ -54,23 +62,111 @@ export default function ReviewPanel({
 
   const posted = current === 'Postado';
   const locked = posted || !canApprove;
+  // O que o cliente já viu de verdade (vídeo tocado / carrossel até o fim).
+  const [seen, setSeen] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(items.map((i) => [i.key, !i.mustSee || i.status !== 'Pendente']))
+  );
+  const [warn, setWarn] = useState<Record<string, string>>({});
+  const [missingMsg, setMissingMsg] = useState<string | null>(null);
+  const [leaveTo, setLeaveTo] = useState<{ href: string } | { form: HTMLFormElement } | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
+  const blocks = useRef<Record<string, HTMLDivElement | null>>({});
+  const markSeen = useCallback((key: string) => {
+    setSeen((v) => (v[key] ? v : { ...v, [key]: true }));
+    setWarn((w) => (w[key] ? { ...w, [key]: '' } : w));
+  }, []);
 
   const set = (key: string, patch: Partial<Draft[string]>) =>
     setDraft((d) => ({ ...d, [key]: { ...d[key], ...patch } }));
-  const toggle = (key: string, s: DecisionStatus) => set(key, { status: draft[key].status === s ? null : s });
+  const toggle = (key: string, s: DecisionStatus) => {
+    const it = items.find((i) => i.key === key)!;
+    if (s === 'Aprovado' && draft[key].status !== 'Aprovado' && it.mustSee && !seen[key] && !isAdmin) {
+      setWarn((w) => ({ ...w, [key]: MUST_SEE_TEXT[it.mustSee!] }));
+      return;
+    }
+    setMissingMsg(null);
+    set(key, { status: draft[key].status === s ? null : s });
+  };
 
   const decided = items.filter((i) => draft[i.key].status).length;
   const missingNote = items.find((i) => draft[i.key].status === 'Ajuste' && !draft[i.key].note.trim());
   const ready = decided === items.length && !missingNote;
+  const missing = items.filter((i) => !draft[i.key].status);
+  // Enquanto o cliente está respondendo, não deixa sair sem enviar.
+  const guard = canApprove && !isAdmin && editing && !locked && !pending;
+
+  useEffect(() => {
+    if (!guard) return;
+    const onUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null;
+      if (!a || a.target === '_blank' || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      const url = new URL(a.href, location.href);
+      if (url.origin !== location.origin || url.pathname === location.pathname) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setLeaveTo({ href: url.pathname + url.search });
+    };
+    const onSubmit = (e: SubmitEvent) => {
+      const f = e.target as HTMLFormElement;
+      if (!f.closest('.review-stack')) {
+        e.preventDefault();
+        setLeaveTo({ form: f });
+      }
+    };
+    window.addEventListener('beforeunload', onUnload);
+    document.addEventListener('click', onClick, true);
+    document.addEventListener('submit', onSubmit, true);
+    return () => {
+      window.removeEventListener('beforeunload', onUnload);
+      document.removeEventListener('click', onClick, true);
+      document.removeEventListener('submit', onSubmit, true);
+    };
+  }, [guard]);
+
+  function goToFirstMissing() {
+    const first = missing[0] ?? missingNote;
+    if (!first) return;
+    blocks.current[first.key]?.querySelector('.approval-row')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setFlash(first.key);
+    setTimeout(() => setFlash(null), 1400);
+  }
+
+  function leave() {
+    const to = leaveTo;
+    setLeaveTo(null);
+    if (!to) return;
+    window.onbeforeunload = null;
+    if ('href' in to) {
+      setEditing(false);
+      setTimeout(() => router.push(to.href), 40);
+    } else {
+      setEditing(false);
+      setTimeout(() => to.form.submit(), 40);
+    }
+  }
 
   const helper = useMemo(() => {
     if (missingNote) return `Escreva o ajuste de ${missingNote.label}.`;
     if (ready) return 'Tudo certo. Pode enviar.';
-    return 'Aprove, peça ajuste ou reprove cada item.';
+    return 'Veja e responda cada item: aprovar, ajustar ou reprovar.';
   }, [missingNote, ready]);
 
   function send() {
-    if (!ready || pending) return;
+    if (pending) return;
+    if (!ready) {
+      setMissingMsg(
+        missing.length
+          ? `Falta olhar e responder: ${joinPt(missing.map((i) => i.label))}.`
+          : `Escreva o ajuste de ${missingNote!.label}.`
+      );
+      goToFirstMissing();
+      return;
+    }
+    setMissingMsg(null);
     setError(null);
     const payload = Object.fromEntries(items.map((i) => [i.key, { status: draft[i.key].status!, note: draft[i.key].note }]));
     start(async () => {
@@ -114,7 +210,20 @@ export default function ReviewPanel({
         const showNote = editable && (d.status === 'Ajuste' || d.status === 'Reprovado');
         const savedNote = !editable && it.note && (it.status === 'Ajuste' || it.status === 'Reprovado');
         return (
-          <div key={it.key} className="review-block rise" style={{ ['--d' as string]: `${120 + idx * 110}ms` }}>
+          <div
+            key={it.key}
+            ref={(el) => { blocks.current[it.key] = el; }}
+            className={`review-block rise${flash === it.key ? ' flash' : ''}`}
+            style={{ ['--d' as string]: `${120 + idx * 110}ms` }}
+            onPlayCapture={() => it.mustSee === 'play' && markSeen(it.key)}
+            onClickCapture={(e) => {
+              if (it.mustSee === 'play' && (e.target as Element).closest('.frame-916')) markSeen(it.key);
+            }}
+            onScrollCapture={(e) => {
+              const el = e.target as HTMLElement;
+              if (it.mustSee === 'swipe' && el.classList?.contains('track') && el.scrollLeft + el.clientWidth >= el.scrollWidth - 8) markSeen(it.key);
+            }}
+          >
             {items.length > 1 && (
               <div className="block-title">
                 <span className="num">{String(idx + 1).padStart(2, '0')}</span>
@@ -155,6 +264,9 @@ export default function ReviewPanel({
                 </>
               )}
             </div>
+            {editable && warn[it.key] && (
+              <p role="alert" className="see-warn rise"><Icon name={it.mustSee === 'play' ? 'video' : 'image'} size={16} className="ic-play" />{warn[it.key]}</p>
+            )}
             {showNote && (
               <div className="field rise" style={{ paddingTop: 14 }}>
                 <label htmlFor={`n-${it.key}`} className="label">
@@ -187,7 +299,10 @@ export default function ReviewPanel({
             <span className="label">{decided} de {items.length}</span>
           </div>
           <div className="progress"><i style={{ width: `${Math.round((decided / items.length) * 100)}%` }} /></div>
-          <button type="button" className="btn block" onClick={send} disabled={!ready || pending} aria-disabled={!ready || pending}>
+          {missingMsg && (
+            <p role="alert" className="missing-warn rise"><Icon name="bell" size={16} className="ic-play" />{missingMsg}</p>
+          )}
+          <button type="button" className={`btn block${ready ? '' : ' not-ready'}`} onClick={send} disabled={pending} data-ready={ready ? "sim" : "nao"}>
             <Icon name="send" size={16} className={pending ? 'ic-play' : ''} />{pending ? 'Enviando…' : isAdmin ? 'Salvar respostas' : 'Enviar para a Arco'}
           </button>
           <p className="hint" style={{ textAlign: 'center' }}>{helper}</p>
@@ -222,6 +337,24 @@ export default function ReviewPanel({
           <span className="display" style={{ fontSize: 26 }}>Conteúdo postado</span>
         </div>
       )}
+
+      {leaveTo && createPortal(
+        <div className="leave-overlay" role="dialog" aria-modal="true" aria-labelledby="leave-t" onMouseDown={(e) => e.target === e.currentTarget && setLeaveTo(null)}>
+          <div className="leave-box">
+            <Icon name="bell" size={28} className="ic-play" />
+            <h2 id="leave-t" className="display" style={{ fontSize: 26, margin: 0 }}>Você ainda não terminou</h2>
+            <p style={{ margin: 0, color: 'var(--muted)', lineHeight: 1.5 }}>
+              {missing.length
+                ? <>Falta olhar e responder: <strong style={{ color: 'var(--ink)' }}>{joinPt(missing.map((i) => i.label))}</strong>. Suas respostas só chegam na Arco quando você tocar em Enviar.</>
+                : <>Você respondeu tudo, mas ainda não enviou. Suas respostas só chegam na Arco quando você tocar em Enviar.</>}
+            </p>
+            <button type="button" className="btn block" autoFocus onClick={() => { setLeaveTo(null); if (ready) document.querySelector<HTMLButtonElement>('.review-stack .btn.block')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); else goToFirstMissing(); }}>
+              Continuar revisando
+            </button>
+            <button type="button" className="link-btn" style={{ alignSelf: 'center' }} onClick={leave}>Sair sem enviar</button>
+          </div>
+        </div>
+      , document.body)}
 
       {isAdmin && (
         <div style={{ paddingTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>

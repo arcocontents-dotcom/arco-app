@@ -23,7 +23,7 @@ const A = seedPage(CLIENTS_DB, { Nome: title('Studio Alfa'), 'E-mails que aprova
 const B = seedPage(CLIENTS_DB, { Nome: title('Beta Ltda'), 'E-mails que aprovam': rt('b@x.com') });
 const rel = (id) => ({ relation: [{ id }] });
 const date = (s) => ({ date: { start: s, time_zone: 'America/Cuiaba' } });
-const REELS = seedPage(CONTENTS_DB, { 'Título': title('Depoimento de cliente'), Cliente: rel(A), Data: date('2026-11-12T18:00:00'), Tipo: sel('Reels'), Status: sel('Aguardando'), Capa: { url: 'https://midia.test/capa.jpg' }, Legenda: rt('Legenda do reels #teste') });
+const REELS = seedPage(CONTENTS_DB, { 'Título': title('Depoimento de cliente'), Cliente: rel(A), Data: date('2026-11-12T18:00:00'), Tipo: sel('Reels'), Status: sel('Aguardando'), 'Vídeo': { url: 'https://midia.test/v.mp4' }, Capa: { url: 'https://midia.test/capa.jpg' }, Legenda: rt('Legenda do reels #teste') });
 const CARR = seedPage(CONTENTS_DB, { 'Título': title('Antes e depois'), Cliente: rel(A), Data: date('2026-11-11T12:00:00'), Tipo: sel('Carrossel'), Status: sel('Aguardando'), Artes: { files: [1, 2, 3].map((i) => ({ name: `Arte ${i}`, type: 'external', external: { url: `https://midia.test/a${i}.jpg` } })) }, Legenda: rt('Legenda do carrossel') });
 const STORY = seedPage(CONTENTS_DB, { 'Título': title('Promoção de sábado'), Cliente: rel(A), Data: date('2026-11-14T09:00:00'), Tipo: sel('Story'), Status: sel('Aguardando'), 'Imagem do story': { url: 'https://midia.test/s.jpg' } });
 const DRAFT = seedPage(CONTENTS_DB, { 'Título': title('Rascunho secreto'), Cliente: rel(A), Data: date('2026-11-13T10:00:00'), Tipo: sel('Post'), Status: sel('Rascunho') });
@@ -191,15 +191,39 @@ try {
   });
 
   await step('Reels: aprovar vídeo, pedir ajuste na capa, reprovar legenda e enviar', async () => {
+    globalThis.__pd = pa;
     await pa.goto(`${APP}/c/${A}/${REELS}`);
     await pa.getByRole('heading', { name: 'Depoimento de cliente' }).waitFor();
     await pa.waitForTimeout(900);
     await shot(pa, '04-reels');
-    await pa.getByRole('button', { name: 'Aprovar Vídeo' }).click();
-    await pa.locator('.approval-row').nth(1).getByRole('button', { name: 'Ajustar' }).click();
     const send = pa.getByRole('button', { name: 'Enviar para a Arco' });
+    // tentar enviar sem olhar nada: avisa o que falta
+    await send.click();
+    await pa.getByText('Falta olhar e responder: Vídeo, Capa e Legenda.').waitFor();
+    // aprovar o vídeo sem assistir: não deixa
+    await pa.getByRole('button', { name: 'Aprovar Vídeo' }).click();
+    await pa.getByText('Assista ao vídeo antes de aprovar.').waitFor();
+    assert.equal(await pa.getByRole('button', { name: 'Aprovar Vídeo' }).getAttribute('aria-pressed'), 'false');
+    // sair no meio: pergunta antes
+    await pa.getByRole('link', { name: 'Voltar' }).click();
+    await pa.getByRole('dialog', { name: 'Você ainda não terminou' }).waitFor();
+    await pa.getByRole('dialog').getByText(/Falta olhar e responder: Vídeo, Capa e Legenda/).waitFor();
+    await pa.waitForTimeout(500);
+    await pa.screenshot({ path: `${SHOTS}/04b-sair-sem-terminar.png` }).catch(() => {});
+    await pa.getByRole('button', { name: 'Continuar revisando' }).click();
+    assert.match(pa.url(), new RegExp(REELS.replace(/-/g, '-?')));
+    // assiste e aí aprova
+    await pa.getByRole('button', { name: /Reproduzir vídeo/ }).click();
+    await pa.waitForFunction(() => !!document.fullscreenElement, null, { timeout: 3000 }).catch(() => {});
+    await pa.evaluate(() => document.fullscreenElement && document.exitFullscreen());
+    await pa.waitForTimeout(300);
+    await pa.getByRole('button', { name: 'Aprovar Vídeo' }).click();
+    assert.equal(await pa.getByRole('button', { name: /aprovação de Vídeo/ }).getAttribute('aria-pressed'), 'true');
+    await pa.locator('.approval-row').nth(1).getByRole('button', { name: 'Ajustar' }).click();
     await pa.getByRole('button', { name: 'Reprovar Legenda' }).click();
-    assert.equal(await send.isDisabled(), true, 'não pode enviar sem escrever o ajuste');
+    assert.equal(await send.getAttribute('data-ready'), 'nao', 'não pode enviar sem escrever o ajuste');
+    await send.click();
+    await pa.getByText('Escreva o ajuste de Capa.').first().waitFor();
     await pa.fill('#n-capa', 'Trocar a foto da capa');
     await pa.fill('#n-legenda', 'Tom não combina');
     await pa.waitForTimeout(300);
@@ -230,6 +254,10 @@ try {
     await pa.getByRole('button', { name: 'Próxima arte' }).click();
     await pa.waitForTimeout(700);
     assert.equal((await pa.locator('.counter').textContent()).trim(), '2/3');
+    await pa.getByRole('button', { name: 'Aprovar Carrossel' }).click();
+    await pa.getByText('Passe todas as artes do carrossel antes de aprovar.').waitFor();
+    await pa.getByRole('button', { name: 'Próxima arte' }).click();
+    await pa.waitForTimeout(700);
     await pa.getByRole('button', { name: 'Aprovar Carrossel' }).click();
     await pa.getByRole('button', { name: 'Aprovar Legenda' }).click();
     await pa.getByRole('button', { name: 'Enviar para a Arco' }).click();

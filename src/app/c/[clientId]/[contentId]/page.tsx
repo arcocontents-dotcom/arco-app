@@ -60,7 +60,8 @@ export default async function ReviewPage({ params }: { params: Promise<{ clientI
     label: itemLabel(c.type, k),
     status: c.items[k].status,
     note: c.items[k].note,
-    media: mediaFor(c, k)
+    media: mediaFor(c, k),
+    mustSee: (k === 'video' || k === 'story') && c.videoUrl ? ('play' as const) : k === 'arte' && c.artUrls.length > 1 ? ('swipe' as const) : null
   }));
 
   return (

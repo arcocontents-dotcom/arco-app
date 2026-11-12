@@ -537,3 +537,14 @@ button, input, textarea, select { font: inherit; color: inherit; }
   .cal .wd-m { display: inline; font-family: var(--body); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin-left: 6px; }
   .cal .card .ph { height: 90px; }
 }
+
+/* ---------- revisão: avisos ---------- */
+.see-warn, .missing-warn { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; padding: 12px 14px; background: #fbf1e8; color: var(--adj); font-size: 14px; line-height: 1.4; border-left: 3px solid var(--adj); }
+.missing-warn { margin: 0; }
+.btn.not-ready { opacity: 0.55; }
+.review-block.flash .approval-row { animation: flash-row 1.3s var(--ease); }
+@keyframes flash-row { 0%, 100% { box-shadow: 0 0 0 0 rgba(168, 86, 28, 0); } 20%, 60% { box-shadow: 0 0 0 3px rgba(168, 86, 28, 0.55); } }
+.leave-overlay { position: fixed; inset: 0; z-index: 120; background: rgba(17, 17, 17, 0.45); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); display: flex; align-items: flex-end; justify-content: center; padding: 16px; animation: fade 0.2s ease both; }
+.leave-box { width: min(440px, 100%); background: var(--bg); padding: 28px 22px 18px; display: flex; flex-direction: column; gap: 14px; color: var(--ink); animation: cmd-in 0.3s var(--ease) both; }
+.leave-box .ic { color: var(--adj); }
+@media (min-width: 700px) { .leave-overlay { align-items: center; } }
