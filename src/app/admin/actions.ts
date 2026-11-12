@@ -3,6 +3,9 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { requireAdmin } from '@/lib/access';
+import { syncPlanFromContent } from '@/lib/planning';
+import { pushConfigured, sendPush } from '@/lib/push';
+import { allow } from '@/lib/ratelimit';
 import { env } from '@/lib/env';
 import {
   archiveContent,
@@ -15,6 +18,8 @@ import {
   getContentFresh,
   setClientInstagram,
   setPosted,
+  getClientPushSubs,
+  setClientPushSubs,
   updateClient,
   updateContent,
   type ContentInput
@@ -196,6 +201,7 @@ export async function saveContentAction(p: ContentPayload): Promise<SaveResult> 
       if (!p.publish) status = 'Rascunho';
       if (p.resetApprovals && p.publish) status = 'Aguardando';
       await updateContent(p.id, { ...input, status }, prev.clientId);
+      if (prev.planningId) await syncPlanFor(p.id);
       return { ok: true, id: p.id };
     }
     const id = await createContent({ ...input, status: p.publish ? 'Aguardando' : 'Rascunho', resetApprovals: true });
@@ -229,7 +235,33 @@ export async function markPostedAction(form: FormData) {
   await requireAdmin();
   const id = String(form.get('id') ?? '');
   const content = await getContentFresh(id);
-  if (content) await setPosted(content, true);
+  if (content) {
+    await setPosted(content, true);
+    await syncPlanFor(id);
+  }
   revalidatePath('/admin/pendencias');
   redirect('/admin/pendencias?ok=postado');
+}
+
+/** Leva o andamento da aprovação para o card ligado no Calendário mensal. */
+async function syncPlanFor(id: string, unposted = false) {
+  const fresh = await getContentFresh(id);
+  if (fresh?.planningId) await syncPlanFromContent(fresh, { unposted });
+}
+
+/** Botão "Avisar cliente": manda um aviso para os celulares do cliente que ligaram os avisos. */
+export async function notifyClientAction(clientId: string): Promise<{ ok: true; sent: number } | { ok: false; error: string }> {
+  await requireAdmin();
+  if (!pushConfigured()) return { ok: false, error: 'Avisos ainda não configurados no servidor.' };
+  const client = await getClientFresh(clientId);
+  if (!client || client.cancelled) return { ok: false, error: 'Cliente não encontrado.' };
+  if (!allow(`notify:${client.id}`, 3, 10 * 60_000)) return { ok: false, error: 'Aviso já enviado há pouco. Espere uns minutos.' };
+  const subs = await getClientPushSubs(client.id);
+  if (!subs.length) return { ok: false, error: 'Ninguém deste cliente ligou os avisos ainda.' };
+  const results = await Promise.all(subs.map((s) => sendPush(s.endpoint).catch(() => 'erro' as const)));
+  const keep = subs.filter((_, i) => results[i] !== 'gone');
+  if (keep.length !== subs.length) await setClientPushSubs(client.id, keep);
+  const sent = results.filter((r) => r === 'ok').length;
+  if (!sent) return { ok: false, error: 'Não foi possível entregar agora.' };
+  return { ok: true, sent };
 }

@@ -35,6 +35,16 @@ export const env = {
   get contentsDb() {
     return need('NOTION_CONTENTS_DB');
   },
+  /** Calendário mensal (planejamento e produção) que já existia no Notion da Arco. */
+  get planningDb() {
+    return read('NOTION_PLANNING_DB');
+  },
+  get vapidPublicKey() {
+    return read('VAPID_PUBLIC_KEY');
+  },
+  get vapidPrivateKey() {
+    return read('VAPID_PRIVATE_KEY');
+  },
   get resendKey() {
     return read('RESEND_API_KEY');
   },

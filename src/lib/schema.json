@@ -9,7 +9,9 @@
     "igToken": "IG token (criptografado)",
     "igTokenExpires": "IG token expira",
     "logo": "Logo",
-    "cancelled": "Cancelado"
+    "cancelled": "Cancelado",
+    "calName": "Nome no Calendário mensal",
+    "push": "Avisos (inscrições)"
   },
   "contents": {
     "title": "Título",
@@ -40,6 +42,18 @@
     "answeredAt": "Respondido em",
     "postedAt": "Postado em",
     "hadAdjust": "Teve ajuste",
-    "adjustRounds": "Rodadas de ajuste"
+    "adjustRounds": "Rodadas de ajuste",
+    "planning": "Planejamento"
+  },
+  "planning": {
+    "title": "Título do assunto",
+    "client": "Cliente",
+    "date": "Data de postagem",
+    "status": "Status",
+    "kind": "Tipo de demanda",
+    "note": "Observação",
+    "owner": "Demanda atual está com",
+    "done": "Finalizado",
+    "month": "Referente ao mês"
   }
 }

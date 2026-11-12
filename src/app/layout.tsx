@@ -7,7 +7,8 @@ export const metadata: Metadata = {
   description: 'Calendário e aprovação de conteúdo da Arco Contents.',
   manifest: '/manifest.webmanifest',
   icons: { icon: '/icon-192.png', apple: '/apple-touch-icon.png' },
-  robots: { index: false, follow: false }
+  robots: { index: false, follow: false },
+  appleWebApp: { capable: true, title: 'Arco', statusBarStyle: 'default' }
 };
 
 export const viewport: Viewport = {

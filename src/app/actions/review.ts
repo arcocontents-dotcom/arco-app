@@ -3,6 +3,7 @@
 import { currentViewer } from '@/lib/access';
 import { getClientFresh, getContentFresh, saveDecisions, setPosted } from '@/lib/notion';
 import { type Decision, type GeneralStatus, validateDecisions } from '@/lib/domain';
+import { syncPlanFromContent } from '@/lib/planning';
 
 export type ReviewResult = { ok: true; status: GeneralStatus } | { ok: false; error: string };
 
@@ -37,6 +38,7 @@ export async function submitReview(contentId: string, decisions: Record<string, 
     return { ok: false, error: 'Não foi possível salvar agora. Tente de novo.' };
   }
   const fresh = await getContentFresh(contentId);
+  if (fresh?.planningId) await syncPlanFromContent(fresh);
   return { ok: true, status: fresh?.status ?? 'Aguardando' };
 }
 
@@ -47,6 +49,8 @@ export async function togglePosted(contentId: string, posted: boolean): Promise<
   if (!content) return { ok: false, error: 'Conteúdo não encontrado.' };
   try {
     await setPosted(content, posted);
+    const fresh = await getContentFresh(contentId);
+    if (fresh?.planningId) await syncPlanFromContent(fresh, { unposted: !posted });
   } catch (e) {
     console.error('[posted]', e);
     return { ok: false, error: 'Não foi possível salvar agora.' };

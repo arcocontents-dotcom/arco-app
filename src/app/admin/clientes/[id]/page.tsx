@@ -1,3 +1,4 @@
+import NotifyButton from '@/components/NotifyButton';
 import Icon from '@/components/Icon';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -63,6 +64,7 @@ export default async function ClienteAcessos({
         <div className="actions">
           <Link className="btn outline small" href={`/admin?c=${c.id}`}><Icon name="calendar" size={16} />Calendário</Link>
           <Link className="btn outline small" href={`/c/${c.id}`}><Icon name="eye" size={16} />Ver como cliente</Link>
+          <NotifyButton clientId={c.id} name={c.name} />
         </div>
       </div>
 

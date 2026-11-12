@@ -24,7 +24,7 @@ const C = schema.clients;
 const K = schema.contents;
 
 let _client: NotionClient | null = null;
-function notion() {
+export function notion() {
   if (!_client)
     _client = new NotionClient({
       auth: env.notionToken,
@@ -47,6 +47,14 @@ export interface ClientRecord {
   igConnected: boolean;
   logoUrl: string | null;
   cancelled: boolean;
+  /** Nome do cliente na coluna Cliente do Calendário mensal (planejamento). */
+  calName: string;
+}
+
+export interface PushSub {
+  endpoint: string;
+  email: string;
+  at: string;
 }
 
 export interface ContentRecord {
@@ -70,6 +78,8 @@ export interface ContentRecord {
   postedAt: string | null;
   hadAdjust: boolean;
   adjustRounds: number;
+  /** Card ligado no Calendário mensal (planejamento). */
+  planningId: string | null;
 }
 
 // ---------------- leitura de propriedades ----------------
@@ -77,7 +87,7 @@ export interface ContentRecord {
 type Props = PageObjectResponse['properties'];
 type Prop = Props[string];
 
-function text(p: Prop | undefined): string {
+export function text(p: Prop | undefined): string {
   if (!p) return '';
   if (p.type === 'title') return p.title.map((t) => t.plain_text).join('');
   if (p.type === 'rich_text') return p.rich_text.map((t) => t.plain_text).join('');
@@ -85,16 +95,16 @@ function text(p: Prop | undefined): string {
   if (p.type === 'url') return p.url ?? '';
   return '';
 }
-function select(p: Prop | undefined): string | null {
+export function select(p: Prop | undefined): string | null {
   return p && p.type === 'select' ? p.select?.name ?? null : null;
 }
-function checkbox(p: Prop | undefined): boolean {
+export function checkbox(p: Prop | undefined): boolean {
   return !!(p && p.type === 'checkbox' && p.checkbox);
 }
 function url(p: Prop | undefined): string | null {
   return p && p.type === 'url' && p.url ? p.url : null;
 }
-function date(p: Prop | undefined): string | null {
+export function date(p: Prop | undefined): string | null {
   return p && p.type === 'date' ? p.date?.start ?? null : null;
 }
 function relationFirst(p: Prop | undefined): string | null {
@@ -111,14 +121,14 @@ export function streamUid(u: string | null): string | null {
   return m ? m[1].toLowerCase() : null;
 }
 
-function normId(id: string): string {
+export function normId(id: string): string {
   return id.replace(/-/g, '').toLowerCase();
 }
 export function sameId(a: string | null | undefined, b: string | null | undefined): boolean {
   return !!a && !!b && normId(a) === normId(b);
 }
 
-function isPage(x: unknown): x is PageObjectResponse {
+export function isPage(x: unknown): x is PageObjectResponse {
   return !!x && typeof x === 'object' && (x as { object?: string }).object === 'page' && 'properties' in (x as object);
 }
 
@@ -132,7 +142,8 @@ function toClient(p: PageObjectResponse): ClientRecord {
     instagram: text(pr[C.instagram]).replace(/^@/, ''),
     igConnected: checkbox(pr[C.igConnected]),
     logoUrl: url(pr[C.logo]),
-    cancelled: checkbox(pr[C.cancelled])
+    cancelled: checkbox(pr[C.cancelled]),
+    calName: text(pr[C.calName]).trim()
   };
 }
 
@@ -175,11 +186,12 @@ function toContent(p: PageObjectResponse): ContentRecord {
     adjustRounds: (() => {
       const p = pr[K.adjustRounds];
       return p && p.type === 'number' && typeof p.number === 'number' ? p.number : 0;
-    })()
+    })(),
+    planningId: relationFirst(pr[K.planning])
   };
 }
 
-async function queryAll(database_id: string, body: Record<string, unknown>): Promise<PageObjectResponse[]> {
+export async function queryAll(database_id: string, body: Record<string, unknown>): Promise<PageObjectResponse[]> {
   const out: PageObjectResponse[] = [];
   let cursor: string | undefined;
   do {
@@ -195,8 +207,8 @@ async function queryAll(database_id: string, body: Record<string, unknown>): Pro
   return out;
 }
 
-const rich = (s: string) => ({ rich_text: chunk(s).map((c) => ({ type: 'text' as const, text: { content: c } })) });
-const titleProp = (s: string) => ({ title: [{ type: 'text' as const, text: { content: s.slice(0, 1900) } }] });
+export const rich = (s: string) => ({ rich_text: chunk(s).map((c) => ({ type: 'text' as const, text: { content: c } })) });
+export const titleProp = (s: string) => ({ title: [{ type: 'text' as const, text: { content: s.slice(0, 1900) } }] });
 
 // ---------------- clientes ----------------
 
@@ -254,9 +266,10 @@ export async function createClient(input: { name: string; instagram: string }): 
 
 export async function updateClient(
   id: string,
-  input: { name?: string; instagram?: string; approvers?: string[]; viewers?: string[]; logoUrl?: string | null; cancelled?: boolean }
+  input: { name?: string; instagram?: string; approvers?: string[]; viewers?: string[]; logoUrl?: string | null; cancelled?: boolean; calName?: string }
 ) {
   const properties: Record<string, unknown> = {};
+  if (input.calName !== undefined) properties[C.calName] = rich(input.calName);
   if (input.cancelled !== undefined) properties[C.cancelled] = { checkbox: input.cancelled };
   if (input.logoUrl !== undefined) properties[C.logo] = { url: input.logoUrl || null };
   if (input.name !== undefined) properties[C.name] = titleProp(input.name);
@@ -265,6 +278,22 @@ export async function updateClient(
   if (input.viewers) properties[C.viewers] = rich(input.viewers.join(', '));
   await notion().pages.update({ page_id: id, properties: properties as never });
   invalidate('clients');
+}
+
+/** Aparelhos que recebem avisos (lidos sem cache). */
+export async function getClientPushSubs(id: string): Promise<PushSub[]> {
+  const p = await notion().pages.retrieve({ page_id: id });
+  if (!isPage(p)) return [];
+  try {
+    const arr = JSON.parse(text(p.properties[C.push]) || '[]');
+    return Array.isArray(arr) ? arr.filter((x) => x && typeof x.endpoint === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function setClientPushSubs(id: string, subs: PushSub[]) {
+  await notion().pages.update({ page_id: id, properties: { [C.push]: rich(JSON.stringify(subs.slice(-10))) } as never });
 }
 
 export async function setClientInstagram(
@@ -298,7 +327,7 @@ export async function listClientsWithInstagram(): Promise<{ id: string; expires:
 // ---------------- conteúdos ----------------
 
 const contentsTag = (clientId: string) => `contents:${normId(clientId)}:`;
-function invalidateContents(clientId: string) {
+export function invalidateContents(clientId: string) {
   invalidate(contentsTag(clientId));
   invalidate('contents:all-');
 }
@@ -380,6 +409,7 @@ export interface ContentInput {
   storyImageUrl: string | null;
   status: GeneralStatus;
   resetApprovals: boolean;
+  planningId?: string | null;
 }
 
 function contentProps(input: ContentInput): Record<string, unknown> {
@@ -398,6 +428,7 @@ function contentProps(input: ContentInput): Record<string, unknown> {
       files: input.artUrls.map((u, i) => ({ name: `Arte ${i + 1}`, type: 'external', external: { url: u } }))
     }
   };
+  if (input.planningId) props[K.planning] = { relation: [{ id: input.planningId }] };
   if (input.resetApprovals) {
     for (const k of ITEM_KEYS) {
       props[K.itemStatus[k]] = { select: { name: 'Pendente' } };
@@ -509,5 +540,20 @@ export function listAllContentsInRange(fromDay: string, toDay: string): Promise<
       sorts: [{ property: K.date, direction: 'ascending' }]
     });
     return pages.filter((p) => !p.archived).map(toContent).filter((c) => c.day && c.day >= fromDay && c.day <= toDay);
+  });
+}
+
+/** Conteúdos deste cliente ligados a um card do Calendário mensal. */
+export function listContentsLinked(clientId: string): Promise<ContentRecord[]> {
+  return memo(contentsTag(clientId) + 'linked', 15_000, async () => {
+    const pages = await queryAll(env.contentsDb, {
+      filter: {
+        and: [
+          { property: K.client, relation: { contains: clientId } },
+          { property: K.planning, relation: { is_not_empty: true } }
+        ]
+      }
+    });
+    return pages.filter((p) => !p.archived).map(toContent);
   });
 }

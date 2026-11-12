@@ -4,7 +4,7 @@
 export type IconName =
   | 'calendar' | 'grid' | 'users' | 'chart' | 'feed' | 'week' | 'month' | 'plus' | 'eye' | 'logout'
   | 'search' | 'bell' | 'download' | 'check' | 'pencil' | 'x' | 'send' | 'link' | 'chat' | 'left'
-  | 'right' | 'copy' | 'image' | 'video' | 'trash' | 'clock' | 'inbox' | 'undo' | 'command';
+  | 'right' | 'copy' | 'image' | 'video' | 'trash' | 'clock' | 'inbox' | 'undo' | 'command' | 'bulb' | 'phone' | 'external' | 'drag';
 
 const P = {
   fill: 'none',
@@ -144,6 +144,24 @@ function paths(name: IconName) {
       </>);
     case 'undo':
       return <g className="a-back"><path d="M9 7 4.5 11.5 9 16" /><path d="M4.5 11.5H15a4.5 4.5 0 0 1 0 9h-2" /></g>;
+    case 'bulb':
+      return (<>
+        <g className="a-glow"><path d="M9 17.5h6M10 20.5h4" /><path d="M8.5 14.5a6 6 0 1 1 7 0c-.6.5-1 1.2-1 2v1h-5v-1c0-.8-.4-1.5-1-2Z" /></g>
+        <g className="a-rays"><path d="M12 1.5v1.5M3.5 9.5H2M22 9.5h-1.5M5.5 3.5l1 1M18.5 3.5l-1 1" /></g>
+      </>);
+    case 'phone':
+      return (<>
+        <rect x="6.5" y="2.5" width="11" height="19" rx="2" />
+        <path d="M10.5 18.5h3" />
+        <g className="a-swing"><path d="M20.5 6.5c.8 1 1 2.3.6 3.5M3.5 6.5c-.8 1-1 2.3-.6 3.5" /></g>
+      </>);
+    case 'external':
+      return (<>
+        <path d="M18 13.5V19a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 19V7.5A1.5 1.5 0 0 1 5.5 6H11" />
+        <g className="a-nudge"><path d="M14.5 3.5h6v6M20.5 3.5 11 13" /></g>
+      </>);
+    case 'drag':
+      return (<>{[7, 12, 17].flatMap((y) => [9, 15].map((x) => <circle key={`${x}${y}`} cx={x} cy={y} r="1" fill="currentColor" stroke="none" />))}</>);
     case 'command':
       return (<g className="a-spin-slow">
         <path d="M9 9V6.5A2.5 2.5 0 1 0 6.5 9H9Zm0 0h6m-6 0v6m6-6V6.5A2.5 2.5 0 1 1 17.5 9H15Zm0 0v6m0 0h2.5a2.5 2.5 0 1 1-2.5 2.5V15Zm0 0H9m0 0v2.5A2.5 2.5 0 1 1 6.5 15H9Z" />

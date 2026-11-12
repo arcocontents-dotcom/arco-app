@@ -1,3 +1,4 @@
+import PushOptIn from '@/components/PushOptIn';
 import Icon from '@/components/Icon';
 import Link from 'next/link';
 import { requireClientAccess } from '@/lib/access';
@@ -59,6 +60,9 @@ export default async function ClientPage({
   return (
     <main className="shell">
       <ClientTop name={client.name} isAdmin={viewer.role === 'admin'} />
+      {viewer.role !== 'admin' && env.vapidPublicKey && (
+        <div style={{ padding: '0 24px' }}><PushOptIn clientId={client.id} vapidKey={env.vapidPublicKey} /></div>
+      )}
       {view === 'semana' && <Week {...{ client: client.id, day, today, href, waiting, canApprove, base }} />}
       {view === 'mes' && <Month {...{ client: client.id, day, today, href, base }} />}
       {view === 'feed' && <Feed {...{ client: client.id, href, base, open, igUser: client.instagram, igOn: client.igConnected, logo: client.logoUrl, name: client.name }} />}

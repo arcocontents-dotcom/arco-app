@@ -1,3 +1,4 @@
+import NotifyButton from '@/components/NotifyButton';
 import Icon from '@/components/Icon';
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/access';
@@ -36,7 +37,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     <AdminShell current={client.id}>
       <div className="toolbar">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <p className="label rise">{client.name} · {yearNum(day)}</p>
+          <p className="label rise ic-inline"><Icon name="calendar" size={14} />Aprovação · calendário editorial · {client.name}</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <h1 className="display rise" style={{ fontSize: 'clamp(40px, 6vw, 80px)', ['--d' as string]: '60ms' }}>{MONTHS[monthIdx(day)]}</h1>
             <Link className="icon-btn" href={nav(addMonths(day, -1))} aria-label="Mês anterior"><ArrowLeft /></Link>
@@ -45,6 +46,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         </div>
         <div className="actions rise" style={{ ['--d' as string]: '120ms' }}>
           <Link className="btn outline small" href={`/c/${client.id}`}><Icon name="eye" size={16} />Ver como cliente</Link>
+          <NotifyButton clientId={client.id} name={client.name} />
           <Link className="btn small" href={`/admin/conteudo/novo?c=${client.id}`}><Icon name="plus" size={16} />Novo conteúdo</Link>
         </div>
       </div>

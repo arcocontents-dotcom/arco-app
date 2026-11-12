@@ -6,7 +6,7 @@ import { localParts, todayIn } from '@/lib/domain';
 import Icon from './Icon';
 import CommandPalette from './CommandPalette';
 
-type Section = 'calendario' | 'gestao' | 'pendencias';
+type Section = 'calendario' | 'gestao' | 'pendencias' | 'planejamento';
 
 /** Conteúdos que pedem ação: atrasados (data passou e não postou) e ajustes/reprovados. */
 export async function alerts() {
@@ -28,7 +28,8 @@ export default async function AdminShell({
   const active = (id: string | null) => clients.some((c) => sameId(c.id, id));
   const pending = new Set([...a.late, ...a.fix].filter((x) => active(x.clientId)).map((x) => x.id)).size;
   const perClient = (id: string) => [...a.fix, ...a.late].filter((x) => sameId(x.clientId, id)).length;
-  const href = (id: string) => (section === 'gestao' ? `/admin/clientes/${id}` : `/admin?c=${id}`);
+  const href = (id: string) =>
+    section === 'gestao' ? `/admin/clientes/${id}` : section === 'planejamento' ? `/admin/planejamento?c=${id}` : `/admin?c=${id}`;
   const currentName = clients.find((c) => sameId(c.id, current))?.name;
 
   return (
@@ -43,8 +44,11 @@ export default async function AdminShell({
         </div>
 
         <nav className="side-nav" aria-label="Áreas">
-          <Link href="/admin" aria-current={section === 'calendario' ? 'page' : undefined}>
-            <Icon name="calendar" /> <span>Calendário</span>
+          <Link href={current ? `/admin/planejamento?c=${current}` : '/admin/planejamento'} aria-current={section === 'planejamento' ? 'page' : undefined}>
+            <Icon name="bulb" /> <span>Planejamento</span>
+          </Link>
+          <Link href={current ? `/admin?c=${current}` : '/admin'} aria-current={section === 'calendario' ? 'page' : undefined}>
+            <Icon name="calendar" /> <span>Aprovação</span>
           </Link>
           <Link href="/admin/gestao" aria-current={section === 'gestao' ? 'page' : undefined}>
             <Icon name="grid" /> <span>Gestão</span>

@@ -4,7 +4,10 @@ import 'server-only';
 // escritas feitas pelo app limpam o cache na hora; edições feitas direto no Notion
 // aparecem em até alguns segundos.
 type Entry = { at: number; ttl: number; value: Promise<unknown> };
-const store = new Map<string, Entry>();
+// Guardado no globalThis: cada rota do Next pode carregar o módulo separado, e assim
+// todas enxergam (e limpam) o mesmo cache.
+const g = globalThis as unknown as { __arcoCache?: Map<string, Entry> };
+const store = (g.__arcoCache ??= new Map<string, Entry>());
 
 export function memo<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
   const now = Date.now();

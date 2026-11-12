@@ -8,6 +8,7 @@ import { currentViewer, resolveViewer } from '@/lib/access';
 import { safeNext } from '@/lib/next-path';
 import { sendLoginEmail } from '@/lib/mail';
 import { signLoginToken, startSession, verifyLoginToken } from '@/lib/session';
+import { allow } from '@/lib/ratelimit';
 
 export type LoginState = { status: 'idle' | 'sent' | 'error'; message?: string; email?: string };
 
@@ -20,6 +21,13 @@ export async function requestLink(_prev: LoginState, form: FormData): Promise<Lo
   const origin = h.get('origin');
   if (origin && origin !== env.appUrl && process.env.NODE_ENV === 'production') {
     return { status: 'error', message: 'Origem inválida.' };
+  }
+
+  // No máximo 3 links por e-mail a cada 10 minutos e 20 pedidos por conexão por hora.
+  const ip = h.get('cf-connecting-ip') ?? h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'local';
+  if (!allow(`login:ip:${ip}`, 20, 3600_000) || !allow(`login:mail:${email}`, 3, 600_000)) {
+    // Mesma resposta de sucesso: não revela nada, só não envia de novo.
+    return { status: 'sent', email };
   }
 
   try {

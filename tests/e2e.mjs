@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
 import { SignJWT } from 'jose';
 import { chromium } from 'playwright';
-import { CLIENTS_DB, CONTENTS_DB, seedPage, startMock, store } from './mock-notion.mjs';
+import { CLIENTS_DB, CONTENTS_DB, PLANNING_DB, seedPage, startMock, store } from './mock-notion.mjs';
 
 const MOCK_PORT = 4010;
 const APP_PORT = 3100;
@@ -29,6 +29,10 @@ const STORY = seedPage(CONTENTS_DB, { 'Título': title('Promoção de sábado'),
 const DRAFT = seedPage(CONTENTS_DB, { 'Título': title('Rascunho secreto'), Cliente: rel(A), Data: date('2026-11-13T10:00:00'), Tipo: sel('Post'), Status: sel('Rascunho') });
 const BPOST = seedPage(CONTENTS_DB, { 'Título': title('Post do Beta'), Cliente: rel(B), Data: date('2026-11-12T10:00:00'), Tipo: sel('Post'), Status: sel('Aguardando') });
 
+const stat = (n) => ({ status: { name: n } });
+const PLAN1 = seedPage(PLANNING_DB, { 'Título do assunto': title('Ideia de bastidores'), Cliente: sel('Studio Alfa'), Status: stat('Ideia') });
+const PLAN2 = seedPage(PLANNING_DB, { 'Título do assunto': title('Reels do lançamento'), Cliente: sel('Studio Alfa'), Status: stat('Realizando'), 'Data de postagem': { date: { start: '2026-11-20' } }, 'Tipo de demanda': sel('Reels 1'), 'Observação': sel('Falta edição'), 'Demanda atual está com': sel('Yan') });
+const PLANX = seedPage(PLANNING_DB, { 'Título do assunto': title('De outro cliente'), Cliente: sel('Outro Cliente'), Status: stat('Ideia') });
 const page = (id) => store.get(id.replace(/-/g, ''));
 const selOf = (id, prop) => page(id).properties[prop].select?.name ?? null;
 const textOf = (id, prop) => page(id).properties[prop].rich_text.map((t) => t.plain_text).join('');
@@ -45,6 +49,9 @@ const app = spawn('npx', ['next', 'start', '-p', String(APP_PORT)], {
     NOTION_TOKEN: 'secret_teste',
     NOTION_CLIENTS_DB: CLIENTS_DB,
     NOTION_CONTENTS_DB: CONTENTS_DB,
+    NOTION_PLANNING_DB: PLANNING_DB,
+    VAPID_PUBLIC_KEY: 'BMocD2_Bate1IK8f6sJ1d4i2a3m9Q0fTq6m1nUQ8m2m0a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w',
+    VAPID_PRIVATE_KEY: 'teste',
     NOTION_BASE_URL: `http://127.0.0.1:${MOCK_PORT}`,
     R2_PUBLIC_URL: 'https://midia.test',
     NEXT_TELEMETRY_DISABLED: '1'
@@ -74,7 +81,7 @@ async function step(name, fn) {
     console.log('  ✓', name);
   } catch (e) {
     results.push(['falhou', name, e.message]);
-    console.log('  ✗', name, '\n    ', e.message.split('\n')[0]);
+    console.log('  ✗', name, '\n    ', process.env.DBG ? e.message.split('\n').slice(0, 6).join(' | ') : e.message.split('\n')[0]);
     const pd = globalThis.__pd;
     if (process.env.SHOTS_DIR && pd) {
       try {
@@ -269,6 +276,21 @@ try {
   await step('cliente não vê "marcar como postado"', async () => {
     assert.equal(await pa.getByRole('button', { name: 'Marcar como postado' }).count(), 0);
   });
+  await step('avisos no celular: cliente liga só para o próprio cliente e só com endereço válido', async () => {
+    const ok = await pa.request.post(`${APP}/api/push`, { data: { clientId: A, endpoint: 'https://fcm.googleapis.com/fcm/send/abc123' } });
+    assert.equal(ok.status(), 200);
+    assert.match(textOf(A, 'Avisos (inscrições)'), /fcm\.googleapis\.com\/fcm\/send\/abc123/);
+    const evil = await pa.request.post(`${APP}/api/push`, { data: { clientId: A, endpoint: 'https://evil.example/x' } });
+    assert.equal(evil.status(), 400);
+    const other = await pa.request.post(`${APP}/api/push`, { data: { clientId: B, endpoint: 'https://fcm.googleapis.com/fcm/send/zzz' } });
+    assert.equal(other.status(), 403);
+    const forged = await pa.request.post(`${APP}/api/push`, { headers: { 'content-type': 'text/plain', origin: 'https://evil.example' }, data: JSON.stringify({ clientId: A, endpoint: 'https://fcm.googleapis.com/fcm/send/x' }) });
+    assert.equal(forged.status(), 403);
+    await pa.goto(`${APP}/c/${A}`);
+    await pa.locator('.push-card, .push-on').first().waitFor({ timeout: 8000 }).catch(() => {});
+    await pa.waitForTimeout(600);
+    await pa.screenshot({ path: `${SHOTS}/03b-avisos.png` }).catch(() => {});
+  });
   await ctxA.close();
 
   await step('quem só visualiza vê, mas não aprova', async () => {
@@ -337,6 +359,69 @@ try {
     await pd.goto(`${APP}/admin/gestao/dashboard?m=2026-11-01`);
     await pd.waitForTimeout(800);
     await shot(pd, '10b-dashboard');
+  });
+
+  await step('Planejamento: quadro do Calendário mensal, ideias, edição e envio para aprovação', async () => {
+    if (process.env.DBG) { pd.on('pageerror', (e) => console.log('PAGEERR', e.message)); pd.on('console', (m) => console.log('CONSOLE', m.type(), m.text())); }
+    await pd.goto(`${APP}/admin/planejamento?c=${A}&m=2026-11-01`);
+    await pd.getByRole('heading', { name: 'Planejamento', level: 1 }).waitFor();
+    // ligou sozinho pelo nome do cliente
+    assert.equal(textOf(A, 'Nome no Calendário mensal'), 'Studio Alfa');
+    const col = (n) => pd.getByRole('region', { name: n });
+    await col('Ideias').getByText('Ideia de bastidores').waitFor();
+    await col('Em produção').getByText('Reels do lançamento').waitFor();
+    assert.equal(await pd.getByText('De outro cliente').count(), 0, 'não mostra cards de outro cliente');
+    await pd.waitForTimeout(700);
+    await shot(pd, '14-planejamento');
+    // nova ideia direto no Notion
+    await pd.getByLabel('Nova ideia').fill('Ideia nova do app');
+    await pd.keyboard.press('Enter');
+    await col('Ideias').getByText('Ideia nova do app').waitFor();
+    await pd.waitForTimeout(600);
+    const created = [...store.values()].find((x) => x.properties['Título do assunto']?.title?.[0]?.plain_text === 'Ideia nova do app');
+    assert.ok(created, 'criou no Calendário mensal');
+    assert.equal(created.properties['Cliente'].select.name, 'Studio Alfa');
+    assert.equal(created.properties['Status'].status.name, 'Ideia');
+    // editar pelo painel lateral
+    await col('Ideias').getByRole('button', { name: /Ideia de bastidores/ }).click();
+    const drawer = pd.getByRole('dialog', { name: 'Ideia de bastidores' });
+    await drawer.waitFor();
+    await drawer.getByLabel('Tipo de demanda').selectOption('Post 1');
+    await drawer.getByLabel('Data de postagem').fill('2026-11-25');
+    await drawer.getByRole('button', { name: 'Em produção' }).click();
+    await pd.waitForTimeout(800);
+    await shot(pd, '15-planejamento-card');
+    assert.equal(page(PLAN1).properties['Tipo de demanda'].select.name, 'Post 1');
+    assert.equal(page(PLAN1).properties['Data de postagem'].date.start, '2026-11-25');
+    assert.equal(page(PLAN1).properties['Referente ao mês'].select.name, 'Novembro');
+    assert.equal(page(PLAN1).properties['Status'].status.name, 'Realizando');
+    await drawer.getByRole('button', { name: 'Fechar' }).click();
+    // arrastar de volta para Ideias
+    await col('Em produção').getByRole('button', { name: /Ideia de bastidores/ }).dragTo(col('Ideias'));
+    await pd.waitForTimeout(800);
+    assert.equal(page(PLAN1).properties['Status'].status.name, 'Ideia');
+    // enviar para aprovação cria o conteúdo ligado
+    await col('Em produção').getByRole('button', { name: /Reels do lançamento/ }).click();
+    await pd.getByRole('button', { name: 'Enviar para aprovação' }).click();
+    await pd.waitForURL(/\/admin\/conteudo\//, { waitUntil: 'commit' });
+    const cid = pd.url().split('/admin/conteudo/')[1].split(/[?#]/)[0];
+    const content = page(cid);
+    assert.equal(content.properties['Tipo'].select.name, 'Reels');
+    assert.equal(content.properties['Status'].select.name, 'Rascunho');
+    assert.equal(content.properties['Planejamento'].relation[0].id.replace(/-/g, ''), PLAN2.replace(/-/g, ''));
+    // aprovação total → card vira "Finalizado"; postado → Status Postado no Notion
+    await pd.goto(`${APP}/c/${A}/${cid}`);
+    for (const n of ['Vídeo', 'Capa', 'Legenda']) await pd.getByRole('button', { name: `Aprovar ${n}` }).click();
+    await pd.getByRole('button', { name: 'Salvar respostas' }).click();
+    await pd.getByText('Tudo aprovado').waitFor();
+    assert.equal(page(PLAN2).properties['Observação'].select.name, 'Finalizado');
+    await pd.getByRole('button', { name: 'Marcar como postado' }).click();
+    await pd.getByRole('button', { name: 'Desmarcar postado' }).waitFor();
+    assert.equal(page(PLAN2).properties['Status'].status.name, 'Postado');
+    assert.equal(page(PLAN2).properties['Finalizado'].checkbox, true);
+    // no Notion alguém volta para Realizando: nada quebra; o quadro mostra o link com a aprovação
+    await pd.goto(`${APP}/admin/planejamento?c=${A}&m=2026-11-01`);
+    await col('Postado').getByText('Reels do lançamento').waitFor();
   });
 
   await step('Pendências, busca ⌘K e histórico do cliente', async () => {

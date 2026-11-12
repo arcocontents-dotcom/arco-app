@@ -4,6 +4,7 @@ import Icon from './Icon';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
+import { playChime, prepareChime } from '@/lib/chime';
 import { submitReview, togglePosted } from '@/app/actions/review';
 import { CheckIcon, XIcon } from './icons';
 import type { DecisionStatus, GeneralStatus, ItemStatus } from '@/lib/domain';
@@ -70,6 +71,7 @@ export default function ReviewPanel({
   const [missingMsg, setMissingMsg] = useState<string | null>(null);
   const [leaveTo, setLeaveTo] = useState<{ href: string } | { form: HTMLFormElement } | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  const [celebrate, setCelebrate] = useState(false);
   const blocks = useRef<Record<string, HTMLDivElement | null>>({});
   const markSeen = useCallback((key: string) => {
     setSeen((v) => (v[key] ? v : { ...v, [key]: true }));
@@ -169,9 +171,19 @@ export default function ReviewPanel({
     setMissingMsg(null);
     setError(null);
     const payload = Object.fromEntries(items.map((i) => [i.key, { status: draft[i.key].status!, note: draft[i.key].note }]));
+    const allOk = items.every((i) => draft[i.key].status === 'Aprovado');
+    // O som precisa ser preparado dentro do toque; toca só se der tudo certo.
+    const audio = allOk ? prepareChime() : null;
     start(async () => {
       const r = await submitReview(contentId, payload);
-      if (!r.ok) return setError(r.error);
+      if (!r.ok) {
+        void audio?.close?.();
+        return setError(r.error);
+      }
+      if (allOk) {
+        playChime(audio);
+        setCelebrate(true);
+      }
       setCurrent(r.status);
       setEditing(false);
       router.refresh();
@@ -313,7 +325,7 @@ export default function ReviewPanel({
       )}
 
       {!editing && !posted && (
-        <div className="done-card rise" style={{ marginTop: 24 }}>
+        <div className={`done-card rise${celebrate ? " celebrate" : ""}`} style={{ marginTop: 24 }}>
           <Icon name="check" size={30} className="ic-play done-ic" />
           <span className="label" style={{ color: '#bdbab4' }}>Respondido{answeredBy ? ` por ${answeredBy}` : ''}</span>
           <span className="display" style={{ fontSize: 26 }}>
