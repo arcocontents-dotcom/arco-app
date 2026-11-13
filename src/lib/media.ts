@@ -58,10 +58,16 @@ export function createVideoFileUpload(contentType: string) {
   return createR2Upload(contentType);
 }
 
-async function createR2Upload(contentType: string): Promise<{ uploadURL: string; publicUrl: string }> {
+/** PDF do planejamento mensal: nome legível + código aleatório (impossível de adivinhar). */
+export function createDocUpload(name: string) {
+  const slug = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'planejamento';
+  return createR2Upload('application/pdf', `planejamentos/${slug}-${randomUUID().slice(0, 8)}.pdf`);
+}
+
+async function createR2Upload(contentType: string, fixedKey?: string): Promise<{ uploadURL: string; publicUrl: string }> {
   const ext = EXT[contentType];
   const now = new Date();
-  const key = `midia/${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, '0')}/${randomUUID()}.${ext}`;
+  const key = fixedKey ?? `midia/${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, '0')}/${randomUUID()}.${ext}`;
   const aws = new AwsClient({
     accessKeyId: env.r2AccessKeyId,
     secretAccessKey: env.r2SecretAccessKey,

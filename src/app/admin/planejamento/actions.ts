@@ -5,7 +5,8 @@ import { getClientFresh, createContent, updateClient } from '@/lib/notion';
 import { parseDay, todayIn } from '@/lib/domain';
 import { env } from '@/lib/env';
 import {
-  createPlanItem, getPlanItem, kindToType, planOptions, updatePlanItem, PLAN_STATUSES, SELECT_FIELDS,
+  createPlanItem, getPlanBrief, getPlanItem, kindToType, planOptions, setPlanBrief, updatePlanItem, BRIEF_FIELDS, PLAN_STATUSES, SELECT_FIELDS,
+  type BriefField, type PlanBrief,
   type PlanPatch, type PlanStatus
 } from '@/lib/planning';
 
@@ -61,11 +62,14 @@ export async function setCalNameAction(clientId: string, calName: string): Promi
   return { ok: true };
 }
 
-export async function createIdeaAction(clientId: string, x: { title: string; kind?: string | null; day?: string | null }): Promise<R<{ id: string }>> {
+export async function createIdeaAction(
+  clientId: string,
+  x: { title: string; kind?: string | null; day?: string | null; status?: PlanStatus }
+): Promise<R<{ id: string }>> {
   await requireAdmin();
   const c = await clientCal(clientId);
   if (!c) return { ok: false, error: 'Ligue este cliente ao Calendário mensal primeiro.' };
-  const p = await clean({ title: x.title, kind: x.kind ?? undefined, day: x.day ?? undefined, status: 'Ideia' });
+  const p = await clean({ title: x.title, kind: x.kind ?? undefined, day: x.day ?? undefined, status: x.status ?? 'Ideia' });
   if (typeof p === 'string') return { ok: false, error: p };
   try {
     const id = await createPlanItem(c.calName, { ...p, title: p.title! });
@@ -119,5 +123,36 @@ export async function sendToApprovalAction(clientId: string, planId: string): Pr
   } catch (e) {
     console.error('[planejamento] aprovar', e);
     return { ok: false, error: 'Não foi possível criar na aprovação.' };
+  }
+}
+
+async function ownCard(clientId: string, planId: string) {
+  const c = await clientCal(clientId);
+  const item = await getPlanItem(planId);
+  return c && item && item.cal === c.calName ? item : null;
+}
+
+/** Objetivo, legenda e referência que ficam dentro do card no Notion. */
+export async function getBriefAction(clientId: string, planId: string): Promise<R<{ brief: PlanBrief }>> {
+  await requireAdmin();
+  if (!(await ownCard(clientId, planId))) return { ok: false, error: 'Card não encontrado.' };
+  try {
+    return { ok: true, brief: await getPlanBrief(planId) };
+  } catch {
+    return { ok: false, error: 'Não foi possível ler o card no Notion.' };
+  }
+}
+
+export async function saveBriefAction(clientId: string, planId: string, field: BriefField, value: string): Promise<R> {
+  await requireAdmin();
+  if (!(BRIEF_FIELDS as readonly string[]).includes(field)) return { ok: false, error: 'Campo inválido.' };
+  if (!(await ownCard(clientId, planId))) return { ok: false, error: 'Card não encontrado.' };
+  try {
+    await setPlanBrief(planId, field, String(value ?? '').slice(0, 1900));
+    return { ok: true };
+  } catch (e) {
+    if ((e as { code?: string }).code === 'locked') return { ok: false, error: (e as Error).message };
+    console.error('[planejamento] briefing', e);
+    return { ok: false, error: 'Não foi possível salvar no Notion.' };
   }
 }

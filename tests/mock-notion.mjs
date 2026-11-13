@@ -88,6 +88,12 @@ function emptyProps(db) {
 }
 
 export const store = new Map();
+/** Conteúdo (blocos) dentro das páginas: id da página → lista de blocos. */
+export const blocks = new Map();
+const rt = (arr) => (arr ?? []).map((t) => ({ type: 'text', plain_text: t.text?.content ?? t.plain_text ?? '', text: t.text, annotations: t.annotations ?? {} }));
+export function seedBlocks(pageId, texts) {
+  blocks.set(norm(pageId), texts.map((t) => ({ object: 'block', id: randomUUID(), type: 'paragraph', has_children: false, archived: false, paragraph: { rich_text: rt([{ text: { content: t } }]) } })));
+}
 
 export function seedPage(db, props, id = randomUUID().replace(/-/g, '')) {
   const page = { object: 'page', id: fmtId(norm(id)), url: `https://www.notion.so/${norm(id)}`, archived: false, parent: { type: 'database_id', database_id: fmtId(db) }, properties: emptyProps(db) };
@@ -176,6 +182,28 @@ export function startMock(port) {
         const pages = [...store.values()].filter((p) => norm(p.parent.database_id) === db && !p.archived && match(p, json.filter));
         const sorted = sortPages(pages, json.sorts).slice(0, json.page_size ?? 100);
         return send(200, { object: 'list', results: sorted, has_more: false, next_cursor: null });
+      }
+      if ((m = url.pathname.match(/^\/v1\/blocks\/([^/]+)\/children$/))) {
+        const key = norm(m[1]);
+        if (!store.has(key)) return send(404, { object: 'error', status: 404, code: 'object_not_found', message: 'not found' });
+        const list = blocks.get(key) ?? [];
+        if (req.method === 'GET') return send(200, { object: 'list', results: list, has_more: false, next_cursor: null });
+        if (req.method === 'PATCH') {
+          for (const c of json.children ?? []) list.push({ object: 'block', id: randomUUID(), type: c.type, has_children: false, archived: false, [c.type]: { rich_text: rt(c[c.type].rich_text) } });
+          blocks.set(key, list);
+          return send(200, { object: 'list', results: list });
+        }
+      }
+      if (req.method === 'PATCH' && (m = url.pathname.match(/^\/v1\/blocks\/([^/]+)$/))) {
+        for (const list of blocks.values()) {
+          const b = list.find((x) => norm(x.id) === norm(m[1]));
+          if (b) {
+            const t = Object.keys(json).find((k) => json[k]?.rich_text);
+            if (t) { b.type = t; b[t] = { rich_text: rt(json[t].rich_text) }; }
+            return send(200, b);
+          }
+        }
+        return send(404, { object: 'error', status: 404, code: 'object_not_found', message: 'not found' });
       }
       if (req.method === 'GET' && (m = url.pathname.match(/^\/v1\/databases\/([^/]+)$/))) {
         const db = norm(m[1]);

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
 import { SignJWT } from 'jose';
 import { chromium } from 'playwright';
-import { CLIENTS_DB, CONTENTS_DB, PLANNING_DB, seedPage, startMock, store } from './mock-notion.mjs';
+import { CLIENTS_DB, CONTENTS_DB, PLANNING_DB, blocks, seedBlocks, seedPage, startMock, store } from './mock-notion.mjs';
 
 const MOCK_PORT = 4010;
 const APP_PORT = 3100;
@@ -32,6 +32,7 @@ const BPOST = seedPage(CONTENTS_DB, { 'Título': title('Post do Beta'), Cliente:
 const stat = (n) => ({ status: { name: n } });
 const PLAN1 = seedPage(PLANNING_DB, { 'Título do assunto': title('Ideia de bastidores'), Cliente: sel('Studio Alfa'), Status: stat('Ideia') });
 const PLAN2 = seedPage(PLANNING_DB, { 'Título do assunto': title('Reels do lançamento'), Cliente: sel('Studio Alfa'), Status: stat('Realizando'), 'Data de postagem': { date: { start: '2026-11-20' } }, 'Tipo de demanda': sel('Reels 1'), 'Observação': sel('Falta edição'), 'Demanda atual está com': sel('Yan') });
+seedBlocks(PLAN2, ['Objetivo: Mostrar o lançamento com força.', 'Legenda: Chegou a hora.', 'Referência: https://www.instagram.com/p/exemplo/']);
 const PLANX = seedPage(PLANNING_DB, { 'Título do assunto': title('De outro cliente'), Cliente: sel('Outro Cliente'), Status: stat('Ideia') });
 const page = (id) => store.get(id.replace(/-/g, ''));
 const selOf = (id, prop) => page(id).properties[prop].select?.name ?? null;
@@ -374,7 +375,7 @@ try {
     await pd.waitForTimeout(700);
     await shot(pd, '14-planejamento');
     // nova ideia direto no Notion
-    await pd.getByLabel('Nova ideia').fill('Ideia nova do app');
+    await pd.getByLabel('Nova task em Ideia').fill('Ideia nova do app');
     await pd.keyboard.press('Enter');
     await col('Ideia').getByText('Ideia nova do app').waitFor();
     await pd.waitForTimeout(600);
@@ -427,6 +428,39 @@ try {
     await tabs.getByRole('button', { name: /^Post/ }).click();
     await col('Ideia').getByText('Ideia de bastidores').waitFor();
     await tabs.getByRole('button', { name: /^Todos/ }).click();
+    // nova task em qualquer coluna; na aba Reels já nasce com o próximo número livre
+    await tabs.getByRole('button', { name: /^Reels/ }).click();
+    await pd.getByLabel('Nova task em Realizando').fill('Bastidores da obra');
+    await pd.keyboard.press('Enter');
+    await col('Realizando').getByText('Bastidores da obra').waitFor();
+    await pd.waitForTimeout(600);
+    const task = [...store.values()].find((x) => x.properties['Título do assunto']?.title?.[0]?.plain_text === 'Bastidores da obra');
+    assert.equal(task.properties['Status'].status.name, 'Realizando');
+    assert.equal(task.properties['Tipo de demanda'].select.name, 'Reels 2');
+    await tabs.getByRole('button', { name: /^Todos/ }).click();
+    // briefing que vai no PDF: lido e gravado dentro do card no Notion
+    await col('Realizando').getByRole('button', { name: /Reels do lançamento/ }).click();
+    const d2 = pd.getByRole('dialog', { name: 'Reels do lançamento' });
+    await d2.getByLabel('Objetivo').waitFor();
+    assert.equal(await d2.getByLabel('Objetivo').inputValue(), 'Mostrar o lançamento com força.');
+    await d2.getByLabel('Legenda').fill('Chegou a hora.\nVem ver de perto.');
+    await d2.getByLabel('Objetivo').click();
+    await d2.getByText('Salvo no Notion').waitFor();
+    const bl = blocks.get(PLAN2.replace(/-/g, ''));
+    assert.equal(bl.length, 3, 'não cria nem apaga blocos ao editar');
+    assert.match(bl[1].paragraph.rich_text.map((t) => t.plain_text).join(''), /^Legenda: Chegou a hora\.\nVem ver de perto\.$/);
+    await d2.getByRole('button', { name: 'Fechar' }).click();
+    // relatório do mês em PDF, pronto para o WhatsApp
+    await pd.getByRole('button', { name: 'Planejamento do mês' }).click();
+    const rep = pd.getByRole('dialog', { name: 'Planejamento do mês' });
+    await rep.getByRole('link', { name: 'Baixar PDF' }).waitFor({ timeout: 30000 });
+    assert.match(await rep.getByRole('link', { name: /WhatsApp/ }).first().getAttribute('href'), /^https:\/\/wa\.me\/\?text=.*APROVADO/);
+    const [pdf] = await Promise.all([pd.waitForEvent('download'), rep.getByRole('link', { name: 'Baixar PDF' }).click()]);
+    assert.match(pdf.suggestedFilename(), /^Planejamento Novembro 2026 - Studio Alfa\.pdf$/);
+    if (SHOTS) await pdf.saveAs(`${SHOTS}/16-planejamento-mes.pdf`);
+    await pd.waitForTimeout(400);
+    await shot(pd, '16-relatorio');
+    await rep.getByRole('button', { name: 'Fechar' }).click();
     // enviar para aprovação cria o conteúdo ligado
     await col('Realizando').getByRole('button', { name: /Reels do lançamento/ }).click();
     await pd.getByRole('button', { name: 'Enviar para aprovação' }).click();

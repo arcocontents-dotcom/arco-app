@@ -677,3 +677,19 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .tsel-check { margin-left: auto; color: var(--ink); font-size: 13px; }
 .tsel-none { padding: 8px; font-size: 13px; color: #9b9893; }
 @media (max-width: 900px) { .nprop { grid-template-columns: 130px 1fr; } }
+
+/* ---------- relatório do mês ---------- */
+.report-box { width: min(520px, 100%); }
+.report-working { display: flex; align-items: center; gap: 14px; padding: 18px 0; color: var(--muted); }
+.spinner { width: 22px; height: 22px; border-radius: 999px; border: 2px solid var(--line); border-top-color: var(--ink); animation: spin 0.8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.report-file { display: flex; align-items: center; gap: 12px; padding: 14px; background: var(--paper); color: var(--ok); }
+.report-file div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.report-file strong { color: var(--ink); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.report-msg { margin: 0; white-space: pre-wrap; font: 12.5px/1.5 var(--body); color: var(--muted); background: var(--paper); padding: 12px 14px; max-height: 140px; overflow: auto; }
+.brief { display: flex; flex-direction: column; gap: 12px; padding-top: 6px; border-top: 1px solid var(--line); }
+.brief label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+.brief textarea, .brief input { font: inherit; font-size: 14px; color: var(--ink); background: var(--paper); border: 1px solid transparent; padding: 10px 12px; resize: vertical; }
+.brief textarea:focus, .brief input:focus { outline: none; border-color: var(--ink); }
+.brief .locked { font-size: 12px; color: var(--adj); }
+.plan-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 14px 16px; background: var(--paper); }

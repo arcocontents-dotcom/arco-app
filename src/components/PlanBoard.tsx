@@ -8,7 +8,9 @@ import Icon, { type IconName } from './Icon';
 import TagSelect, { Tag, type Opt } from './TagSelect';
 import { MONTHS, dayLabel } from '@/lib/domain';
 import type { PlanItem, PlanOptions, PlanPatch, PlanStatus, SelectField } from '@/lib/planning';
-import { createIdeaAction, sendToApprovalAction, updatePlanAction } from '@/app/admin/planejamento/actions';
+import { createIdeaAction, getBriefAction, saveBriefAction, sendToApprovalAction, updatePlanAction } from '@/app/admin/planejamento/actions';
+import type { PlanBrief, BriefField } from '@/lib/planning';
+import { useEffect } from 'react';
 
 type Link_ = { id: string; status: string };
 
@@ -62,9 +64,43 @@ export default function PlanBoard({
   const [drag, setDrag] = useState<string | null>(null);
   const [over, setOver] = useState<PlanStatus | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [newTitle, setNewTitle] = useState('');
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [pending, start] = useTransition();
   const addRef = useRef<HTMLInputElement>(null);
+  const [brief, setBrief] = useState<PlanBrief | null>(null);
+  const [briefMsg, setBriefMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setBrief(null);
+    setBriefMsg(null);
+    if (!open) return;
+    let alive = true;
+    getBriefAction(clientId, open).then((r) => {
+      if (!alive) return;
+      if (r.ok) setBrief(r.brief);
+      else setBriefMsg(r.error);
+    });
+    return () => { alive = false; };
+  }, [open, clientId]);
+
+  function saveBrief(field: BriefField, value: string) {
+    if (!open || !brief || brief[field] === value) return;
+    const id = open;
+    setBrief({ ...brief, [field]: value });
+    start(async () => {
+      const r = await saveBriefAction(clientId, id, field, value);
+      setBriefMsg(r.ok ? 'Salvo no Notion' : r.error);
+      if (r.ok) setTimeout(() => setBriefMsg(null), 1800);
+    });
+  }
+
+  /** Na aba Reels/Post/Storys, a nova task já nasce com o próximo número livre (Reels 3, Post 2…). */
+  function nextKind(): string | null {
+    if (tab === 'todos') return null;
+    const group = options.kind.filter((o) => TABS.find((t) => t.key === tab)!.test(o.name.toLowerCase()) && !/freelancer/i.test(o.name));
+    const used = new Set(items.map((i) => i.kind));
+    return (group.find((o) => !used.has(o.name)) ?? group[0])?.name ?? null;
+  }
 
   const colorOf = (list: Opt[], n: string | null) => list.find((o) => o.name === n)?.color ?? 'default';
   const statusColor = (s: PlanStatus) => colorOf(options.status, s);
@@ -95,19 +131,19 @@ export default function PlanBoard({
     });
   }
 
-  function add() {
-    const title = newTitle.trim();
+  function add(status: PlanStatus) {
+    const title = (drafts[status] ?? '').trim();
     if (!title) return;
-    setNewTitle('');
+    setDrafts((d) => ({ ...d, [status]: '' }));
+    const kind = nextKind();
     start(async () => {
-      const r = await createIdeaAction(clientId, { title });
+      const r = await createIdeaAction(clientId, { title, status, kind });
       if (r.ok) {
         setItems((l) => [
-          { id: r.id, url: '', title, cal, day: null, time: null, status: 'Ideia', kind: null, note: null, owner: null, month: null, recMonth: null, editMonth: null, designBy: null, postedBy: null, briefBy: [], deadline: null, done: false },
+          { id: r.id, url: '', title, cal, day: null, time: null, status, kind, note: null, owner: null, month: null, recMonth: null, editMonth: null, designBy: null, postedBy: null, briefBy: [], deadline: null, done: false },
           ...l
         ]);
         router.refresh();
-        addRef.current?.focus();
       } else setErr(r.error);
     });
   }
@@ -151,20 +187,18 @@ export default function PlanBoard({
               <span className={`nstatus nc-${statusColor(col.key)}`}><i />{col.label}</span>
               <span className="plan-count">{byCol[col.key].length}</span>
             </header>
-            {col.key === 'Ideia' && (
-              <div className="plan-add">
-                <Icon name="plus" size={15} />
-                <input
-                  ref={addRef}
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') add(); }}
-                  placeholder="Nova ideia… (Enter)"
-                  aria-label="Nova ideia"
-                  maxLength={200}
-                />
-              </div>
-            )}
+            <div className="plan-add">
+              <Icon name="plus" size={15} />
+              <input
+                ref={col.key === 'Ideia' ? addRef : undefined}
+                value={drafts[col.key] ?? ''}
+                onChange={(e) => setDrafts((d) => ({ ...d, [col.key]: e.target.value }))}
+                onKeyDown={(e) => { if (e.key === 'Enter') add(col.key); }}
+                placeholder={col.key === 'Ideia' ? 'Nova ideia… (Enter)' : 'Nova task… (Enter)'}
+                aria-label={`Nova task em ${col.label}`}
+                maxLength={200}
+              />
+            </div>
             <ul className="plan-list">
               {byCol[col.key].map((it) => {
                 const l = linkOf(it.id);
@@ -248,6 +282,22 @@ export default function PlanBoard({
                 </div>
               ))}
             </dl>
+            <section className="brief" aria-label="Para o cliente">
+              <span className="label">Para o cliente · vai no PDF do mês</span>
+              {!brief && !briefMsg && <span className="hint">Lendo o card no Notion…</span>}
+              {brief && (['objetivo', 'legenda', 'referencia'] as BriefField[]).map((f) => (
+                <label key={`${current.id}-${f}`}>
+                  {f === 'objetivo' ? 'Objetivo' : f === 'legenda' ? 'Legenda' : 'Referência (link)'}
+                  {f === 'referencia' ? (
+                    <input defaultValue={brief[f]} disabled={brief.locked.includes(f)} onBlur={(e) => saveBrief(f, e.target.value.trim())} placeholder="https://www.instagram.com/…" />
+                  ) : (
+                    <textarea rows={f === 'legenda' ? 4 : 2} defaultValue={brief[f]} disabled={brief.locked.includes(f)} onBlur={(e) => saveBrief(f, e.target.value.trim())} />
+                  )}
+                  {brief.locked.includes(f) && <span className="locked">Escrito em várias linhas no Notion: edite por lá.</span>}
+                </label>
+              ))}
+              {briefMsg && <span className="hint" role="status">{briefMsg}</span>}
+            </section>
             <div className="drawer-actions">
               {linkOf(current.id) ? (
                 <Link className="btn block" href={`/admin/conteudo/${linkOf(current.id)!.id}`}><Icon name="eye" size={16} />Abrir na aprovação · {linkOf(current.id)!.status}</Link>

@@ -294,3 +294,120 @@ export async function pullPostedFromPlan(items: PlanItem[], contents: ContentRec
   }
 }
 
+
+// ---------- briefing do card (o texto dentro da página do Notion) ----------
+
+export const BRIEF_FIELDS = ['objetivo', 'legenda', 'referencia'] as const;
+export type BriefField = (typeof BRIEF_FIELDS)[number];
+const BRIEF_LABEL: Record<BriefField, string> = { objetivo: 'Objetivo', legenda: 'Legenda', referencia: 'Referência' };
+const LABEL_RE = /^\s*(objetivo|legenda|refer[eê]ncia|roteiro|descri[cç][aã]o)\s*[:：–-]\s*/i;
+const labelKey = (raw: string): BriefField | 'roteiro' | null => {
+  const k = raw.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  if (k.startsWith('objetivo')) return 'objetivo';
+  if (k.startsWith('legenda')) return 'legenda';
+  if (k.startsWith('referencia')) return 'referencia';
+  if (k.startsWith('roteiro') || k.startsWith('descricao')) return 'roteiro';
+  return null;
+};
+
+export interface PlanBrief {
+  objetivo: string;
+  legenda: string;
+  referencia: string;
+  roteiro: string;
+  /** Campos que têm continuação escrita à mão no Notion: só editáveis lá. */
+  locked: BriefField[];
+}
+
+type Block = { id: string; type: string; has_children?: boolean; [k: string]: unknown };
+const TEXT_TYPES = ['paragraph', 'heading_1', 'heading_2', 'heading_3', 'bulleted_list_item', 'numbered_list_item', 'quote', 'callout', 'to_do', 'toggle'];
+
+function blockText(b: Block): string {
+  const v = b[b.type] as { rich_text?: { plain_text: string }[] } | undefined;
+  return (v?.rich_text ?? []).map((t) => t.plain_text).join('');
+}
+
+async function pageBlocks(pageId: string): Promise<Block[]> {
+  const out: Block[] = [];
+  let cursor: string | undefined;
+  for (let i = 0; i < 5; i++) {
+    const r = (await notion().blocks.children.list({ block_id: pageId, page_size: 100, start_cursor: cursor })) as unknown as {
+      results: Block[]; has_more: boolean; next_cursor: string | null;
+    };
+    out.push(...r.results);
+    if (!r.has_more || !r.next_cursor) break;
+    cursor = r.next_cursor;
+  }
+  return out.filter((b) => TEXT_TYPES.includes(b.type) && !(b as { archived?: boolean }).archived);
+}
+
+/** Lê "Objetivo:", "Legenda:", "Referência:" de dentro do card. Sem rótulos, o texto vira roteiro. */
+function parseBrief(blocks: Block[]): PlanBrief & { at: Partial<Record<BriefField, { id: string; continued: boolean }>> } {
+  const brief: PlanBrief = { objetivo: '', legenda: '', referencia: '', roteiro: '', locked: [] };
+  const at: Partial<Record<BriefField, { id: string; continued: boolean }>> = {};
+  let cur: BriefField | 'roteiro' = 'roteiro';
+  for (const b of blocks) {
+    const t = blockText(b);
+    const m = t.match(LABEL_RE);
+    if (m) {
+      cur = labelKey(m[1]) ?? 'roteiro';
+      const rest = t.slice(m[0].length);
+      if (cur !== 'roteiro') at[cur] = { id: b.id, continued: false };
+      brief[cur] = [brief[cur], rest].filter(Boolean).join('\n');
+    } else if (t.trim()) {
+      if (cur !== 'roteiro' && at[cur]) at[cur]!.continued = true;
+      brief[cur] = [brief[cur], t].filter(Boolean).join('\n');
+    }
+  }
+  brief.locked = BRIEF_FIELDS.filter((f) => at[f]?.continued);
+  return { ...brief, at };
+}
+
+export async function getPlanBrief(id: string): Promise<PlanBrief> {
+  await assertPlanPage(id);
+  const { at: _at, ...brief } = parseBrief(await pageBlocks(id));
+  return brief;
+}
+
+const para = (label: string, value: string) => ({
+  rich_text: [
+    { type: 'text', text: { content: `${label}: ` }, annotations: { bold: true } },
+    { type: 'text', text: { content: value.slice(0, 1900) } }
+  ]
+});
+
+/**
+ * Grava um campo do briefing dentro do card: atualiza a linha "Rótulo: …" que já existe
+ * ou acrescenta uma nova no fim. Nunca apaga blocos do Notion.
+ */
+export async function setPlanBrief(id: string, field: BriefField, value: string) {
+  await assertPlanPage(id);
+  const parsed = parseBrief(await pageBlocks(id));
+  if (parsed.locked.includes(field)) throw Object.assign(new Error('Este texto foi escrito em várias linhas no Notion: edite por lá.'), { code: 'locked' });
+  const existing = parsed.at[field];
+  const label = BRIEF_LABEL[field];
+  if (existing) {
+    await notion().blocks.update({ block_id: existing.id, paragraph: para(label, value) } as never);
+  } else if (value.trim()) {
+    await notion().blocks.children.append({ block_id: id, children: [{ object: 'block', type: 'paragraph', paragraph: para(label, value) }] } as never);
+  }
+  invalidate(`plan:brief:${id}`);
+}
+
+export interface ReportItem extends PlanItem, Omit<PlanBrief, 'locked'> {}
+
+/** Itens com data no mês, já com o briefing, para o relatório do cliente. */
+export async function planningReport(cal: string, fromDay: string, toDay: string): Promise<ReportItem[] | PlanError> {
+  const items = await listPlanning(cal, fromDay, toDay);
+  if (typeof items === 'string') return items;
+  const dated = items.filter((i) => i.day).sort((a, b) => `${a.day}${a.time ?? ''}`.localeCompare(`${b.day}${b.time ?? ''}`));
+  const briefs = await Promise.all(
+    dated.map((i) =>
+      memo(`plan:brief:${i.id}`, 30_000, () => pageBlocks(i.id).then((b) => parseBrief(b))).catch(() => null)
+    )
+  );
+  return dated.map((i, n) => {
+    const b = briefs[n];
+    return { ...i, objetivo: b?.objetivo ?? '', legenda: b?.legenda ?? '', referencia: b?.referencia ?? '', roteiro: b?.roteiro ?? '' };
+  });
+}

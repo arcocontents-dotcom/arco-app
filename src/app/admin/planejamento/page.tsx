@@ -8,6 +8,7 @@ import AdminShell from '@/components/AdminShell';
 import Icon from '@/components/Icon';
 import PlanBoard from '@/components/PlanBoard';
 import CalNamePicker from '@/components/CalNamePicker';
+import PlanReport from '@/components/PlanReport';
 
 export const dynamic = 'force-dynamic';
 
@@ -104,6 +105,10 @@ export default async function Planejamento({ searchParams }: { searchParams: Pro
   return (
     <AdminShell section="planejamento" current={client.id}>
       {head}
+      <div className="plan-actions rise" style={{ ['--d' as string]: '110ms' }}>
+        <p className="hint" style={{ margin: 0 }}>Antes do mês começar, mande o planejamento para o cliente aprovar no WhatsApp. Depois, cada conteúdo é aprovado na semana dele.</p>
+        <PlanReport clientId={client.id} clientName={client.name} month={first} appUrl={env.appUrl} />
+      </div>
       <PlanBoard
         key={`${client.id}-${first}`}
         clientId={client.id}
