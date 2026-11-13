@@ -1,3 +1,4 @@
+import { env } from '@/lib/env';
 import { NextResponse } from 'next/server';
 import { currentViewer } from '@/lib/access';
 import { getClientFresh } from '@/lib/notion';
@@ -22,9 +23,10 @@ export async function GET(req: Request) {
       client: { name: client.name, instagram: client.instagram, logoUrl: client.logoUrl },
       first,
       last,
+      planUrl: `${env.appUrl}/c/${client.id}/planejamento?m=${first.slice(0, 7)}`,
       items: items.map((i) => ({
         title: i.title, day: i.day, time: i.time, kind: i.kind, status: i.status,
-        objetivo: i.objetivo, legenda: i.legenda, referencia: i.referencia, roteiro: i.roteiro
+        objetivo: i.objetivo, legenda: i.legenda, referencia: i.referencia, imagens: i.imagens, roteiro: i.roteiro
       }))
     },
     { headers: { 'Cache-Control': 'no-store' } }

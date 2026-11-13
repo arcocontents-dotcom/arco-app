@@ -32,7 +32,7 @@ const BPOST = seedPage(CONTENTS_DB, { 'Título': title('Post do Beta'), Cliente:
 const stat = (n) => ({ status: { name: n } });
 const PLAN1 = seedPage(PLANNING_DB, { 'Título do assunto': title('Ideia de bastidores'), Cliente: sel('Studio Alfa'), Status: stat('Ideia') });
 const PLAN2 = seedPage(PLANNING_DB, { 'Título do assunto': title('Reels do lançamento'), Cliente: sel('Studio Alfa'), Status: stat('Realizando'), 'Data de postagem': { date: { start: '2026-11-20' } }, 'Tipo de demanda': sel('Reels 1'), 'Observação': sel('Falta edição'), 'Demanda atual está com': sel('Yan') });
-seedBlocks(PLAN2, ['Objetivo: Mostrar o lançamento com força.', 'Legenda: Chegou a hora.', 'Referência: https://www.instagram.com/p/exemplo/']);
+seedBlocks(PLAN2, ['Objetivo: Mostrar o lançamento com força.', 'Legenda: Chegou a hora.', 'Referência: https://www.instagram.com/p/exemplo/', 'Imagens: https://midia.test/i1.jpg https://midia.test/i2.jpg']);
 const PLANX = seedPage(PLANNING_DB, { 'Título do assunto': title('De outro cliente'), Cliente: sel('Outro Cliente'), Status: stat('Ideia') });
 const page = (id) => store.get(id.replace(/-/g, ''));
 const selOf = (id, prop) => page(id).properties[prop].select?.name ?? null;
@@ -405,15 +405,27 @@ try {
     assert.equal(await pd.getByText('De outro cliente').count(), 0, 'não mostra cards de outro cliente');
     await pd.waitForTimeout(700);
     await shot(pd, '14-planejamento');
-    // nova ideia direto no Notion
-    await pd.getByLabel('Nova task em Ideia').fill('Ideia nova do app');
-    await pd.keyboard.press('Enter');
+    // nova ideia igual ao Notion: abre a ficha com todas as propriedades e só cria ao confirmar
+    await pd.getByRole('button', { name: 'Nova task em Ideia' }).click();
+    const nd = pd.getByRole('dialog', { name: 'Nova task' });
+    await nd.getByLabel('Título do assunto').fill('Ideia nova do app');
+    await nd.getByRole('button', { name: 'Observação' }).click();
+    await nd.getByRole('listbox', { name: 'Observação' }).getByRole('option', { name: 'Falta copy' }).click();
+    await nd.getByLabel('Data de postagem').fill('2026-11-27');
+    await shot(pd, '14b-nova-task');
+    assert.equal([...store.values()].filter((x) => x.properties['Título do assunto']?.title?.[0]?.plain_text === 'Ideia nova do app').length, 0, 'só cria ao confirmar');
+    await nd.getByRole('button', { name: 'Criar no Notion' }).click();
+    await pd.getByRole('dialog', { name: 'Ideia nova do app' }).getByLabel('Objetivo').waitFor();
+    await pd.getByRole('dialog', { name: 'Ideia nova do app' }).getByRole('button', { name: 'Fechar' }).click();
     await col('Ideia').getByText('Ideia nova do app').waitFor();
     await pd.waitForTimeout(600);
     const created = [...store.values()].find((x) => x.properties['Título do assunto']?.title?.[0]?.plain_text === 'Ideia nova do app');
     assert.ok(created, 'criou no Calendário mensal');
     assert.equal(created.properties['Cliente'].select.name, 'Studio Alfa');
     assert.equal(created.properties['Status'].status.name, 'Ideia');
+    assert.equal(created.properties['Observação'].select.name, 'Falta copy');
+    assert.equal(created.properties['Data de postagem'].date.start, '2026-11-27');
+    assert.equal(created.properties['Referente ao mês'].select.name, 'Novembro');
     // editar pelo painel lateral
     await col('Ideia').getByRole('button', { name: /Ideia de bastidores/ }).click();
     const drawer = pd.getByRole('dialog', { name: 'Ideia de bastidores' });
@@ -461,8 +473,10 @@ try {
     await tabs.getByRole('button', { name: /^Todos/ }).click();
     // nova task em qualquer coluna; na aba Reels já nasce com o próximo número livre
     await tabs.getByRole('button', { name: /^Reels/ }).click();
-    await pd.getByLabel('Nova task em Realizando').fill('Bastidores da obra');
+    await pd.getByRole('button', { name: 'Nova task em Realizando' }).click();
+    await pd.getByRole('dialog', { name: 'Nova task' }).getByLabel('Título do assunto').fill('Bastidores da obra');
     await pd.keyboard.press('Enter');
+    await pd.getByRole('dialog', { name: 'Bastidores da obra' }).getByRole('button', { name: 'Fechar' }).click();
     await col('Realizando').getByText('Bastidores da obra').waitFor();
     await pd.waitForTimeout(600);
     const task = [...store.values()].find((x) => x.properties['Título do assunto']?.title?.[0]?.plain_text === 'Bastidores da obra');
@@ -478,9 +492,35 @@ try {
     await d2.getByLabel('Objetivo').click();
     await d2.getByText('Salvo no Notion').waitFor();
     const bl = blocks.get(PLAN2.replace(/-/g, ''));
-    assert.equal(bl.length, 3, 'não cria nem apaga blocos ao editar');
+    assert.equal(bl.length, 4, 'não cria nem apaga blocos ao editar');
     assert.match(bl[1].paragraph.rich_text.map((t) => t.plain_text).join(''), /^Legenda: Chegou a hora\.\nVem ver de perto\.$/);
+    // referências: lista com preview; colar link do YouTube adiciona na mesma linha do Notion
+    await d2.getByRole('button', { name: 'Ver referência do Instagram' }).waitFor();
+    await d2.getByLabel('Adicionar referência').fill('https://youtu.be/dQw4w9WgXcQ?si=abc');
+    await d2.getByLabel('Adicionar referência').press('Enter');
+    await d2.getByRole('button', { name: 'Ver referência do YouTube' }).waitFor();
+    await d2.getByText('Salvo no Notion').waitFor();
+    const refText = () => bl[2].paragraph.rich_text.map((t) => t.plain_text).join('');
+    assert.equal(refText(), 'Referência: https://www.instagram.com/p/exemplo/\nhttps://youtu.be/dQw4w9WgXcQ?si=abc');
+    await d2.getByRole('button', { name: 'Ver referência do YouTube' }).click();
+    assert.match(await d2.locator('iframe[title="Referência do YouTube"]').getAttribute('src'), /^https:\/\/www\.youtube-nocookie\.com\/embed\/dQw4w9WgXcQ/);
+    assert.equal(await d2.locator('.img-thumb').count(), 2);
+    await shot(pd, '15c-referencias');
+    await d2.getByRole('button', { name: 'Remover imagem' }).last().click();
+    await d2.getByText('Salvo no Notion').waitFor();
+    assert.equal(bl[3].paragraph.rich_text.map((t) => t.plain_text).join(''), 'Imagens: https://midia.test/i1.jpg');
+    assert.equal(bl.length, 4, 'remover não apaga bloco do Notion');
     await d2.getByRole('button', { name: 'Fechar' }).click();
+    // o cliente vê o planejamento com referências tocando dentro do app
+    await pd.goto(`${APP}/c/${A}/planejamento?m=2026-11`);
+    const card = pd.locator('article', { hasText: 'Reels do lançamento' });
+    await card.getByText('Mostrar o lançamento com força.').waitFor();
+    await card.getByRole('button', { name: 'Ver referência do Instagram' }).click();
+    assert.equal(await card.locator('iframe[title="Referência do Instagram"]').getAttribute('src'), 'https://www.instagram.com/p/exemplo/embed/');
+    assert.equal(await card.locator('.img-strip img').count(), 1);
+    await shot(pd, '16b-planejamento-cliente');
+    await pd.goto(`${APP}/admin/planejamento?c=${A}&m=2026-11-01`);
+    await col('Realizando').getByText('Reels do lançamento').waitFor();
     // relatório do mês em PDF, pronto para o WhatsApp
     await pd.getByRole('button', { name: 'Planejamento do mês' }).click();
     const rep = pd.getByRole('dialog', { name: 'Planejamento do mês' });

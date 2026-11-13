@@ -23,7 +23,7 @@ const nextConfig = {
               "img-src 'self' data: blob: https:",
               "media-src 'self' blob: https:",
               "connect-src 'self' https:",
-              "frame-src https://*.cloudflarestream.com https://iframe.videodelivery.net",
+              "frame-src https://*.cloudflarestream.com https://iframe.videodelivery.net https://www.instagram.com https://www.tiktok.com https://www.youtube-nocookie.com https://assets.pinterest.com",
               "worker-src 'self'",
               "manifest-src 'self'",
               "object-src 'none'",

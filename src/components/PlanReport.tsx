@@ -48,6 +48,7 @@ export default function PlanReport({ clientId, clientName, month, appUrl }: { cl
       const message =
         `Olá, ${first}! Aqui está o planejamento de conteúdo de ${monthName.toLowerCase()}` +
         (url ? `:\n${url}\n\n` : '.\n\n') +
+        (data.planUrl ? `Para ver as referências e imagens tocando aqui no app:\n${data.planUrl}\n\n` : '') +
         `São ${data.items.filter((i) => i.day).length} conteúdos. Se estiver tudo certo, é só responder "APROVADO". ` +
         `Quer mudar algo? Responda com o número do post e o ajuste.`;
       setDone({ url, file, count: data.items.length, message, blobUrl: URL.createObjectURL(blob) });

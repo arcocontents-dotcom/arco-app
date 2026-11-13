@@ -1,6 +1,7 @@
 // Relatório mensal de planejamento (PDF), montado no navegador a partir do Notion.
 // Pensado para ser lido no celular, pelo WhatsApp: hierarquia forte, pouco texto por bloco.
 
+import { splitLinks, toEmbed } from './embed';
 import { MONTHS, addDays, dayNum, monthGrid, weekdayMon } from './domain';
 
 export interface ReportData {
@@ -16,8 +17,10 @@ export interface ReportData {
     objetivo: string;
     legenda: string;
     referencia: string;
+    imagens?: string;
     roteiro: string;
   }[];
+  planUrl?: string;
 }
 
 type RGB = [number, number, number];
@@ -277,7 +280,9 @@ export async function buildPlanningPdf(data: ReportData, appUrl: string): Promis
         block('LEGENDA', it.legenda, 14),
         !it.objetivo && !it.legenda ? block('ROTEIRO', it.roteiro, 10) : block('', '')
       ].filter((p) => p.lines.length);
-      const ref = clean(it.referencia);
+      const refs = splitLinks(it.referencia ?? '').map(toEmbed);
+      const nImgs = splitLinks(it.imagens ?? '').length;
+      const ref = refs.length > 0 || nImgs > 0;
       const h = 12 + title.length * 5.6 + parts.reduce((s, p) => s + p.h, 0) + (ref ? 8 : 0) + 4;
       if (y + h > H - 20) newPage(`Semana ${wi + 1}`, `${range(w.start, w.end)}  ·  continuação`);
 
@@ -315,11 +320,20 @@ export async function buildPlanningPdf(data: ReportData, appUrl: string): Promis
       }
       if (ref) {
         font('M6', 6.5, C.muted);
-        tracked('REFERÊNCIA', kx, ty + 1.5);
-        font('M4', 8.5, hex('#2F5F8A'));
-        const shown = ref.length > 70 ? `${ref.slice(0, 67)}…` : ref;
-        if (/^https?:\/\//.test(ref)) doc.textWithLink(shown, kx + 22, ty + 1.5, { url: ref });
-        else doc.text(shown, kx + 22, ty + 1.5);
+        tracked(refs.length > 1 ? 'REFERÊNCIAS' : refs.length ? 'REFERÊNCIA' : 'IMAGENS', kx, ty + 1.5);
+        let rx = kx + 24;
+        font('M6', 8.5, hex('#2F5F8A'));
+        refs.slice(0, 4).forEach((r) => {
+          doc.textWithLink(r.label, rx, ty + 1.5, { url: r.url });
+          rx += doc.getTextWidth(r.label) + 5;
+        });
+        if (refs.length > 4) { font('M4', 8.5, C.muted); doc.text(`+${refs.length - 4}`, rx, ty + 1.5); rx += 8; }
+        if (nImgs) { font('M4', 8.5, C.muted); doc.text(`${refs.length ? '·  ' : ''}${nImgs} imagem${nImgs > 1 ? 'ns' : ''}`, rx, ty + 1.5); }
+        if (data.planUrl) {
+          font('M6', 8, C.ink);
+          const t = 'Ver no app  ›';
+          doc.textWithLink(t, M + CW - 6 - doc.getTextWidth(t), ty + 1.5, { url: `${data.planUrl}#post-${it.n}` });
+        }
       }
       y += h + 5;
     }

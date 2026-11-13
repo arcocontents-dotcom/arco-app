@@ -11,6 +11,9 @@ import type { PlanItem, PlanOptions, PlanPatch, PlanStatus, SelectField } from '
 import { createIdeaAction, getBriefAction, saveBriefAction, sendToApprovalAction, updatePlanAction } from '@/app/admin/planejamento/actions';
 import type { PlanBrief, BriefField } from '@/lib/planning';
 import { useEffect } from 'react';
+import RefPreview from './RefPreview';
+import { splitLinks } from '@/lib/embed';
+import { uploadImage } from './upload';
 
 type Link_ = { id: string; status: string };
 
@@ -21,6 +24,7 @@ const COLS: { key: PlanStatus; label: string; hint: string }[] = [
 ];
 
 /** Abas por formato, como as visões das páginas dos clientes no Notion. */
+const NEW = 'nova-task';
 const TABS: { key: string; label: string; test: (k: string) => boolean }[] = [
   { key: 'todos', label: 'Todos', test: () => true },
   { key: 'reels', label: 'Reels', test: (k) => k.startsWith('reels') },
@@ -64,16 +68,15 @@ export default function PlanBoard({
   const [drag, setDrag] = useState<string | null>(null);
   const [over, setOver] = useState<PlanStatus | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [draft, setDraft] = useState<PlanItem | null>(null);
   const [pending, start] = useTransition();
-  const addRef = useRef<HTMLInputElement>(null);
   const [brief, setBrief] = useState<PlanBrief | null>(null);
   const [briefMsg, setBriefMsg] = useState<string | null>(null);
 
   useEffect(() => {
     setBrief(null);
     setBriefMsg(null);
-    if (!open) return;
+    if (!open || open === NEW) return;
     let alive = true;
     getBriefAction(clientId, open).then((r) => {
       if (!alive) return;
@@ -86,12 +89,35 @@ export default function PlanBoard({
   function saveBrief(field: BriefField, value: string) {
     if (!open || !brief || brief[field] === value) return;
     const id = open;
-    setBrief({ ...brief, [field]: value });
+    setBrief((b) => (b ? { ...b, [field]: value } : b));
+    setBriefMsg('Salvando…');
     start(async () => {
       const r = await saveBriefAction(clientId, id, field, value);
+      if (r.ok) setBrief((b) => (b ? { ...b, [field]: r.value } : b));
       setBriefMsg(r.ok ? 'Salvo no Notion' : r.error);
       if (r.ok) setTimeout(() => setBriefMsg(null), 1800);
     });
+  }
+
+  const refs = splitLinks(brief?.referencia ?? '');
+  const imgs = splitLinks(brief?.imagens ?? '');
+  const [uploading, setUploading] = useState<number | null>(null);
+
+  async function addImages(files: FileList | null) {
+    if (!files?.length || !brief) return;
+    const list = Array.from(files).slice(0, 12 - imgs.length);
+    const urls: string[] = [];
+    try {
+      for (let i = 0; i < list.length; i++) {
+        setUploading(Math.round((i / list.length) * 100));
+        urls.push(await uploadImage(list[i], (p) => setUploading(Math.round(((i + p) / list.length) * 100))));
+      }
+    } catch (e) {
+      setBriefMsg((e as Error).message);
+    } finally {
+      setUploading(null);
+    }
+    if (urls.length) saveBrief('imagens', [...imgs, ...urls].join('\n'));
   }
 
   /** Na aba Reels/Post/Storys, a nova task já nasce com o próximo número livre (Reels 3, Post 2…). */
@@ -112,7 +138,8 @@ export default function PlanBoard({
     return m;
   }, [visible]);
   const count = (t: (typeof TABS)[number]) => items.filter((i) => t.key === 'todos' || t.test((i.kind ?? '').toLowerCase())).length;
-  const current = items.find((i) => i.id === open) ?? null;
+  const current = open === NEW ? draft : items.find((i) => i.id === open) ?? null;
+  const isNew = open === NEW;
   const linkOf = (id: string) => links[id.replace(/-/g, '')] ?? null;
 
   function patch(id: string, x: PlanPatch) {
@@ -120,6 +147,11 @@ export default function PlanBoard({
     // Igual ao servidor: a data já preenche o "Referente ao mês".
     const local: Partial<PlanItem> = { ...(x as Partial<PlanItem>) };
     if (x.day && x.month === undefined) local.month = MONTHS[Number(x.day.slice(5, 7)) - 1];
+    if (id === NEW) {
+      // Ainda não existe no Notion: só guarda no formulário até clicar em "Criar no Notion".
+      setDraft((d) => (d ? { ...d, ...local } : d));
+      return;
+    }
     setItems((list) => list.map((i) => (i.id === id ? { ...i, ...local } : i)));
     setErr(null);
     start(async () => {
@@ -131,22 +163,35 @@ export default function PlanBoard({
     });
   }
 
-  function add(status: PlanStatus) {
-    const title = (drafts[status] ?? '').trim();
-    if (!title) return;
-    setDrafts((d) => ({ ...d, [status]: '' }));
-    const kind = nextKind();
+  /** Abre uma task nova com todas as propriedades, igual ao Notion. Só grava ao clicar em "Criar no Notion". */
+  function newTask(status: PlanStatus) {
+    setErr(null);
+    setDraft({
+      id: NEW, url: '', title: '', cal, day: null, time: null, status, kind: nextKind(), note: null, owner: null, month: null,
+      recMonth: null, editMonth: null, designBy: null, postedBy: null, briefBy: [], deadline: null, done: false
+    });
+    setOpen(NEW);
+  }
+
+  function createDraft() {
+    if (!draft) return;
+    const title = draft.title.trim();
+    if (!title) {
+      setErr('Dê um título para a task.');
+      return;
+    }
+    const { id: _id, url: _u, cal: _c, time: _t, deadline: _d, ...fields } = draft;
     start(async () => {
-      const r = await createIdeaAction(clientId, { title, status, kind });
+      const r = await createIdeaAction(clientId, { ...fields, title });
       if (r.ok) {
-        setItems((l) => [
-          { id: r.id, url: '', title, cal, day: null, time: null, status, kind, note: null, owner: null, month: null, recMonth: null, editMonth: null, designBy: null, postedBy: null, briefBy: [], deadline: null, done: false },
-          ...l
-        ]);
+        setItems((l) => [{ ...draft, id: r.id, title }, ...l]);
+        setDraft(null);
+        setOpen(r.id);
         router.refresh();
       } else setErr(r.error);
     });
   }
+
 
   function toApproval(id: string) {
     start(async () => {
@@ -187,18 +232,10 @@ export default function PlanBoard({
               <span className={`nstatus nc-${statusColor(col.key)}`}><i />{col.label}</span>
               <span className="plan-count">{byCol[col.key].length}</span>
             </header>
-            <div className="plan-add">
+            <button type="button" className="plan-add" onClick={() => newTask(col.key)} aria-label={`Nova task em ${col.label}`}>
               <Icon name="plus" size={15} />
-              <input
-                ref={col.key === 'Ideia' ? addRef : undefined}
-                value={drafts[col.key] ?? ''}
-                onChange={(e) => setDrafts((d) => ({ ...d, [col.key]: e.target.value }))}
-                onKeyDown={(e) => { if (e.key === 'Enter') add(col.key); }}
-                placeholder={col.key === 'Ideia' ? 'Nova ideia… (Enter)' : 'Nova task… (Enter)'}
-                aria-label={`Nova task em ${col.label}`}
-                maxLength={200}
-              />
-            </div>
+              <span>{col.key === 'Ideia' ? 'Nova ideia' : 'Nova task'}</span>
+            </button>
             <ul className="plan-list">
               {byCol[col.key].map((it) => {
                 const l = linkOf(it.id);
@@ -236,7 +273,7 @@ export default function PlanBoard({
 
       {current && createPortal(
         <div className="drawer-overlay" onMouseDown={(e) => e.target === e.currentTarget && setOpen(null)}>
-          <aside className="drawer" role="dialog" aria-modal="true" aria-label={current.title}>
+          <aside className="drawer" role="dialog" aria-modal="true" aria-label={isNew ? 'Nova task' : current.title}>
             <div className="drawer-top">
               <span className="label">🗓️ Calendário mensal</span>
               <button type="button" className="icon-btn" onClick={() => setOpen(null)} aria-label="Fechar"><Icon name="x" /></button>
@@ -246,7 +283,12 @@ export default function PlanBoard({
               defaultValue={current.title}
               key={current.id}
               aria-label="Título do assunto"
-              onBlur={(e) => { const t = e.target.value.trim(); if (t && t !== current.title) patch(current.id, { title: t }); }}
+              placeholder="Sem título"
+              autoFocus={isNew}
+              maxLength={200}
+              onChange={(e) => isNew && setDraft((d) => (d ? { ...d, title: e.target.value } : d))}
+              onKeyDown={(e) => { if (isNew && e.key === 'Enter') createDraft(); }}
+              onBlur={(e) => { const t = e.target.value.trim(); if (!isNew && t && t !== current.title) patch(current.id, { title: t }); }}
             />
             <dl className="nprops">
               {PROPS.map((p) => (
@@ -282,20 +324,87 @@ export default function PlanBoard({
                 </div>
               ))}
             </dl>
+            {isNew ? (
+              <div className="drawer-actions">
+                {err && <p className="error" role="alert" style={{ margin: 0 }}>{err}</p>}
+                <button type="button" className="btn block" disabled={pending} onClick={createDraft}>
+                  <Icon name="plus" size={16} />{pending ? 'Criando…' : 'Criar no Notion'}
+                </button>
+                <button type="button" className="link-btn" style={{ alignSelf: 'center' }} onClick={() => setOpen(null)}>Cancelar</button>
+                <p className="hint" style={{ margin: 0 }}>Depois de criar, você já preenche objetivo, legenda, referências e imagens aqui mesmo.</p>
+              </div>
+            ) : (<>
             <section className="brief" aria-label="Para o cliente">
-              <span className="label">Para o cliente · vai no PDF do mês</span>
+              <span className="label">Para o cliente · aparece no PDF e no Planejamento do app</span>
               {!brief && !briefMsg && <span className="hint">Lendo o card no Notion…</span>}
-              {brief && (['objetivo', 'legenda', 'referencia'] as BriefField[]).map((f) => (
+              {brief && (['objetivo', 'legenda'] as BriefField[]).map((f) => (
                 <label key={`${current.id}-${f}`}>
-                  {f === 'objetivo' ? 'Objetivo' : f === 'legenda' ? 'Legenda' : 'Referência (link)'}
-                  {f === 'referencia' ? (
-                    <input defaultValue={brief[f]} disabled={brief.locked.includes(f)} onBlur={(e) => saveBrief(f, e.target.value.trim())} placeholder="https://www.instagram.com/…" />
-                  ) : (
-                    <textarea rows={f === 'legenda' ? 4 : 2} defaultValue={brief[f]} disabled={brief.locked.includes(f)} onBlur={(e) => saveBrief(f, e.target.value.trim())} />
-                  )}
+                  {f === 'objetivo' ? 'Objetivo' : 'Legenda'}
+                  <textarea rows={f === 'legenda' ? 4 : 2} defaultValue={brief[f]} disabled={brief.locked.includes(f)} onBlur={(e) => saveBrief(f, e.target.value.trim())} />
                   {brief.locked.includes(f) && <span className="locked">Escrito em várias linhas no Notion: edite por lá.</span>}
                 </label>
               ))}
+              {brief && (
+                <div className="brief-block" key={`${current.id}-ref`}>
+                  <span className="brief-title">Referências · Instagram, TikTok, YouTube, Pinterest</span>
+                  {refs.length > 0 && (
+                    <ul className="ref-list">
+                      {refs.map((u) => (
+                        <li key={u}>
+                          <RefPreview url={u} />
+                          {!brief.locked.includes('referencia') && (
+                            <button type="button" className="ref-x" aria-label="Remover referência" onClick={() => saveBrief('referencia', refs.filter((x) => x !== u).join('\n'))}><Icon name="x" size={14} /></button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {brief.locked.includes('referencia') ? (
+                    <span className="locked">Escrito em várias linhas no Notion: edite por lá.</span>
+                  ) : (
+                    <input
+                      aria-label="Adicionar referência"
+                      placeholder="Cole o link e aperte Enter"
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter') return;
+                        e.preventDefault();
+                        const v = e.currentTarget.value.trim();
+                        if (!v) return;
+                        saveBrief('referencia', [...refs, v].join('\n'));
+                        e.currentTarget.value = '';
+                      }}
+                      onPaste={(e) => {
+                        const v = e.clipboardData.getData('text').trim();
+                        if (!/^https?:\/\//.test(v)) return;
+                        e.preventDefault();
+                        saveBrief('referencia', [...refs, v].join('\n'));
+                      }}
+                    />
+                  )}
+                </div>
+              )}
+              {brief && (
+                <div className="brief-block" key={`${current.id}-img`}>
+                  <span className="brief-title">Imagens do post</span>
+                  <div className="img-grid">
+                    {imgs.map((u) => (
+                      <figure key={u} className="img-thumb">
+                        <img src={u} alt="" loading="lazy" />
+                        {!brief.locked.includes('imagens') && (
+                          <button type="button" className="ref-x" aria-label="Remover imagem" onClick={() => saveBrief('imagens', imgs.filter((x) => x !== u).join('\n'))}><Icon name="x" size={14} /></button>
+                        )}
+                      </figure>
+                    ))}
+                    {!brief.locked.includes('imagens') && (
+                      <label className={`img-add${uploading !== null ? ' busy' : ''}`}>
+                        <input type="file" accept="image/*" multiple className="sr-only" aria-label="Anexar imagens" disabled={uploading !== null} onChange={(e) => addImages(e.target.files)} />
+                        <Icon name={uploading !== null ? 'clock' : 'image'} size={20} />
+                        <span>{uploading !== null ? `${uploading}%` : 'Anexar'}</span>
+                      </label>
+                    )}
+                  </div>
+                </div>
+              )}
               {briefMsg && <span className="hint" role="status">{briefMsg}</span>}
             </section>
             <div className="drawer-actions">
@@ -312,6 +421,7 @@ export default function PlanBoard({
                 </a>
               )}
             </div>
+            </>)}
             <p className="hint">Tudo que você muda aqui vai direto para o Calendário mensal do Notion, só com as opções que já existem lá.</p>
           </aside>
         </div>,

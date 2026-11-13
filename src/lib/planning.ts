@@ -297,15 +297,16 @@ export async function pullPostedFromPlan(items: PlanItem[], contents: ContentRec
 
 // ---------- briefing do card (o texto dentro da página do Notion) ----------
 
-export const BRIEF_FIELDS = ['objetivo', 'legenda', 'referencia'] as const;
+export const BRIEF_FIELDS = ['objetivo', 'legenda', 'referencia', 'imagens'] as const;
 export type BriefField = (typeof BRIEF_FIELDS)[number];
-const BRIEF_LABEL: Record<BriefField, string> = { objetivo: 'Objetivo', legenda: 'Legenda', referencia: 'Referência' };
-const LABEL_RE = /^\s*(objetivo|legenda|refer[eê]ncia|roteiro|descri[cç][aã]o)\s*[:：–-]\s*/i;
+const BRIEF_LABEL: Record<BriefField, string> = { objetivo: 'Objetivo', legenda: 'Legenda', referencia: 'Referência', imagens: 'Imagens' };
+const LABEL_RE = /^\s*(objetivo|legenda|refer[eê]ncias?|imagens|roteiro|descri[cç][aã]o)\s*[:：–-]\s*/i;
 const labelKey = (raw: string): BriefField | 'roteiro' | null => {
   const k = raw.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   if (k.startsWith('objetivo')) return 'objetivo';
   if (k.startsWith('legenda')) return 'legenda';
   if (k.startsWith('referencia')) return 'referencia';
+  if (k.startsWith('imagens')) return 'imagens';
   if (k.startsWith('roteiro') || k.startsWith('descricao')) return 'roteiro';
   return null;
 };
@@ -314,6 +315,8 @@ export interface PlanBrief {
   objetivo: string;
   legenda: string;
   referencia: string;
+  /** Endereços das imagens anexadas (uma por linha). */
+  imagens: string;
   roteiro: string;
   /** Campos que têm continuação escrita à mão no Notion: só editáveis lá. */
   locked: BriefField[];
@@ -343,7 +346,7 @@ async function pageBlocks(pageId: string): Promise<Block[]> {
 
 /** Lê "Objetivo:", "Legenda:", "Referência:" de dentro do card. Sem rótulos, o texto vira roteiro. */
 function parseBrief(blocks: Block[]): PlanBrief & { at: Partial<Record<BriefField, { id: string; continued: boolean }>> } {
-  const brief: PlanBrief = { objetivo: '', legenda: '', referencia: '', roteiro: '', locked: [] };
+  const brief: PlanBrief = { objetivo: '', legenda: '', referencia: '', imagens: '', roteiro: '', locked: [] };
   const at: Partial<Record<BriefField, { id: string; continued: boolean }>> = {};
   let cur: BriefField | 'roteiro' = 'roteiro';
   for (const b of blocks) {
@@ -408,6 +411,6 @@ export async function planningReport(cal: string, fromDay: string, toDay: string
   );
   return dated.map((i, n) => {
     const b = briefs[n];
-    return { ...i, objetivo: b?.objetivo ?? '', legenda: b?.legenda ?? '', referencia: b?.referencia ?? '', roteiro: b?.roteiro ?? '' };
+    return { ...i, objetivo: b?.objetivo ?? '', legenda: b?.legenda ?? '', referencia: b?.referencia ?? '', imagens: b?.imagens ?? '', roteiro: b?.roteiro ?? '' };
   });
 }

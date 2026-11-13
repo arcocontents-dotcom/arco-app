@@ -1,5 +1,8 @@
 'use server';
 
+import { isShortLink, splitLinks } from '@/lib/embed';
+import { isOwnMediaUrl } from '@/lib/media';
+
 import { requireAdmin } from '@/lib/access';
 import { getClientFresh, createContent, updateClient } from '@/lib/notion';
 import { parseDay, todayIn } from '@/lib/domain';
@@ -64,12 +67,13 @@ export async function setCalNameAction(clientId: string, calName: string): Promi
 
 export async function createIdeaAction(
   clientId: string,
-  x: { title: string; kind?: string | null; day?: string | null; status?: PlanStatus }
+  x: PlanPatch & { title: string }
 ): Promise<R<{ id: string }>> {
   await requireAdmin();
   const c = await clientCal(clientId);
   if (!c) return { ok: false, error: 'Ligue este cliente ao Calendário mensal primeiro.' };
-  const p = await clean({ title: x.title, kind: x.kind ?? undefined, day: x.day ?? undefined, status: x.status ?? 'Ideia' });
+  const strip = Object.fromEntries(Object.entries(x).filter(([, v]) => v !== null && v !== undefined && !(Array.isArray(v) && !v.length)));
+  const p = await clean({ status: 'Ideia', ...strip, title: x.title });
   if (typeof p === 'string') return { ok: false, error: p };
   try {
     const id = await createPlanItem(c.calName, { ...p, title: p.title! });
@@ -143,13 +147,40 @@ export async function getBriefAction(clientId: string, planId: string): Promise<
   }
 }
 
-export async function saveBriefAction(clientId: string, planId: string, field: BriefField, value: string): Promise<R> {
+/** Abre links curtos (vm.tiktok.com, pin.it) só nesses domínios, para achar o endereço do post. */
+async function expandShort(url: string): Promise<string> {
+  let cur = url;
+  for (let i = 0; i < 4 && isShortLink(cur); i++) {
+    try {
+      const r = await fetch(cur, { method: 'GET', redirect: 'manual', headers: { 'user-agent': 'Mozilla/5.0 (compatible; ArcoApp)' } });
+      const loc = r.headers.get('location');
+      if (!loc) break;
+      cur = new URL(loc, cur).href;
+    } catch {
+      break;
+    }
+  }
+  return cur;
+}
+
+async function normalizeBrief(field: BriefField, value: string): Promise<string> {
+  const v = String(value ?? '');
+  if (field === 'referencia') {
+    const links = await Promise.all(splitLinks(v).slice(0, 12).map(expandShort));
+    return [...new Set(links.map((l) => l.replace(/[?&](igsh|igshid|utm_[a-z]+|is_from_webapp|sender_device)=[^&]*/g, '').replace(/\?&/, '?').replace(/\?$/, '')))].join('\n');
+  }
+  if (field === 'imagens') return splitLinks(v).filter(isOwnMediaUrl).slice(0, 12).join('\n');
+  return v.slice(0, 1900);
+}
+
+export async function saveBriefAction(clientId: string, planId: string, field: BriefField, value: string): Promise<R<{ value: string }>> {
   await requireAdmin();
   if (!(BRIEF_FIELDS as readonly string[]).includes(field)) return { ok: false, error: 'Campo inválido.' };
   if (!(await ownCard(clientId, planId))) return { ok: false, error: 'Card não encontrado.' };
   try {
-    await setPlanBrief(planId, field, String(value ?? '').slice(0, 1900));
-    return { ok: true };
+    const clean = await normalizeBrief(field, value);
+    await setPlanBrief(planId, field, clean);
+    return { ok: true, value: clean };
   } catch (e) {
     if ((e as { code?: string }).code === 'locked') return { ok: false, error: (e as Error).message };
     console.error('[planejamento] briefing', e);

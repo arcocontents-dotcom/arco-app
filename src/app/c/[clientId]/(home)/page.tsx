@@ -78,6 +78,7 @@ function Tabs({ view, href, day }: { view: View; href: (v: View, d?: string) => 
       <Link href={href('semana', day)} aria-current={view === 'semana' ? 'page' : undefined}><Icon name="week" size={15} />Semana</Link>
       <Link href={href('mes', day)} aria-current={view === 'mes' ? 'page' : undefined}><Icon name="month" size={15} />Mês</Link>
       <Link href={href('feed')} aria-current={view === 'feed' ? 'page' : undefined}><Icon name="feed" size={15} />Feed</Link>
+      <Link href={`${href('feed').split('?')[0]}/planejamento`}><Icon name="bulb" size={15} />Planejamento</Link>
     </nav>
   );
 }
