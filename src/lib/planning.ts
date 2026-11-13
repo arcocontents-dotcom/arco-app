@@ -107,20 +107,18 @@ export function matchCalName(name: string, options: string[]): string | null {
 export function listPlanning(cal: string, fromDay: string, toDay: string): Promise<PlanItem[] | PlanError> {
   if (!env.planningDb) return Promise.resolve('nao-configurado');
   return memo(`plan:${cal}:${fromDay}:${toDay}`, 15_000, async () => {
-    const pages = await queryAll(env.planningDb!, {
-      filter: {
-        and: [
-          { property: P.client, select: { equals: cal } },
-          {
-            or: [
-              { and: [{ property: P.date, date: { on_or_after: fromDay } }, { property: P.date, date: { on_or_before: toDay } }] },
-              { and: [{ property: P.date, date: { is_empty: true } }, { property: P.status, status: { equals: 'Ideia' } }] }
-            ]
-          }
-        ]
-      },
-      sorts: [{ property: P.date, direction: 'ascending' }]
-    });
+    // O Notion aceita no máximo 2 níveis de filtro aninhado: por isso são duas buscas.
+    const client = { property: P.client, select: { equals: cal } };
+    const [dated, ideas] = await Promise.all([
+      queryAll(env.planningDb!, {
+        filter: { and: [client, { property: P.date, date: { on_or_after: fromDay } }, { property: P.date, date: { on_or_before: toDay } }] },
+        sorts: [{ property: P.date, direction: 'ascending' }]
+      }),
+      queryAll(env.planningDb!, {
+        filter: { and: [client, { property: P.date, date: { is_empty: true } }, { property: P.status, status: { equals: 'Ideia' } }] }
+      })
+    ]);
+    const pages = [...dated, ...ideas];
     return pages.filter((p) => !p.archived).map(toPlan);
   }).catch((e) => classify(e));
 }

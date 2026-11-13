@@ -158,6 +158,9 @@ export function startMock(port) {
       let m;
       if (req.method === 'POST' && (m = url.pathname.match(/^\/v1\/databases\/([^/]+)\/query$/))) {
         const db = norm(m[1]);
+        // Igual ao Notion: no máximo 2 níveis de filtros compostos (and/or).
+        const depth = (f) => (f && (f.and || f.or) ? 1 + Math.max(0, ...(f.and || f.or).map(depth)) : 0);
+        if (depth(json.filter) > 2) return send(400, { object: 'error', status: 400, code: 'validation_error', message: 'Filter nesting too deep' });
         const pages = [...store.values()].filter((p) => norm(p.parent.database_id) === db && !p.archived && match(p, json.filter));
         const sorted = sortPages(pages, json.sorts).slice(0, json.page_size ?? 100);
         return send(200, { object: 'list', results: sorted, has_more: false, next_cursor: null });
