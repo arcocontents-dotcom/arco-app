@@ -325,35 +325,6 @@ export async function buildPlanningPdf(data: ReportData, appUrl: string): Promis
     }
   });
 
-  // ---------- como aprovar ----------
-  doc.addPage();
-  bg();
-  font('M6', 7, C.muted);
-  tracked('PRÓXIMOS PASSOS', M, 22);
-  font('M9', 30);
-  doc.text('Como aprovar', M, 36);
-  const steps: [string, string][] = [
-    ['Revise o planejamento', `São ${items.length} conteúdos para ${month.toLowerCase()}. Veja temas, datas e legendas com calma.`],
-    ['Responda no WhatsApp', 'Mande "APROVADO" para seguir. Quer mudar algo? Responda com o número do post e o ajuste — por exemplo: "Post 03: trocar a data".'],
-    ['Aprove cada conteúdo no app', `Na semana de cada post, o conteúdo chega pronto no app da Arco para você aprovar vídeo, capa e legenda. ${appUrl.replace(/^https?:\/\//, '')}`]
-  ];
-  let py = 56;
-  steps.forEach(([t, d], i) => {
-    doc.setFillColor(...C.ink).circle(M + 7, py + 1, 7, 'F');
-    font('M9', 13, C.white);
-    doc.text(String(i + 1), M + 7, py + 5.4, { align: 'center' });
-    font('M8', 13);
-    doc.text(t, M + 20, py + 2);
-    font('M4', 10, C.soft);
-    const lines = doc.splitTextToSize(d, W - 2 * M - 20) as string[];
-    doc.text(lines, M + 20, py + 9, { lineHeightFactor: 1.4 });
-    py += 18 + lines.length * 5;
-  });
-  doc.setDrawColor(...C.line).line(M, py + 4, W - M, py + 4);
-  font('M4', 9, C.muted);
-  doc.text(`Preparado pela Arco Contents em ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}.`, M, py + 13);
-  if (arco) doc.addImage(arco, 'PNG', W - M - 34, H - 40, 34, 12.5);
-
   const total = doc.getNumberOfPages();
   for (let p = 2; p <= total; p++) {
     doc.setPage(p);
