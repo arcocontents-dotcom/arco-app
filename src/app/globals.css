@@ -835,3 +835,13 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .pcal-undated { display: flex; flex-direction: column; gap: 8px; }
 .pcal-undated > div { display: flex; flex-wrap: wrap; gap: 8px; }
 .pcal-undated .pcal-card { width: auto; max-width: 240px; }
+.pc-week-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.pc-week-h span { font-family: var(--display); font-size: 20px; letter-spacing: 0; text-transform: uppercase; color: var(--ink); }
+.pc-week-h small { font-size: 11px; color: var(--muted); }
+.pc-week-h em { margin-left: auto; font-style: normal; font-size: 11px; color: var(--muted); }
+.pc-group { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700; margin-top: 4px; }
+.pc-group::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.g-reels::before { background: #d9730d; }
+.g-post::before { background: #337ea9; }
+.g-story::before { background: #cb912f; }
+.g-fotos::before { background: #9065b0; }

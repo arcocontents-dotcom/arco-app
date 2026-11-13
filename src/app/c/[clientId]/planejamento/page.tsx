@@ -4,12 +4,16 @@ import { env } from '@/lib/env';
 import { MONTHS, addDays, addMonths, dayLabel, dayNum, monthIdx, parseDay, startOfWeek, todayIn, yearNum } from '@/lib/domain';
 import { planningReport, type ReportItem } from '@/lib/planning';
 import { splitLinks } from '@/lib/embed';
+import { FORMAT_ORDER, planKind, planOrder } from '@/lib/report-pdf';
 import ClientTop from '@/components/ClientTop';
 import Icon from '@/components/Icon';
 import RefPreview from '@/components/RefPreview';
 import ImageStrip from '@/components/ImageStrip';
 
 export const dynamic = 'force-dynamic';
+
+const FORMAT_NAME: Record<string, string> = { story: 'Story', post: 'Post', reels: 'Reels', fotos: 'Fotos', outro: 'Conteúdo' };
+const fmtList = (l: string[]) => (l.length > 1 ? `${l.slice(0, -1).join(', ')} e ${l[l.length - 1]}` : l[0] ?? '');
 
 const kindOf = (k: string | null) => {
   const s = (k ?? '').toLowerCase();
@@ -40,7 +44,7 @@ export default async function PlanejamentoCliente({
     : [];
 
   const weeks: { start: string; list: (ReportItem & { n: number })[] }[] = [];
-  (items ?? []).forEach((it, i) => {
+  planOrder(items ?? []).forEach((it, i) => {
     const ws = startOfWeek(it.day!);
     let w = weeks.find((x) => x.start === ws);
     if (!w) weeks.push((w = { start: ws, list: [] }));
@@ -73,21 +77,29 @@ export default async function PlanejamentoCliente({
             <span><strong>{count('story')}</strong>stories</span>
           </div>
           <p className="hint pc-how rise" style={{ ['--d' as string]: '120ms' }}>
-            Revise cada conteúdo e as referências. Está tudo certo? Responda <b>APROVADO</b> no WhatsApp. Quer mudar algo? Mande o número do post e o ajuste.
+            Revise cada conteúdo e as referências. Está tudo certo? Responda <b>APROVADO</b> no WhatsApp. Quer mudar algo? Mande o número (ex.: Nº 03) e o ajuste.
           </p>
           {weeks.map((w, wi) => (
             <section key={w.start} className="pc-week rise" style={{ ['--d' as string]: `${140 + wi * 40}ms` }} aria-label={`Semana ${wi + 1}`}>
-              <h2 className="label">Semana {wi + 1} · {dayNum(w.start)}–{dayNum(addDays(w.start, 6))}</h2>
-              {w.list.map((it) => {
+              <h2 className="label pc-week-h">
+                <span>Semana {wi + 1}</span>
+                <small>{fmtList(FORMAT_ORDER.filter((k) => w.list.some((i) => planKind(i.kind) === k)).map((k) => FORMAT_NAME[k]))}</small>
+                <em>{dayNum(w.start)}–{dayNum(addDays(w.start, 6))}</em>
+              </h2>
+              {w.list.map((it, ii) => {
+                const k = planKind(it.kind);
+                const head = ii === 0 || planKind(w.list[ii - 1].kind) !== k;
                 const refs = splitLinks(it.referencia);
                 const imgs = splitLinks(it.imagens);
                 return (
-                  <article key={it.id} className="pc-card" id={`post-${it.n}`}>
+                  <div key={it.id} style={{ display: 'contents' }}>
+                  {head && <span className={`pc-group g-${k}`}>{FORMAT_NAME[k]}</span>}
+                  <article className="pc-card" id={`post-${it.n}`}>
                     <header>
                       <span className="pc-day"><strong>{String(dayNum(it.day!)).padStart(2, '0')}</strong><small>{dayLabel(it.day!).split(' ')[0]}</small></span>
                       <div style={{ minWidth: 0 }}>
                         <span className={`pc-kind k-${kindOf(it.kind)}`}>{it.kind ?? 'Post'}</span>
-                        <span className="label pc-n">Post {String(it.n).padStart(2, '0')}{it.time ? ` · ${it.time}` : ''}</span>
+                        <span className="label pc-n">Nº {String(it.n).padStart(2, '0')}{it.time ? ` · ${it.time}` : ''}</span>
                         <h3>{it.title}</h3>
                       </div>
                     </header>
@@ -104,6 +116,7 @@ export default async function PlanejamentoCliente({
                       </div>
                     )}
                   </article>
+                  </div>
                 );
               })}
             </section>
