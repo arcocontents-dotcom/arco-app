@@ -328,12 +328,32 @@ try {
     // aviso é por conteúdo: sem botão geral, um sino em cada conteúdo aguardando
     assert.equal(await pd.getByRole('button', { name: 'Avisar cliente', exact: true }).count(), 0);
     await pd.getByRole('button', { name: 'Avisar cliente sobre Promoção de sábado' }).click();
-    const wa = pd.locator('.notify-toast a.notify-wa');
+    const dlg = pd.getByRole('dialog', { name: 'Avisar cliente' });
+    const wa = dlg.getByRole('link', { name: /WhatsApp/ });
     await wa.waitFor({ timeout: 10000 });
-    const href = decodeURIComponent((await wa.getAttribute('href')) ?? '');
-    assert.ok(href.includes('Promoção de sábado') && href.includes(`/c/${A}/`), href);
+    let href = decodeURIComponent((await wa.getAttribute('href')) ?? '');
+    assert.ok(href.startsWith('https://wa.me/?text=') && href.includes('Promoção de sábado') && href.includes(`/c/${A}/`), href);
+    assert.ok(await dlg.getByRole('button', { name: /Google Mensagens/ }).isDisabled(), 'SMS precisa de celular');
+    await dlg.getByRole('link', { name: 'Cadastrar celular' }).waitFor();
     await shot(pd, '08b-avisar-conteudo');
-    await pd.getByRole('button', { name: 'Fechar aviso' }).click();
+    await dlg.getByRole('button', { name: 'Fechar' }).click();
+    // cadastra o celular (a coluna é criada sozinha na tabela Clientes do app) e o WhatsApp vai direto
+    await pd.goto(`${APP}/admin/clientes/${A}`);
+    await pd.getByLabel('Celular com DDD').fill('(65) 99999-8888');
+    await pd.locator('form:has(#phone)').getByRole('button', { name: 'Salvar' }).click();
+    await pd.getByText('Celular salvo.').waitFor();
+    assert.equal(await pd.getByLabel('Celular com DDD').inputValue(), '(65) 99999-8888');
+    await pd.getByLabel('Celular com DDD').fill('123');
+    await pd.locator('form:has(#phone)').getByRole('button', { name: 'Salvar' }).click();
+    await pd.getByText(/Celular inválido/).waitFor();
+    await pd.goto(`${APP}/c/${A}/${STORY}`);
+    await pd.getByRole('button', { name: 'Avisar cliente' }).click();
+    await dlg.getByText('Direto para (65) 99999-8888').waitFor({ timeout: 10000 });
+    href = decodeURIComponent((await dlg.getByRole('link', { name: /WhatsApp/ }).getAttribute('href')) ?? '');
+    assert.ok(href.startsWith('https://wa.me/5565999998888?text='), href);
+    assert.ok(await dlg.getByRole('button', { name: /Google Mensagens/ }).isEnabled());
+    await shot(pd, '08c-avisar-com-celular');
+    await dlg.getByRole('button', { name: 'Fechar' }).click();
   });
 
   await step('Gestão separada mostra clientes e o que precisa de atenção', async () => {

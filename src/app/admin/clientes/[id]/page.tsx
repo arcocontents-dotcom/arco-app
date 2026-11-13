@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { requireAdmin } from '@/lib/access';
 import { env } from '@/lib/env';
 import { getClientFresh, listContentsInRangeAdmin } from '@/lib/notion';
-import { addDays, todayIn } from '@/lib/domain';
+import { addDays, formatPhone, todayIn } from '@/lib/domain';
 import ContentRow from '@/components/ContentRow';
 import { instagramConfigured } from '@/lib/instagram';
 import AdminShell from '@/components/AdminShell';
@@ -12,7 +12,7 @@ import { XIcon } from '@/components/icons';
 import LogoUploader from '@/components/LogoUploader';
 import AccessLink from '@/components/AccessLink';
 import CancelClient from '@/components/CancelClient';
-import { addAccessAction, disconnectInstagramAction, removeAccessAction, updateClientAction } from '../../actions';
+import { addAccessAction, disconnectInstagramAction, removeAccessAction, setClientPhoneAction, updateClientAction } from '../../actions';
 
 const OK: Record<string, string> = {
   criado: 'Cliente criado. Agora libere os e-mails.',
@@ -20,13 +20,15 @@ const OK: Record<string, string> = {
   liberado: 'Acesso liberado.',
   removido: 'Acesso removido.',
   'ig-ok': 'Instagram conectado.',
-  'ig-off': 'Instagram desconectado.'
+  'ig-off': 'Instagram desconectado.',
+  telefone: 'Celular salvo.'
 };
 const ERR: Record<string, string> = {
   email: 'Digite um e-mail válido.',
   nome: 'Dê um nome ao cliente.',
   ig: 'Não foi possível conectar o Instagram. Confirme que a conta é Profissional e tente de novo.',
-  admin: 'Esse é o e-mail do administrador: ele já vê todos os clientes.'
+  admin: 'Esse é o e-mail do administrador: ele já vê todos os clientes.',
+  telefone: 'Celular inválido. Use DDD + número, ex.: (65) 99999-8888.'
 };
 
 export const dynamic = 'force-dynamic';
@@ -127,6 +129,18 @@ export default async function ClienteAcessos({
         </section>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+          <section className="panel rise" style={{ ['--d' as string]: '150ms' }}>
+            <h2 className="label">Celular para avisos</h2>
+            <p className="hint">Usado no botão "Avisar cliente" de cada conteúdo: WhatsApp direto para este número ou Google Mensagens (SMS).</p>
+            <form action={setClientPhoneAction} style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <input type="hidden" name="id" value={c.id} />
+              <div className="field" style={{ flex: '1 1 200px' }}>
+                <label htmlFor="phone" className="label">Celular com DDD</label>
+                <input id="phone" name="phone" type="tel" inputMode="tel" autoComplete="off" className="input" placeholder="(65) 99999-8888" defaultValue={c.phone ? formatPhone(c.phone) : ''} />
+              </div>
+              <button className="btn small" type="submit">Salvar</button>
+            </form>
+          </section>
           <section className="panel rise" style={{ ['--d' as string]: '180ms' }}>
             <h2 className="label">Instagram</h2>
             {c.igConnected ? (

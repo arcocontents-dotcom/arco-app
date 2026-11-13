@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import NotifyButton from '@/components/NotifyButton';
 import { requireContentAccess } from '@/lib/access';
 import type { ContentRecord } from '@/lib/notion';
 import { dayLabel, itemLabel, itemsFor, type ItemKey } from '@/lib/domain';
@@ -84,7 +85,8 @@ export default async function ReviewPage({ params }: { params: Promise<{ clientI
         answeredBy={c.answeredBy}
       />
       {isAdmin && (
-        <div style={{ maxWidth: 640, width: '100%', margin: '0 auto', padding: '0 16px 48px' }}>
+        <div style={{ maxWidth: 640, width: '100%', margin: '0 auto', padding: '0 16px 48px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {c.status !== 'Rascunho' && <NotifyButton contentId={c.id} clientId={client.id} title={c.title} block />}
           <Link href={`/admin/conteudo/${c.id}`} className="btn outline block">Editar conteúdo</Link>
         </div>
       )}

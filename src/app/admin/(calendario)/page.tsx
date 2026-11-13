@@ -72,7 +72,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                     <Link href={`/admin/conteudo/${x.id}`} className="card-edit" aria-label={`Editar ${x.title}`} title="Editar">
                       <Icon name="pencil" size={14} />
                     </Link>
-                    {x.status === 'Aguardando' && <NotifyButton contentId={x.id} title={x.title} compact />}
+                    {x.status === 'Aguardando' && <NotifyButton contentId={x.id} clientId={client.id} title={x.title} compact />}
                   </div>
                 ))}
               </div>

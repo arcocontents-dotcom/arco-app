@@ -11,7 +11,8 @@
     "logo": "Logo",
     "cancelled": "Cancelado",
     "calName": "Nome no Calendário mensal",
-    "push": "Avisos (inscrições)"
+    "push": "Avisos (inscrições)",
+    "phone": "Celular (WhatsApp/SMS)"
   },
   "contents": {
     "title": "Título",

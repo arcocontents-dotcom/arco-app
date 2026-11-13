@@ -15,6 +15,7 @@ import {
   createClient,
   createContent,
   getClientFresh,
+  setClientPhone,
   getContentFresh,
   setClientInstagram,
   setPosted,
@@ -24,7 +25,7 @@ import {
   updateContent,
   type ContentInput
 } from '@/lib/notion';
-import { CONTENT_TYPES, EMAIL_RE, normalizeEmail, parseDay, type ContentType, type GeneralStatus } from '@/lib/domain';
+import { CONTENT_TYPES, EMAIL_RE, normalizeEmail, normalizePhone, parseDay, type ContentType, type GeneralStatus } from '@/lib/domain';
 import { isOwnMediaUrl } from '@/lib/media';
 import { signLoginToken } from '@/lib/session';
 
@@ -133,6 +134,16 @@ export async function removeAccessAction(form: FormData) {
   if (!c) redirect('/admin');
   await updateClient(id, { approvers: c.approvers.filter((e) => e !== email), viewers: c.viewers.filter((e) => e !== email) });
   redirect(`/admin/clientes/${id}?ok=removido`);
+}
+
+export async function setClientPhoneAction(form: FormData) {
+  await requireAdmin();
+  const id = String(form.get('id') ?? '');
+  const phone = normalizePhone(String(form.get('phone') ?? ''));
+  if (!(await getClientFresh(id))) redirect('/admin');
+  if (phone === null) redirect(`/admin/clientes/${id}?e=telefone`);
+  await setClientPhone(id, phone);
+  redirect(`/admin/clientes/${id}?ok=telefone`);
 }
 
 export async function disconnectInstagramAction(form: FormData) {
@@ -249,24 +260,46 @@ async function syncPlanFor(id: string, unposted = false) {
   if (fresh?.planningId) await syncPlanFromContent(fresh, { unposted });
 }
 
-/** "Avisar cliente" de UM conteúdo: aviso no celular com o nome do post, abrindo direto nele. */
-export async function notifyContentAction(
-  contentId: string
-): Promise<{ ok: boolean; sent: number; error?: string; wa: string }> {
-  await requireAdmin();
+async function notifyContext(contentId: string) {
   const c = await getContentFresh(contentId);
-  if (!c || !c.clientId) return { ok: false, sent: 0, error: 'Conteúdo não encontrado.', wa: '' };
+  if (!c || !c.clientId) return { error: 'Conteúdo não encontrado.' } as const;
   const client = await getClientFresh(c.clientId);
-  if (!client || client.cancelled) return { ok: false, sent: 0, error: 'Cliente não encontrado.', wa: '' };
+  if (!client || client.cancelled) return { error: 'Cliente não encontrado.' } as const;
   const first = client.name.split(/\s+/).filter((w) => !/^(arqui?\.?|dra?\.?)$/i.test(w))[0] ?? client.name;
   const path = `/c/${client.id}/${c.id}`;
-  const verb = c.status === 'Aguardando' ? 'está esperando a sua aprovação' : 'foi atualizado';
-  const wa = `https://wa.me/?text=${encodeURIComponent(`Olá, ${first}! O conteúdo "${c.title}" ${verb}:\n${env.appUrl}${path}`)}`;
-  if (c.status === 'Rascunho') return { ok: false, sent: 0, error: 'É rascunho: o cliente ainda não vê. Mude para Aguardando.', wa: '' };
-  if (!pushConfigured()) return { ok: false, sent: 0, error: 'Avisos no celular indisponíveis agora.', wa };
-  if (!allow(`notify:${c.id}`, 3, 10 * 60_000)) return { ok: false, sent: 0, error: 'Aviso deste conteúdo já enviado há pouco.', wa };
+  return { c, client, first, path } as const;
+}
+
+export type NotifyInfo =
+  | { ok: false; error: string }
+  | { ok: true; clientName: string; phone: string; message: string; devices: number; draft: boolean };
+
+/** Monta o aviso de UM conteúdo: mensagem pronta, celular do cliente e quantos aparelhos têm o app com aviso. */
+export async function notifyInfoAction(contentId: string): Promise<NotifyInfo> {
+  await requireAdmin();
+  const x = await notifyContext(contentId);
+  if ('error' in x) return { ok: false, error: x.error! };
+  const { c, client, first, path } = x;
+  const when = c.day ? ` (${c.type}, ${c.day.slice(8, 10)}/${c.day.slice(5, 7)})` : ` (${c.type})`;
+  const message =
+    c.status === 'Aguardando'
+      ? `Olá, ${first}! O conteúdo "${c.title}"${when} já está no app esperando a sua aprovação. É só abrir, revisar e aprovar:\n${env.appUrl}${path}`
+      : `Olá, ${first}! Atualizei o conteúdo "${c.title}"${when} no app:\n${env.appUrl}${path}`;
+  const devices = pushConfigured() ? (await getClientPushSubs(client.id).catch(() => [])).length : 0;
+  return { ok: true, clientName: client.name, phone: client.phone, message, devices, draft: c.status === 'Rascunho' };
+}
+
+/** Aviso no celular (app) de UM conteúdo, com o nome do post, abrindo direto nele. */
+export async function notifyContentAction(contentId: string): Promise<{ ok: boolean; sent: number; error?: string }> {
+  await requireAdmin();
+  const x = await notifyContext(contentId);
+  if ('error' in x) return { ok: false, sent: 0, error: x.error };
+  const { c, client, first, path } = x;
+  if (c.status === 'Rascunho') return { ok: false, sent: 0, error: 'É rascunho: o cliente ainda não vê. Mude para Aguardando.' };
+  if (!pushConfigured()) return { ok: false, sent: 0, error: 'Avisos no celular indisponíveis agora.' };
+  if (!allow(`notify:${c.id}`, 3, 10 * 60_000)) return { ok: false, sent: 0, error: 'Aviso deste conteúdo já enviado há pouco.' };
   const subs = await getClientPushSubs(client.id);
-  if (!subs.length) return { ok: false, sent: 0, error: `${first} ainda não ativou os avisos no celular.`, wa };
+  if (!subs.length) return { ok: false, sent: 0, error: `${first} ainda não ativou os avisos no app.` };
   const message = {
     title: c.status === 'Aguardando' ? 'Conteúdo para aprovar' : 'Conteúdo atualizado',
     body: `${c.type} · ${c.title}${c.day ? ` · ${c.day.slice(8, 10)}/${c.day.slice(5, 7)}` : ''}. Toque para revisar.`,
@@ -277,6 +310,6 @@ export async function notifyContentAction(
   const keep = subs.filter((_, i) => results[i] !== 'gone');
   if (keep.length !== subs.length) await setClientPushSubs(client.id, keep);
   const sent = results.filter((r) => r === 'ok').length;
-  if (!sent) return { ok: false, sent: 0, error: 'Não foi possível entregar no celular agora.', wa };
-  return { ok: true, sent, wa };
+  if (!sent) return { ok: false, sent: 0, error: 'Não foi possível entregar no celular agora.' };
+  return { ok: true, sent };
 }

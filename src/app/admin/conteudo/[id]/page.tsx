@@ -25,7 +25,7 @@ export default async function EditarConteudo({ params }: { params: Promise<{ id:
           <h1 className="display rise" style={{ fontSize: 'clamp(36px, 5vw, 64px)', ['--d' as string]: '60ms' }}>{c.title}</h1>
         </div>
         <div className="actions">
-          {c.status !== 'Rascunho' && <NotifyButton contentId={c.id} title={c.title} />}
+          {c.status !== 'Rascunho' && <NotifyButton contentId={c.id} clientId={c.clientId} title={c.title} />}
           <Link className="btn outline small" href={`/c/${c.clientId}/${c.id}`}>Ver aprovação</Link>
         </div>
       </div>

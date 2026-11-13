@@ -49,6 +49,7 @@ PLAN_OPTIONS[PL.editMonth] = PLAN_OPTIONS[PL.month];
 const PLAN_COLORS = { 'Reels 1': 'orange', 'Reels 2': 'orange', 'Post 1': 'blue', 'Storys 1': 'yellow', Fotos: 'purple', Finalizado: 'green', Realizando: 'blue', Postado: 'green' };
 const colorOf = (prop, name) => (prop === PL.note && name !== 'Finalizado' ? 'red' : PLAN_COLORS[name] ?? 'blue');
 
+export const schemaChanges = [];
 const norm = (id) => String(id).replace(/-/g, '').toLowerCase();
 const fmtId = (h) => `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 
@@ -65,6 +66,7 @@ function toResponse(type, v) {
     case 'formula': return { type, formula: v.formula ?? { type: 'string', string: null } };
     case 'url': return { type, url: v.url ?? null };
     case 'email': return { type, email: v.email ?? null };
+    case 'phone_number': return { type, phone_number: v.phone_number ?? null };
     case 'checkbox': return { type, checkbox: !!v.checkbox };
     case 'number': return { type, number: typeof v.number === 'number' ? v.number : null };
     case 'relation': return { type, relation: (v.relation ?? []).map((r) => ({ id: fmtId(norm(r.id)) })), has_more: false };
@@ -210,6 +212,17 @@ export function startMock(port) {
         if (!TYPES[db]) return send(404, { object: 'error', status: 404, code: 'object_not_found', message: 'not found' });
         const properties = Object.fromEntries(Object.entries(TYPES[db]).map(([n, t]) => [n, { type: t, ...(['select', 'multi_select', 'status'].includes(t) ? { [t]: { options: (PLAN_OPTIONS[n] ?? []).map((name) => ({ name, color: colorOf(n, name) })) } } : {}) }]));
         return send(200, { object: 'database', id: fmtId(db), properties });
+      }
+      if (req.method === 'PATCH' && (m = url.pathname.match(/^\/v1\/databases\/([^/]+)$/))) {
+        const db = norm(m[1]);
+        if (db !== CLIENTS_DB && db !== CONTENTS_DB) return send(403, { object: 'error', status: 403, code: 'restricted_resource', message: 'Só as tabelas do app' });
+        for (const [n, def] of Object.entries(json.properties ?? {})) {
+          if (!def) throw Object.assign(new Error('Apagar coluna não é permitido'), { status: 400 });
+          if (TYPES[db][n]) throw Object.assign(new Error(`Coluna já existe: ${n}`), { status: 400 });
+          TYPES[db][n] = Object.keys(def)[0];
+          schemaChanges.push(n);
+        }
+        return send(200, { object: 'database', id: fmtId(db) });
       }
       if (req.method === 'GET' && (m = url.pathname.match(/^\/v1\/pages\/([^/]+)$/))) {
         const p = store.get(norm(m[1]));

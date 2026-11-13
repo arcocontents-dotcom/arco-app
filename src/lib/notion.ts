@@ -49,6 +49,7 @@ export interface ClientRecord {
   cancelled: boolean;
   /** Nome do cliente na coluna Cliente do Calendário mensal (planejamento). */
   calName: string;
+  phone: string;
 }
 
 export interface PushSub {
@@ -95,6 +96,7 @@ export function text(p: Prop | undefined): string {
   if (p.type === 'rich_text') return p.rich_text.map((t) => t.plain_text).join('');
   if (p.type === 'email') return p.email ?? '';
   if (p.type === 'url') return p.url ?? '';
+  if (p.type === 'phone_number') return p.phone_number ?? '';
   return '';
 }
 export function select(p: Prop | undefined): string | null {
@@ -145,7 +147,8 @@ function toClient(p: PageObjectResponse): ClientRecord {
     igConnected: checkbox(pr[C.igConnected]),
     logoUrl: url(pr[C.logo]),
     cancelled: checkbox(pr[C.cancelled]),
-    calName: text(pr[C.calName]).trim()
+    calName: text(pr[C.calName]).trim(),
+    phone: text(pr[C.phone]).trim()
   };
 }
 
@@ -279,6 +282,22 @@ export async function updateClient(
   if (input.approvers) properties[C.approvers] = rich(input.approvers.join(', '));
   if (input.viewers) properties[C.viewers] = rich(input.viewers.join(', '));
   await notion().pages.update({ page_id: id, properties: properties as never });
+  invalidate('clients');
+}
+
+/**
+ * Celular do cliente (WhatsApp/SMS). Se a coluna ainda não existir na tabela Clientes do app,
+ * cria só ela (tipo telefone) e tenta de novo. Nada é apagado.
+ */
+export async function setClientPhone(id: string, phone: string) {
+  const write = () => notion().pages.update({ page_id: id, properties: { [C.phone]: { phone_number: phone || null } } as never });
+  try {
+    await write();
+  } catch (e) {
+    if (!/not a property that exists|Propriedade inexistente/i.test((e as Error).message ?? '')) throw e;
+    await notion().databases.update({ database_id: env.clientsDb, properties: { [C.phone]: { phone_number: {} } } as never });
+    await write();
+  }
   invalidate('clients');
 }
 

@@ -245,3 +245,17 @@ export function production(items: ProdItem[], today: string, nowTime: string): R
   }
   return out;
 }
+
+/** Celular para WhatsApp/SMS: só dígitos, com 55 na frente quando é número do Brasil sem DDI. */
+export function normalizePhone(raw: string): string | null {
+  const d = raw.replace(/\D/g, '');
+  if (!d) return '';
+  const full = d.length === 10 || d.length === 11 ? `55${d}` : d;
+  return full.length >= 12 && full.length <= 15 ? `+${full}` : null;
+}
+
+/** "+5565999998888" → "(65) 99999-8888" para mostrar. */
+export function formatPhone(p: string): string {
+  const m = p.match(/^\+55(\d{2})(\d{4,5})(\d{4})$/);
+  return m ? `(${m[1]}) ${m[2]}-${m[3]}` : p;
+}
