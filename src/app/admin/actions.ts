@@ -249,19 +249,34 @@ async function syncPlanFor(id: string, unposted = false) {
   if (fresh?.planningId) await syncPlanFromContent(fresh, { unposted });
 }
 
-/** Botão "Avisar cliente": manda um aviso para os celulares do cliente que ligaram os avisos. */
-export async function notifyClientAction(clientId: string): Promise<{ ok: true; sent: number } | { ok: false; error: string }> {
+/** "Avisar cliente" de UM conteúdo: aviso no celular com o nome do post, abrindo direto nele. */
+export async function notifyContentAction(
+  contentId: string
+): Promise<{ ok: boolean; sent: number; error?: string; wa: string }> {
   await requireAdmin();
-  if (!pushConfigured()) return { ok: false, error: 'Avisos ainda não configurados no servidor.' };
-  const client = await getClientFresh(clientId);
-  if (!client || client.cancelled) return { ok: false, error: 'Cliente não encontrado.' };
-  if (!allow(`notify:${client.id}`, 3, 10 * 60_000)) return { ok: false, error: 'Aviso já enviado há pouco. Espere uns minutos.' };
+  const c = await getContentFresh(contentId);
+  if (!c || !c.clientId) return { ok: false, sent: 0, error: 'Conteúdo não encontrado.', wa: '' };
+  const client = await getClientFresh(c.clientId);
+  if (!client || client.cancelled) return { ok: false, sent: 0, error: 'Cliente não encontrado.', wa: '' };
+  const first = client.name.split(/\s+/).filter((w) => !/^(arqui?\.?|dra?\.?)$/i.test(w))[0] ?? client.name;
+  const path = `/c/${client.id}/${c.id}`;
+  const verb = c.status === 'Aguardando' ? 'está esperando a sua aprovação' : 'foi atualizado';
+  const wa = `https://wa.me/?text=${encodeURIComponent(`Olá, ${first}! O conteúdo "${c.title}" ${verb}:\n${env.appUrl}${path}`)}`;
+  if (c.status === 'Rascunho') return { ok: false, sent: 0, error: 'É rascunho: o cliente ainda não vê. Mude para Aguardando.', wa: '' };
+  if (!pushConfigured()) return { ok: false, sent: 0, error: 'Avisos no celular indisponíveis agora.', wa };
+  if (!allow(`notify:${c.id}`, 3, 10 * 60_000)) return { ok: false, sent: 0, error: 'Aviso deste conteúdo já enviado há pouco.', wa };
   const subs = await getClientPushSubs(client.id);
-  if (!subs.length) return { ok: false, error: 'Ninguém deste cliente ligou os avisos ainda.' };
-  const results = await Promise.all(subs.map((s) => sendPush(s.endpoint).catch(() => 'erro' as const)));
+  if (!subs.length) return { ok: false, sent: 0, error: `${first} ainda não ativou os avisos no celular.`, wa };
+  const message = {
+    title: c.status === 'Aguardando' ? 'Conteúdo para aprovar' : 'Conteúdo atualizado',
+    body: `${c.type} · ${c.title}${c.day ? ` · ${c.day.slice(8, 10)}/${c.day.slice(5, 7)}` : ''}. Toque para revisar.`,
+    url: path,
+    tag: `c${c.id.replace(/-/g, '').slice(0, 30)}`
+  };
+  const results = await Promise.all(subs.map((s) => sendPush(s, message).catch(() => 'erro' as const)));
   const keep = subs.filter((_, i) => results[i] !== 'gone');
   if (keep.length !== subs.length) await setClientPushSubs(client.id, keep);
   const sent = results.filter((r) => r === 'ok').length;
-  if (!sent) return { ok: false, error: 'Não foi possível entregar agora.' };
-  return { ok: true, sent };
+  if (!sent) return { ok: false, sent: 0, error: 'Não foi possível entregar no celular agora.', wa };
+  return { ok: true, sent, wa };
 }

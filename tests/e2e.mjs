@@ -51,8 +51,6 @@ const app = spawn('npx', ['next', 'start', '-p', String(APP_PORT)], {
     NOTION_CLIENTS_DB: CLIENTS_DB,
     NOTION_CONTENTS_DB: CONTENTS_DB,
     NOTION_PLANNING_DB: PLANNING_DB,
-    VAPID_PUBLIC_KEY: 'BMocD2_Bate1IK8f6sJ1d4i2a3m9Q0fTq6m1nUQ8m2m0a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w',
-    VAPID_PRIVATE_KEY: 'teste',
     NOTION_BASE_URL: `http://127.0.0.1:${MOCK_PORT}`,
     R2_PUBLIC_URL: 'https://midia.test',
     NEXT_TELEMETRY_DISABLED: '1'
@@ -281,6 +279,10 @@ try {
     const ok = await pa.request.post(`${APP}/api/push`, { data: { clientId: A, endpoint: 'https://fcm.googleapis.com/fcm/send/abc123' } });
     assert.equal(ok.status(), 200);
     assert.match(textOf(A, 'Avisos (inscrições)'), /fcm\.googleapis\.com\/fcm\/send\/abc123/);
+    const P = Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 7)]).toString('base64url');
+    const withKeys = await pa.request.post(`${APP}/api/push`, { data: { clientId: A, endpoint: 'https://fcm.googleapis.com/fcm/send/abc123', p256dh: P, auth: Buffer.alloc(16, 1).toString('base64url') } });
+    assert.equal(withKeys.status(), 200);
+    assert.match(textOf(A, 'Avisos (inscrições)'), /"auth":"AQEBAQEBAQEBAQEBAQEBAQ"/);
     const evil = await pa.request.post(`${APP}/api/push`, { data: { clientId: A, endpoint: 'https://evil.example/x' } });
     assert.equal(evil.status(), 400);
     const other = await pa.request.post(`${APP}/api/push`, { data: { clientId: B, endpoint: 'https://fcm.googleapis.com/fcm/send/zzz' } });
@@ -323,6 +325,15 @@ try {
     await pd.getByText('Rascunho secreto').waitFor();
     await pd.waitForTimeout(900);
     await shot(pd, '08-admin');
+    // aviso é por conteúdo: sem botão geral, um sino em cada conteúdo aguardando
+    assert.equal(await pd.getByRole('button', { name: 'Avisar cliente', exact: true }).count(), 0);
+    await pd.getByRole('button', { name: 'Avisar cliente sobre Promoção de sábado' }).click();
+    const wa = pd.locator('.notify-toast a.notify-wa');
+    await wa.waitFor({ timeout: 10000 });
+    const href = decodeURIComponent((await wa.getAttribute('href')) ?? '');
+    assert.ok(href.includes('Promoção de sábado') && href.includes(`/c/${A}/`), href);
+    await shot(pd, '08b-avisar-conteudo');
+    await pd.getByRole('button', { name: 'Fechar aviso' }).click();
   });
 
   await step('Gestão separada mostra clientes e o que precisa de atenção', async () => {

@@ -11,21 +11,24 @@ async function guard(req: Request) {
   const v = await currentViewer();
   if (!v) return { error: NextResponse.json({ error: 'Entre de novo.' }, { status: 401 }) };
   if (!allow(`push:${v.email}`, 20, 3600_000)) return { error: NextResponse.json({ error: 'Muitas tentativas.' }, { status: 429 }) };
-  const body = (await req.json().catch(() => ({}))) as { clientId?: string; endpoint?: string };
+  const body = (await req.json().catch(() => ({}))) as { clientId?: string; endpoint?: string; p256dh?: string; auth?: string };
   const client = await getClientFresh(String(body.clientId ?? ''));
   const allowed =
     client && !client.cancelled && (v.role === 'admin' || client.approvers.includes(v.email) || client.viewers.includes(v.email));
   if (!client || !allowed) return { error: NextResponse.json({ error: 'Sem acesso.' }, { status: 403 }) };
   const endpoint = String(body.endpoint ?? '');
   if (!isPushEndpoint(endpoint)) return { error: NextResponse.json({ error: 'Aparelho inválido.' }, { status: 400 }) };
-  return { v, client, endpoint };
+  const k = (x: unknown, n: number) => (typeof x === 'string' && /^[A-Za-z0-9_-]+$/.test(x) && Buffer.from(x, 'base64url').length === n ? x : undefined);
+  return { v, client, endpoint, p256dh: k(body.p256dh, 65), auth: k(body.auth, 16) };
 }
 
 export async function POST(req: Request) {
   const g = await guard(req);
   if ('error' in g) return g.error;
   const subs = (await getClientPushSubs(g.client.id)).filter((s) => s.endpoint !== g.endpoint);
-  subs.push({ endpoint: g.endpoint, email: g.v.email, at: new Date().toISOString() });
+  const prev = (await getClientPushSubs(g.client.id)).find((s) => s.endpoint === g.endpoint);
+  if (prev && prev.p256dh === g.p256dh && prev.auth === g.auth) return NextResponse.json({ ok: true });
+  subs.push({ endpoint: g.endpoint, p256dh: g.p256dh, auth: g.auth, email: g.v.email, at: new Date().toISOString() });
   await setClientPushSubs(g.client.id, subs);
   return NextResponse.json({ ok: true });
 }

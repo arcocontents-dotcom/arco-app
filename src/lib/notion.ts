@@ -53,6 +53,8 @@ export interface ClientRecord {
 
 export interface PushSub {
   endpoint: string;
+  p256dh?: string;
+  auth?: string;
   email: string;
   at: string;
 }

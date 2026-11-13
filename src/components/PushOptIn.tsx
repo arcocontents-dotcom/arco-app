@@ -32,11 +32,24 @@ export default function PushOptIn({ clientId, vapidKey }: { clientId: string; va
       await navigator.serviceWorker.ready;
       reg.active?.postMessage({ type: 'home', url: `/c/${clientId}` });
       const sub = await reg.pushManager.getSubscription();
-      if (sub) setState('on');
+      if (sub) {
+        setState('on');
+        save(sub).catch(() => undefined); // garante que o servidor tem as chaves deste aparelho
+      }
       else if (Notification.permission === 'denied') setState(dismissed ? 'hidden' : 'denied');
       else setState(dismissed ? 'hidden' : 'off');
     })().catch(() => setState('unsupported'));
   }, [clientId]);
+
+  async function save(sub: PushSubscription) {
+    const k = sub.toJSON().keys ?? {};
+    const r = await fetch('/api/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId, endpoint: sub.endpoint, p256dh: k.p256dh, auth: k.auth })
+    });
+    return r.ok;
+  }
 
   async function enable() {
     setState('working');
@@ -45,9 +58,16 @@ export default function PushOptIn({ clientId, vapidKey }: { clientId: string; va
       const perm = await Notification.requestPermission();
       if (perm !== 'granted') return setState('denied');
       const reg = await navigator.serviceWorker.ready;
-      const sub = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(vapidKey) }));
-      const r = await fetch('/api/push', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId, endpoint: sub.endpoint }) });
-      if (!r.ok) throw new Error();
+      const opts = { userVisibleOnly: true, applicationServerKey: b64(vapidKey) };
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe(opts).catch(async () => {
+          // inscrição antiga com outra chave: refaz
+          await (await reg.pushManager.getSubscription())?.unsubscribe();
+          return reg.pushManager.subscribe(opts);
+        });
+      }
+      if (!(await save(sub))) throw new Error();
       setState('on');
     } catch {
       setMsg('Não deu para ativar agora. Tente de novo.');
