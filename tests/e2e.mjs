@@ -617,7 +617,7 @@ try {
   });
 
   await step('admin também aprova, pede ajuste ou reprova', async () => {
-    await pd.goto(`${APP}/c/${A}/${STORY}`);
+    await pd.goto(`${APP}/c/${A}/${STORY}`, { waitUntil: 'networkidle' });
     await pd.getByRole('button', { name: 'Aprovar Story' }).click();
     await pd.getByRole('button', { name: 'Salvar respostas' }).click();
     await pd.getByText('Respondido por arcocontents@gmail.com').waitFor();
