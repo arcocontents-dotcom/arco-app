@@ -8,7 +8,7 @@ import { getClientFresh, createContent, updateClient } from '@/lib/notion';
 import { parseDay, todayIn } from '@/lib/domain';
 import { env } from '@/lib/env';
 import {
-  createPlanItem, getPlanBrief, getPlanItem, kindToType, planOptions, setPlanBrief, updatePlanItem, BRIEF_FIELDS, PLAN_STATUSES, SELECT_FIELDS,
+  createPlanItem, trashPlanItem, getPlanBrief, getPlanItem, kindToType, planOptions, setPlanBrief, updatePlanItem, BRIEF_FIELDS, PLAN_STATUSES, SELECT_FIELDS,
   type BriefField, type PlanBrief,
   type PlanPatch, type PlanStatus
 } from '@/lib/planning';
@@ -130,9 +130,9 @@ export async function sendToApprovalAction(clientId: string, planId: string): Pr
   }
 }
 
-async function ownCard(clientId: string, planId: string) {
+async function ownCard(clientId: string, planId: string, allowTrashed = false) {
   const c = await clientCal(clientId);
-  const item = await getPlanItem(planId);
+  const item = await getPlanItem(planId, allowTrashed);
   return c && item && item.cal === c.calName ? item : null;
 }
 
@@ -185,5 +185,18 @@ export async function saveBriefAction(clientId: string, planId: string, field: B
     if ((e as { code?: string }).code === 'locked') return { ok: false, error: (e as Error).message };
     console.error('[planejamento] briefing', e);
     return { ok: false, error: 'Não foi possível salvar no Notion.' };
+  }
+}
+
+/** Apagar task: vai para a lixeira do Notion. Com restore = true, volta de lá (botão Desfazer). */
+export async function trashPlanAction(clientId: string, planId: string, restore = false): Promise<R> {
+  await requireAdmin();
+  if (!(await ownCard(clientId, planId, restore))) return { ok: false, error: 'Card não encontrado.' };
+  try {
+    await trashPlanItem(planId, !restore);
+    return { ok: true };
+  } catch (e) {
+    console.error('[planejamento] lixeira', e);
+    return { ok: false, error: restore ? 'Não foi possível restaurar.' : 'Não foi possível apagar no Notion.' };
   }
 }

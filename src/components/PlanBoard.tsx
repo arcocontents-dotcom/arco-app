@@ -6,9 +6,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Icon, { type IconName } from './Icon';
 import TagSelect, { Tag, type Opt } from './TagSelect';
-import { MONTHS, dayLabel } from '@/lib/domain';
+import { MONTHS, WEEKDAYS_SHORT, dayLabel, dayNum, monthGrid } from '@/lib/domain';
 import type { PlanItem, PlanOptions, PlanPatch, PlanStatus, SelectField } from '@/lib/planning';
-import { createIdeaAction, getBriefAction, saveBriefAction, sendToApprovalAction, updatePlanAction } from '@/app/admin/planejamento/actions';
+import { createIdeaAction, getBriefAction, saveBriefAction, sendToApprovalAction, trashPlanAction, updatePlanAction } from '@/app/admin/planejamento/actions';
 import type { PlanBrief, BriefField } from '@/lib/planning';
 import { useEffect } from 'react';
 import RefPreview from './RefPreview';
@@ -52,7 +52,7 @@ const PROPS: ({ kind: 'select'; field: SelectField; label: string; icon: IconNam
 ];
 
 export default function PlanBoard({
-  clientId, cal, items: initial, links, options
+  clientId, cal, month, items: initial, links, options
 }: {
   clientId: string;
   cal: string;
@@ -69,11 +69,18 @@ export default function PlanBoard({
   const [over, setOver] = useState<PlanStatus | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [draft, setDraft] = useState<PlanItem | null>(null);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
+  const [view, setView] = useState<'quadro' | 'calendario'>('quadro');
+  const draftRef = useRef<PlanItem | null>(null);
+  const creating = useRef(false);
+  const [undo, setUndo] = useState<PlanItem | null>(null);
   const [pending, start] = useTransition();
   const [brief, setBrief] = useState<PlanBrief | null>(null);
   const [briefMsg, setBriefMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    setConfirmDel(false);
     setBrief(null);
     setBriefMsg(null);
     if (!open || open === NEW) return;
@@ -148,8 +155,12 @@ export default function PlanBoard({
     const local: Partial<PlanItem> = { ...(x as Partial<PlanItem>) };
     if (x.day && x.month === undefined) local.month = MONTHS[Number(x.day.slice(5, 7)) - 1];
     if (id === NEW) {
-      // Ainda não existe no Notion: só guarda no formulário até clicar em "Criar no Notion".
-      setDraft((d) => (d ? { ...d, ...local } : d));
+      // Ainda não existe no Notion: guarda no formulário até ganhar título.
+      setDraft((d) => {
+        const n = d ? { ...d, ...local } : d;
+        draftRef.current = n;
+        return n;
+      });
       return;
     }
     setItems((list) => list.map((i) => (i.id === id ? { ...i, ...local } : i)));
@@ -163,35 +174,96 @@ export default function PlanBoard({
     });
   }
 
-  /** Abre uma task nova com todas as propriedades, igual ao Notion. Só grava ao clicar em "Criar no Notion". */
-  function newTask(status: PlanStatus) {
+  /** Abre uma task nova com todas as propriedades, igual ao Notion. Salva sozinha quando ganha título. */
+  function newTask(status: PlanStatus, day: string | null = null) {
     setErr(null);
-    setDraft({
-      id: NEW, url: '', title: '', cal, day: null, time: null, status, kind: nextKind(), note: null, owner: null, month: null,
+    const d: PlanItem = {
+      id: NEW, url: '', title: '', cal, day, time: null, status, kind: nextKind(), note: null, owner: null,
+      month: day ? MONTHS[Number(day.slice(5, 7)) - 1] : null,
       recMonth: null, editMonth: null, designBy: null, postedBy: null, briefBy: [], deadline: null, done: false
-    });
+    };
+    draftRef.current = d;
+    setDraft(d);
     setOpen(NEW);
   }
 
-  function createDraft() {
-    if (!draft) return;
-    const title = draft.title.trim();
-    if (!title) {
-      setErr('Dê um título para a task.');
-      return;
-    }
-    const { id: _id, url: _u, cal: _c, time: _t, deadline: _d, ...fields } = draft;
+  function trash(item: PlanItem) {
+    const before = items;
+    setItems((l) => l.filter((i) => i.id !== item.id));
+    setOpen(null);
+    setConfirmDel(false);
+    setErr(null);
     start(async () => {
-      const r = await createIdeaAction(clientId, { ...fields, title });
-      if (r.ok) {
-        setItems((l) => [{ ...draft, id: r.id, title }, ...l]);
-        setDraft(null);
-        setOpen(r.id);
-        router.refresh();
-      } else setErr(r.error);
+      const r = await trashPlanAction(clientId, item.id);
+      if (!r.ok) {
+        setItems(before);
+        setErr(r.error);
+        return;
+      }
+      setUndo(item);
+      setTimeout(() => setUndo((u) => (u?.id === item.id ? null : u)), 8000);
+      router.refresh();
     });
   }
 
+  function restore() {
+    if (!undo) return;
+    const item = undo;
+    setUndo(null);
+    setItems((l) => [item, ...l.filter((i) => i.id !== item.id)]);
+    start(async () => {
+      const r = await trashPlanAction(clientId, item.id, true);
+      if (!r.ok) {
+        setItems((l) => l.filter((i) => i.id !== item.id));
+        setErr(r.error);
+      } else router.refresh();
+    });
+  }
+
+  /**
+   * Igual ao Notion: a task nova se salva sozinha assim que tem título (ao sair do campo,
+   * apertar Enter ou fechar a ficha). O que mudar enquanto salva também vai para o Notion.
+   */
+  function createDraft() {
+    const d = draftRef.current;
+    if (!d || creating.current) return;
+    const title = d.title.trim();
+    if (!title) return;
+    creating.current = true;
+    const { id: _id, url: _u, cal: _c, time: _t, deadline: _d, ...fields } = d;
+    const sent = { ...d, title };
+    start(async () => {
+      const r = await createIdeaAction(clientId, { ...fields, title });
+      creating.current = false;
+      if (!r.ok) {
+        setErr(r.error);
+        return;
+      }
+      const latest = draftRef.current ?? sent;
+      const diff: PlanPatch = {};
+      for (const k of ['title', 'status', 'day', 'kind', 'note', 'owner', 'month', 'recMonth', 'editMonth', 'designBy', 'postedBy', 'done'] as const) {
+        if (JSON.stringify(latest[k]) !== JSON.stringify(sent[k])) (diff as Record<string, unknown>)[k] = k === 'title' ? latest.title.trim() || title : latest[k];
+      }
+      if (JSON.stringify(latest.briefBy) !== JSON.stringify(sent.briefBy)) diff.briefBy = latest.briefBy;
+      const item = { ...latest, title: latest.title.trim() || title, id: r.id };
+      setItems((l) => [item, ...l]);
+      setDraft(null);
+      draftRef.current = null;
+      setOpen((o) => (o === NEW ? r.id : o));
+      setSaved('Task criada no Notion');
+      setTimeout(() => setSaved(null), 1800);
+      if (Object.keys(diff).length) await updatePlanAction(clientId, r.id, diff);
+      router.refresh();
+    });
+  }
+
+  function closeDrawer() {
+    if (open === NEW) createDraft();
+    setOpen(null);
+  }
+
+  /** Abre direto no aplicativo do Notion (notion://), não no site. */
+  const notionApp = (url: string) => url.replace(/^https?:\/\/(www\.)?notion\.(so|site)\//, 'notion://www.notion.so/').replace(/^https?:\/\/app\.notion\.com\/p\//, 'notion://www.notion.so/');
 
   function toApproval(id: string) {
     start(async () => {
@@ -203,6 +275,10 @@ export default function PlanBoard({
 
   return (
     <div className="plan">
+      <div className="plan-views rise" role="tablist" aria-label="Visualização">
+        <button type="button" role="tab" aria-selected={view === 'quadro'} onClick={() => setView('quadro')}><Icon name="grid" size={15} />Quadro</button>
+        <button type="button" role="tab" aria-selected={view === 'calendario'} onClick={() => setView('calendario')}><Icon name="calendar" size={15} />Calendário</button>
+      </div>
       <nav className="ntabs rise" aria-label="Formato">
         {TABS.map((t) => (
           <button key={t.key} type="button" aria-pressed={tab === t.key} onClick={() => setTab(t.key)}>
@@ -211,6 +287,17 @@ export default function PlanBoard({
         ))}
       </nav>
       {err && <p className="error" role="alert">{err}</p>}
+      {view === 'calendario' && (
+        <PlanCalendar
+          month={month}
+          items={visible}
+          kindColor={(k) => colorOf(options.kind, k)}
+          onOpen={(id) => setOpen(id)}
+          onNew={(day) => newTask('Ideia', day)}
+          onMove={(id, day) => patch(id, { day })}
+        />
+      )}
+      {view === 'quadro' && (
       <div className="plan-cols">
         {COLS.map((col, ci) => (
           <section
@@ -270,13 +357,22 @@ export default function PlanBoard({
           </section>
         ))}
       </div>
+      )}
 
+      {undo && (
+        <div className="undo-bar" role="status">
+          <Icon name="trash" size={15} />
+          <span>Task apagada · está na lixeira do Notion</span>
+          <button type="button" onClick={restore}><Icon name="undo" size={14} />Desfazer</button>
+        </div>
+      )}
       {current && createPortal(
-        <div className="drawer-overlay" onMouseDown={(e) => e.target === e.currentTarget && setOpen(null)}>
+        <div className="drawer-overlay" onMouseDown={(e) => e.target === e.currentTarget && closeDrawer()}>
           <aside className="drawer" role="dialog" aria-modal="true" aria-label={isNew ? 'Nova task' : current.title}>
             <div className="drawer-top">
               <span className="label">🗓️ Calendário mensal</span>
-              <button type="button" className="icon-btn" onClick={() => setOpen(null)} aria-label="Fechar"><Icon name="x" /></button>
+              {saved && <span className="hint ic-inline" role="status" style={{ marginLeft: 'auto', marginRight: 8 }}><Icon name="check" size={13} className="ic-play" />{saved}</span>}
+              <button type="button" className="icon-btn" onClick={closeDrawer} aria-label="Fechar"><Icon name="x" /></button>
             </div>
             <input
               className="drawer-title"
@@ -286,9 +382,13 @@ export default function PlanBoard({
               placeholder="Sem título"
               autoFocus={isNew}
               maxLength={200}
-              onChange={(e) => isNew && setDraft((d) => (d ? { ...d, title: e.target.value } : d))}
-              onKeyDown={(e) => { if (isNew && e.key === 'Enter') createDraft(); }}
-              onBlur={(e) => { const t = e.target.value.trim(); if (!isNew && t && t !== current.title) patch(current.id, { title: t }); }}
+              onChange={(e) => { if (isNew) { const v = e.target.value; setDraft((d) => { const n = d ? { ...d, title: v } : d; draftRef.current = n; return n; }); } }}
+              onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+              onBlur={(e) => {
+                const t = e.target.value.trim();
+                if (isNew) createDraft();
+                else if (t && t !== current.title) patch(current.id, { title: t });
+              }}
             />
             <dl className="nprops">
               {PROPS.map((p) => (
@@ -327,11 +427,9 @@ export default function PlanBoard({
             {isNew ? (
               <div className="drawer-actions">
                 {err && <p className="error" role="alert" style={{ margin: 0 }}>{err}</p>}
-                <button type="button" className="btn block" disabled={pending} onClick={createDraft}>
-                  <Icon name="plus" size={16} />{pending ? 'Criando…' : 'Criar no Notion'}
-                </button>
-                <button type="button" className="link-btn" style={{ alignSelf: 'center' }} onClick={() => setOpen(null)}>Cancelar</button>
-                <p className="hint" style={{ margin: 0 }}>Depois de criar, você já preenche objetivo, legenda, referências e imagens aqui mesmo.</p>
+                <p className="hint ic-inline" style={{ margin: 0 }} role="status">
+                  {pending ? <><span className="spinner" aria-hidden="true" />Salvando no Notion…</> : 'Digite o título: a task se salva sozinha no Notion, igual lá. Depois aparecem objetivo, legenda, referências e imagens.'}
+                </p>
               </div>
             ) : (<>
             <section className="brief" aria-label="Para o cliente">
@@ -416,9 +514,24 @@ export default function PlanBoard({
                 </button>
               )}
               {current.url && (
-                <a className="link-btn ic-inline" href={current.url} target="_blank" rel="noreferrer" style={{ alignSelf: 'center' }}>
+                <a className="link-btn ic-inline" href={notionApp(current.url)} style={{ alignSelf: 'center' }}>
                   <Icon name="external" size={14} />Abrir no Notion
                 </a>
+              )}
+            </div>
+            <div className="plan-del">
+              {!confirmDel ? (
+                <button type="button" className="link-btn danger ic-inline" onClick={() => setConfirmDel(true)}>
+                  <Icon name="trash" size={14} />Apagar task
+                </button>
+              ) : (
+                <div className="plan-del-box" role="alertdialog" aria-label="Confirmar apagar">
+                  <p>Apagar <b>{current.title}</b>? Ela vai para a lixeira do Notion e dá para restaurar por 30 dias.{linkOf(current.id) ? ' O conteúdo que já está na aprovação continua lá.' : ''}</p>
+                  <div>
+                    <button type="button" className="btn small danger" onClick={() => trash(current)}><Icon name="trash" size={14} />Apagar</button>
+                    <button type="button" className="btn outline small" onClick={() => setConfirmDel(false)}>Cancelar</button>
+                  </div>
+                </div>
               )}
             </div>
             </>)}
@@ -426,6 +539,91 @@ export default function PlanBoard({
           </aside>
         </div>,
         document.body
+      )}
+    </div>
+  );
+}
+
+/** Visão de calendário do mês (igual à do Notion): arraste para mudar a data, + para criar no dia. */
+function PlanCalendar({
+  month, items, kindColor, onOpen, onNew, onMove
+}: {
+  month: string;
+  items: PlanItem[];
+  kindColor: (k: string) => string;
+  onOpen: (id: string) => void;
+  onNew: (day: string) => void;
+  onMove: (id: string, day: string) => void;
+}) {
+  const [drag, setDrag] = useState<string | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+  const cells = monthGrid(month);
+  const today = new Date().toISOString().slice(0, 10);
+  const undated = items.filter((i) => !i.day);
+  return (
+    <div className="pcal-wrap rise">
+      <div className="pcal" role="grid" aria-label="Calendário do planejamento">
+        {WEEKDAYS_SHORT.map((w) => <span key={w} className="pcal-wd">{w}</span>)}
+        {cells.map((c) => {
+          const list = items.filter((i) => i.day === c.day);
+          return (
+            <div
+              key={c.day}
+              role="gridcell"
+              aria-label={c.day}
+              className={`pcal-cell${c.inMonth ? '' : ' out'}${c.day === today ? ' today' : ''}${over === c.day ? ' over' : ''}`}
+              onDragOver={(e) => { if (drag) { e.preventDefault(); setOver(c.day); } }}
+              onDragLeave={() => setOver((o) => (o === c.day ? null : o))}
+              onDrop={(e) => {
+                e.preventDefault();
+                setOver(null);
+                const it = items.find((i) => i.id === drag);
+                setDrag(null);
+                if (it && it.day !== c.day) onMove(it.id, c.day);
+              }}
+            >
+              <div className="pcal-n">
+                <span>{dayNum(c.day)}</span>
+                <button type="button" className="pcal-add" onClick={() => onNew(c.day)} aria-label={`Nova task em ${c.day}`}><Icon name="plus" size={14} /></button>
+              </div>
+              {list.map((it) => (
+                <button
+                  key={it.id}
+                  type="button"
+                  className="pcal-card"
+                  draggable
+                  onDragStart={(e) => { setDrag(it.id); e.dataTransfer.effectAllowed = 'move'; }}
+                  onDragEnd={() => { setDrag(null); setOver(null); }}
+                  onClick={() => onOpen(it.id)}
+                >
+                  <span className="pcal-title">{it.title}</span>
+                  {it.kind && <Tag name={it.kind} color={kindColor(it.kind)} />}
+                </button>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+      {undated.length > 0 && (
+        <div className="pcal-undated">
+          <span className="label">Sem data · arraste para um dia</span>
+          <div>
+            {undated.map((it) => (
+              <button
+                key={it.id}
+                type="button"
+                className="pcal-card"
+                draggable
+                onDragStart={(e) => { setDrag(it.id); e.dataTransfer.effectAllowed = 'move'; }}
+                onDragEnd={() => { setDrag(null); setOver(null); }}
+                onClick={() => onOpen(it.id)}
+              >
+                <span className="pcal-title">{it.title}</span>
+                {it.kind && <Tag name={it.kind} color={kindColor(it.kind)} />}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

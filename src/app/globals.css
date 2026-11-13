@@ -796,3 +796,42 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .brief .ref.tall .ref-frame, .brief .ref.tall .ref-cover { aspect-ratio: auto; height: 420px; max-width: 240px; }
 .brief .ref.tall .ref-cover { height: 150px; max-width: none; }
 .brief .ref-play { width: 42px; height: 42px; }
+
+/* ---------- apagar task ---------- */
+.plan-del { padding-top: 10px; border-top: 1px solid var(--line); }
+.link-btn.danger { color: var(--rej); }
+.plan-del-box { display: flex; flex-direction: column; gap: 12px; padding: 14px; background: #f8e9e7; animation: rise 0.35s var(--ease) both; }
+.plan-del-box p { margin: 0; font-size: 13px; line-height: 1.5; color: #4a1d1d; }
+.plan-del-box > div { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn.danger { background: var(--rej); border-color: var(--rej); color: #fff; }
+.btn.danger .ic { color: #fff !important; }
+.undo-bar { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 32px); padding: 12px 14px 12px 18px; background: var(--ink); color: #fff; font-size: 13px; box-shadow: 0 18px 40px -20px rgba(0, 0, 0, 0.6); }
+.undo-bar .ic { color: #fff !important; }
+.undo-bar button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(255, 255, 255, 0.5); background: none; color: #fff; padding: 6px 10px; font: inherit; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; }
+.undo-bar button:hover { background: #fff; color: var(--ink); }
+.undo-bar button:hover .ic { color: var(--ink) !important; }
+
+/* ---------- planejamento: quadro | calendário ---------- */
+.plan-views { display: flex; width: fit-content; gap: 2px; padding: 3px; background: #e2dfda; margin-bottom: 14px; }
+.plan-views button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 7px 14px; font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; transition: background 0.2s ease, color 0.2s ease; }
+.plan-views button[aria-selected='true'] { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); }
+.pcal-wrap { display: flex; flex-direction: column; gap: 18px; overflow-x: auto; }
+.pcal { display: grid; grid-template-columns: repeat(7, minmax(120px, 1fr)); border-top: 1px solid var(--line); border-left: 1px solid var(--line); min-width: 840px; }
+.pcal-wd { padding: 8px 10px; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.pcal-cell { min-height: 122px; padding: 6px; display: flex; flex-direction: column; gap: 4px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: rgba(255, 255, 255, 0.35); transition: background 0.2s ease; }
+.pcal-cell.out { background: transparent; }
+.pcal-cell.out .pcal-n span { color: var(--faint); }
+.pcal-cell.over { background: #fff; box-shadow: inset 0 0 0 2px var(--ink); }
+.pcal-cell.today .pcal-n span { background: #e0533d; color: #fff; border-radius: 999px; padding: 1px 7px; }
+.pcal-n { display: flex; align-items: center; justify-content: space-between; font-size: 13px; padding: 2px 2px 4px; }
+.pcal-add { width: 24px; height: 24px; border: 0; background: none; color: var(--muted); display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transition: opacity 0.15s ease, background 0.15s ease; }
+.pcal-cell:hover .pcal-add, .pcal-add:focus-visible { opacity: 1; }
+.pcal-add:hover { background: #e2dfda; color: var(--ink); }
+@media (hover: none) { .pcal-add { opacity: 1; } }
+.pcal-card { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; width: 100%; padding: 7px 8px; border: 0; background: #fff; text-align: left; font: inherit; cursor: grab; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.07); transition: transform 0.2s var(--ease), box-shadow 0.2s ease; }
+.pcal-card:hover { transform: translateY(-1px); box-shadow: 0 8px 18px -12px rgba(0, 0, 0, 0.5); }
+.pcal-title { font-size: 12.5px; font-weight: 600; line-height: 1.3; }
+.pcal-card .ntag { font-size: 11px; line-height: 17px; }
+.pcal-undated { display: flex; flex-direction: column; gap: 8px; }
+.pcal-undated > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.pcal-undated .pcal-card { width: auto; max-width: 240px; }

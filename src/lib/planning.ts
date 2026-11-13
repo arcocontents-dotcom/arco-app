@@ -170,18 +170,18 @@ export function listPlanning(cal: string, fromDay: string, toDay: string): Promi
   }).catch((e) => classify(e));
 }
 
-async function assertPlanPage(id: string): Promise<PageObjectResponse> {
+async function assertPlanPage(id: string, allowTrashed = false): Promise<PageObjectResponse> {
   const p = await notion().pages.retrieve({ page_id: id });
   // Só mexe em cards do Calendário mensal; qualquer outra página é recusada.
-  if (!isPage(p) || p.archived || !env.planningDb || !sameId(p.parent.type === 'database_id' ? p.parent.database_id : '', env.planningDb)) {
+  if (!isPage(p) || (p.archived && !allowTrashed) || !env.planningDb || !sameId(p.parent.type === 'database_id' ? p.parent.database_id : '', env.planningDb)) {
     throw Object.assign(new Error('Card não encontrado'), { code: 'object_not_found' });
   }
   return p;
 }
 
-export async function getPlanItem(id: string): Promise<PlanItem | null> {
+export async function getPlanItem(id: string, allowTrashed = false): Promise<PlanItem | null> {
   try {
-    return toPlan(await assertPlanPage(id));
+    return toPlan(await assertPlanPage(id, allowTrashed));
   } catch {
     return null;
   }
@@ -224,6 +224,13 @@ function patchProps(x: PlanPatch): Record<string, unknown> {
 export async function updatePlanItem(id: string, x: PlanPatch) {
   await assertPlanPage(id);
   await notion().pages.update({ page_id: id, properties: patchProps(x) as never });
+  invalidate('plan:');
+}
+
+/** Manda o card para a lixeira do Notion (dá para restaurar por 30 dias), ou tira de lá. */
+export async function trashPlanItem(id: string, trash = true) {
+  await assertPlanPage(id, !trash);
+  await notion().pages.update({ page_id: id, archived: trash });
   invalidate('plan:');
 }
 

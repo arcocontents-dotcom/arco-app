@@ -405,19 +405,32 @@ try {
     assert.equal(await pd.getByText('De outro cliente').count(), 0, 'não mostra cards de outro cliente');
     await pd.waitForTimeout(700);
     await shot(pd, '14-planejamento');
-    // nova ideia igual ao Notion: abre a ficha com todas as propriedades e só cria ao confirmar
+    // nova ideia igual ao Notion: abre a ficha com todas as propriedades e se salva sozinha ao ganhar título
     await pd.getByRole('button', { name: 'Nova task em Ideia' }).click();
     const nd = pd.getByRole('dialog', { name: 'Nova task' });
-    await nd.getByLabel('Título do assunto').fill('Ideia nova do app');
     await nd.getByRole('button', { name: 'Observação' }).click();
     await nd.getByRole('listbox', { name: 'Observação' }).getByRole('option', { name: 'Falta copy' }).click();
+    assert.equal([...store.values()].filter((x) => x.properties['Título do assunto']?.title?.[0]?.plain_text === 'Ideia nova do app').length, 0, 'sem título ainda não cria');
+    await nd.getByLabel('Título do assunto').fill('Ideia nova do app');
     await nd.getByLabel('Data de postagem').fill('2026-11-27');
     await shot(pd, '14b-nova-task');
-    assert.equal([...store.values()].filter((x) => x.properties['Título do assunto']?.title?.[0]?.plain_text === 'Ideia nova do app').length, 0, 'só cria ao confirmar');
-    await nd.getByRole('button', { name: 'Criar no Notion' }).click();
     await pd.getByRole('dialog', { name: 'Ideia nova do app' }).getByLabel('Objetivo').waitFor();
+    await pd.waitForTimeout(900);
     await pd.getByRole('dialog', { name: 'Ideia nova do app' }).getByRole('button', { name: 'Fechar' }).click();
     await col('Ideia').getByText('Ideia nova do app').waitFor();
+    // apagar task: confirma, vai para a lixeira do Notion e dá para desfazer
+    await col('Ideia').getByRole('button', { name: /Ideia nova do app/ }).click();
+    const dd = pd.getByRole('dialog', { name: 'Ideia nova do app' });
+    await dd.getByRole('button', { name: 'Apagar task' }).click();
+    await dd.getByRole('alertdialog', { name: 'Confirmar apagar' }).getByRole('button', { name: 'Apagar' }).click();
+    await pd.getByText('Task apagada · está na lixeira do Notion').waitFor();
+    const trashed = [...store.values()].find((x) => x.properties['Título do assunto']?.title?.[0]?.plain_text === 'Ideia nova do app');
+    assert.equal(trashed.archived, true, 'foi para a lixeira (arquivado), não apagado de vez');
+    assert.equal(await col('Ideia').getByText('Ideia nova do app').count(), 0);
+    await pd.getByRole('button', { name: 'Desfazer' }).click();
+    await col('Ideia').getByText('Ideia nova do app').waitFor();
+    await pd.waitForTimeout(800);
+    assert.equal(trashed.archived, false, 'Desfazer tira da lixeira');
     await pd.waitForTimeout(600);
     const created = [...store.values()].find((x) => x.properties['Título do assunto']?.title?.[0]?.plain_text === 'Ideia nova do app');
     assert.ok(created, 'criou no Calendário mensal');
@@ -475,8 +488,8 @@ try {
     await tabs.getByRole('button', { name: /^Reels/ }).click();
     await pd.getByRole('button', { name: 'Nova task em Realizando' }).click();
     await pd.getByRole('dialog', { name: 'Nova task' }).getByLabel('Título do assunto').fill('Bastidores da obra');
-    await pd.keyboard.press('Enter');
-    await pd.getByRole('dialog', { name: 'Bastidores da obra' }).getByRole('button', { name: 'Fechar' }).click();
+    // fechar a ficha já salva (sem botão de salvar)
+    await pd.getByRole('dialog', { name: 'Nova task' }).getByRole('button', { name: 'Fechar' }).click();
     await col('Realizando').getByText('Bastidores da obra').waitFor();
     await pd.waitForTimeout(600);
     const task = [...store.values()].find((x) => x.properties['Título do assunto']?.title?.[0]?.plain_text === 'Bastidores da obra');
@@ -521,6 +534,17 @@ try {
     await shot(pd, '16b-planejamento-cliente');
     await pd.goto(`${APP}/admin/planejamento?c=${A}&m=2026-11-01`);
     await col('Realizando').getByText('Reels do lançamento').waitFor();
+    // visão de calendário dentro do planejamento
+    await pd.getByRole('tab', { name: 'Calendário' }).click();
+    const cal20 = pd.getByRole('gridcell', { name: '2026-11-20' });
+    await cal20.getByRole('button', { name: /Reels do lançamento/ }).waitFor();
+    await pd.getByRole('gridcell', { name: '2026-11-27' }).getByText('Ideia nova do app').waitFor();
+    await shot(pd, '14c-calendario');
+    await cal20.getByRole('button', { name: /Reels do lançamento/ }).click();
+    const nl = pd.getByRole('dialog', { name: 'Reels do lançamento' }).getByRole('link', { name: 'Abrir no Notion' });
+    assert.match((await nl.getAttribute('href')) ?? '', /^notion:\/\//);
+    await pd.getByRole('dialog', { name: 'Reels do lançamento' }).getByRole('button', { name: 'Fechar' }).click();
+    await pd.getByRole('tab', { name: 'Quadro' }).click();
     // relatório do mês em PDF, pronto para o WhatsApp
     await pd.getByRole('button', { name: 'Planejamento do mês' }).click();
     const rep = pd.getByRole('dialog', { name: 'Planejamento do mês' });
