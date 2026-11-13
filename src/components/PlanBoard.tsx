@@ -4,44 +4,61 @@ import { useMemo, useRef, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Icon from './Icon';
-import { dayLabel } from '@/lib/domain';
-import type { PlanItem, PlanPatch, PlanStatus } from '@/lib/planning';
+import Icon, { type IconName } from './Icon';
+import TagSelect, { Tag, type Opt } from './TagSelect';
+import { MONTHS, dayLabel } from '@/lib/domain';
+import type { PlanItem, PlanOptions, PlanPatch, PlanStatus, SelectField } from '@/lib/planning';
 import { createIdeaAction, sendToApprovalAction, updatePlanAction } from '@/app/admin/planejamento/actions';
 
 type Link_ = { id: string; status: string };
 
 const COLS: { key: PlanStatus; label: string; hint: string }[] = [
-  { key: 'Ideia', label: 'Ideias', hint: 'Pautas soltas, sem compromisso' },
-  { key: 'Realizando', label: 'Em produção', hint: 'Gravando, editando, aprovando' },
+  { key: 'Ideia', label: 'Ideia', hint: 'Pautas soltas, sem compromisso' },
+  { key: 'Realizando', label: 'Realizando', hint: 'Gravando, editando, aprovando' },
   { key: 'Postado', label: 'Postado', hint: 'No ar' }
 ];
 
-const kindClass = (k: string | null) => {
-  const s = (k ?? '').toLowerCase();
-  if (s.startsWith('reels')) return 'k-reels';
-  if (s.startsWith('post')) return 'k-post';
-  if (s.startsWith('stor')) return 'k-story';
-  if (s.startsWith('foto')) return 'k-fotos';
-  return '';
-};
-const noteClass = (n: string | null) => (n === 'Finalizado' ? 'n-ok' : n ? 'n-warn' : '');
+/** Abas por formato, como as visões das páginas dos clientes no Notion. */
+const TABS: { key: string; label: string; test: (k: string) => boolean }[] = [
+  { key: 'todos', label: 'Todos', test: () => true },
+  { key: 'reels', label: 'Reels', test: (k) => k.startsWith('reels') },
+  { key: 'post', label: 'Post', test: (k) => k.startsWith('post') },
+  { key: 'storys', label: 'Storys', test: (k) => k.startsWith('stor') },
+  { key: 'fotos', label: 'Fotos', test: (k) => k.startsWith('foto') }
+];
+
+/** Propriedades na mesma ordem e com os mesmos nomes do Notion. */
+const PROPS: ({ kind: 'select'; field: SelectField; label: string; icon: IconName } | { kind: 'status' | 'date' | 'month' | 'deadline' | 'done' | 'brief' | 'client'; label: string; icon: IconName })[] = [
+  { kind: 'client', label: 'Cliente', icon: 'users' },
+  { kind: 'select', field: 'owner', label: 'Demanda atual está com', icon: 'users' },
+  { kind: 'status', label: 'Status', icon: 'clock' },
+  { kind: 'select', field: 'note', label: 'Observação', icon: 'bell' },
+  { kind: 'select', field: 'kind', label: 'Tipo de demanda', icon: 'video' },
+  { kind: 'date', label: 'Data de postagem', icon: 'calendar' },
+  { kind: 'select', field: 'month', label: 'Referente ao mês', icon: 'calendar' },
+  { kind: 'select', field: 'recMonth', label: 'Gravado quando', icon: 'video' },
+  { kind: 'select', field: 'editMonth', label: 'Editado quando', icon: 'pencil' },
+  { kind: 'deadline', label: 'Prazo', icon: 'clock' },
+  { kind: 'done', label: 'Finalizado', icon: 'check' },
+  { kind: 'brief', label: 'Gravado/Briefing por', icon: 'users' },
+  { kind: 'select', field: 'designBy', label: 'Editado/Design por', icon: 'image' },
+  { kind: 'select', field: 'postedBy', label: 'Postado por', icon: 'send' }
+];
 
 export default function PlanBoard({
-  clientId, cal, month, items: initial, links, kinds, notes, owners
+  clientId, cal, items: initial, links, options
 }: {
   clientId: string;
   cal: string;
   month: string;
   items: PlanItem[];
   links: Record<string, Link_>;
-  kinds: string[];
-  notes: string[];
-  owners: string[];
+  options: Omit<PlanOptions, 'clients'>;
 }) {
   const router = useRouter();
   const [items, setItems] = useState(initial);
   const [open, setOpen] = useState<string | null>(null);
+  const [tab, setTab] = useState('todos');
   const [drag, setDrag] = useState<string | null>(null);
   const [over, setOver] = useState<PlanStatus | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -49,17 +66,25 @@ export default function PlanBoard({
   const [pending, start] = useTransition();
   const addRef = useRef<HTMLInputElement>(null);
 
+  const colorOf = (list: Opt[], n: string | null) => list.find((o) => o.name === n)?.color ?? 'default';
+  const statusColor = (s: PlanStatus) => colorOf(options.status, s);
+  const tabTest = TABS.find((t) => t.key === tab)!.test;
+  const visible = items.filter((i) => tab === 'todos' || tabTest((i.kind ?? '').toLowerCase()));
   const byCol = useMemo(() => {
     const m: Record<PlanStatus, PlanItem[]> = { Ideia: [], Realizando: [], Postado: [] };
-    for (const it of items) m[it.status].push(it);
+    for (const it of visible) m[it.status].push(it);
     return m;
-  }, [items]);
+  }, [visible]);
+  const count = (t: (typeof TABS)[number]) => items.filter((i) => t.key === 'todos' || t.test((i.kind ?? '').toLowerCase())).length;
   const current = items.find((i) => i.id === open) ?? null;
   const linkOf = (id: string) => links[id.replace(/-/g, '')] ?? null;
 
   function patch(id: string, x: PlanPatch) {
     const before = items;
-    setItems((list) => list.map((i) => (i.id === id ? { ...i, ...(x as Partial<PlanItem>) } : i)));
+    // Igual ao servidor: a data já preenche o "Referente ao mês".
+    const local: Partial<PlanItem> = { ...(x as Partial<PlanItem>) };
+    if (x.day && x.month === undefined) local.month = MONTHS[Number(x.day.slice(5, 7)) - 1];
+    setItems((list) => list.map((i) => (i.id === id ? { ...i, ...local } : i)));
     setErr(null);
     start(async () => {
       const r = await updatePlanAction(clientId, id, x);
@@ -77,7 +102,10 @@ export default function PlanBoard({
     start(async () => {
       const r = await createIdeaAction(clientId, { title });
       if (r.ok) {
-        setItems((l) => [{ id: r.id, url: '', title, cal, day: null, time: null, status: 'Ideia', kind: null, note: null, owner: null, done: false }, ...l]);
+        setItems((l) => [
+          { id: r.id, url: '', title, cal, day: null, time: null, status: 'Ideia', kind: null, note: null, owner: null, month: null, recMonth: null, editMonth: null, designBy: null, postedBy: null, briefBy: [], deadline: null, done: false },
+          ...l
+        ]);
         router.refresh();
         addRef.current?.focus();
       } else setErr(r.error);
@@ -94,6 +122,13 @@ export default function PlanBoard({
 
   return (
     <div className="plan">
+      <nav className="ntabs rise" aria-label="Formato">
+        {TABS.map((t) => (
+          <button key={t.key} type="button" aria-pressed={tab === t.key} onClick={() => setTab(t.key)}>
+            {t.label} <span>{count(t)}</span>
+          </button>
+        ))}
+      </nav>
       {err && <p className="error" role="alert">{err}</p>}
       <div className="plan-cols">
         {COLS.map((col, ci) => (
@@ -113,7 +148,7 @@ export default function PlanBoard({
             }}
           >
             <header className="plan-head">
-              <span className={`plan-pill p-${col.key}`}><i />{col.label}</span>
+              <span className={`nstatus nc-${statusColor(col.key)}`}><i />{col.label}</span>
               <span className="plan-count">{byCol[col.key].length}</span>
             </header>
             {col.key === 'Ideia' && (
@@ -145,13 +180,15 @@ export default function PlanBoard({
                     >
                       <span className="plan-title">{it.title}</span>
                       <span className="plan-tags">
-                        {it.kind && <span className={`tag ${kindClass(it.kind)}`}>{it.kind}</span>}
-                        {it.note && <span className={`tag ${noteClass(it.note)}`}>{it.note}</span>}
+                        {it.kind && <Tag name={it.kind} color={colorOf(options.kind, it.kind)} />}
+                        {it.note && <Tag name={it.note} color={colorOf(options.note, it.note)} />}
+                        {it.done && <Tag name="Finalizado" color="green" />}
                       </span>
                       <span className="plan-meta">
                         {it.day ? <span className="ic-inline"><Icon name="calendar" size={13} />{dayLabel(it.day)}</span> : <span className="muted">Sem data</span>}
+                        {it.deadline && <span className="muted">{it.deadline}</span>}
                         {l && <span className={`status s-${l.status}`}>{l.status === 'Rascunho' ? 'Na aprovação' : l.status}</span>}
-                        {it.owner && <span className="owner" title={it.owner}>{it.owner.charAt(0)}</span>}
+                        {it.owner && <span className="owner" title={`Demanda atual está com ${it.owner}`}>{it.owner.charAt(0)}</span>}
                       </span>
                     </button>
                   </li>
@@ -167,50 +204,49 @@ export default function PlanBoard({
         <div className="drawer-overlay" onMouseDown={(e) => e.target === e.currentTarget && setOpen(null)}>
           <aside className="drawer" role="dialog" aria-modal="true" aria-label={current.title}>
             <div className="drawer-top">
-              <span className="label">{cal} · Calendário mensal</span>
+              <span className="label">🗓️ Calendário mensal</span>
               <button type="button" className="icon-btn" onClick={() => setOpen(null)} aria-label="Fechar"><Icon name="x" /></button>
             </div>
             <input
               className="drawer-title"
               defaultValue={current.title}
               key={current.id}
-              aria-label="Título"
+              aria-label="Título do assunto"
               onBlur={(e) => { const t = e.target.value.trim(); if (t && t !== current.title) patch(current.id, { title: t }); }}
             />
-            <dl className="props">
-              <dt><Icon name="clock" size={15} />Status</dt>
-              <dd>
-                <div className="seg-mini">
-                  {COLS.map((c) => (
-                    <button key={c.key} type="button" aria-pressed={current.status === c.key} onClick={() => patch(current.id, { status: c.key })}>{c.label}</button>
-                  ))}
+            <dl className="nprops">
+              {PROPS.map((p) => (
+                <div key={p.label} className="nprop">
+                  <dt><Icon name={p.icon} size={15} /><span>{p.label}</span></dt>
+                  <dd>
+                    {p.kind === 'client' && <Tag name={cal} color={colorOf(options.client, cal)} />}
+                    {p.kind === 'select' && (
+                      <TagSelect label={p.label} options={options[p.field]} value={current[p.field]} onChange={(v) => patch(current.id, { [p.field]: (v as string | null) ?? null })} />
+                    )}
+                    {p.kind === 'brief' && (
+                      <TagSelect label={p.label} multiple options={options.briefBy} value={current.briefBy} onChange={(v) => patch(current.id, { briefBy: v as string[] })} />
+                    )}
+                    {p.kind === 'status' && (
+                      <TagSelect
+                        label={p.label}
+                        options={options.status.length ? options.status : COLS.map((c) => ({ name: c.key, color: 'default' }))}
+                        value={current.status}
+                        onChange={(v) => v && patch(current.id, { status: v as PlanStatus })}
+                      />
+                    )}
+                    {p.kind === 'date' && (
+                      <input type="date" className="ninput" value={current.day ?? ''} onChange={(e) => patch(current.id, { day: e.target.value || null })} aria-label={p.label} />
+                    )}
+                    {p.kind === 'deadline' && <span className="nreadonly">{current.deadline ?? 'Sem data definida'}</span>}
+                    {p.kind === 'done' && (
+                      <label className="ncheck">
+                        <input type="checkbox" checked={current.done} onChange={(e) => patch(current.id, { done: e.target.checked })} aria-label={p.label} />
+                        <span />
+                      </label>
+                    )}
+                  </dd>
                 </div>
-              </dd>
-              <dt><Icon name="video" size={15} />Tipo</dt>
-              <dd>
-                <select className="select" value={current.kind ?? ''} onChange={(e) => patch(current.id, { kind: e.target.value || null })} aria-label="Tipo de demanda">
-                  <option value="">—</option>
-                  {kinds.map((k) => <option key={k} value={k}>{k}</option>)}
-                </select>
-              </dd>
-              <dt><Icon name="calendar" size={15} />Data</dt>
-              <dd>
-                <input type="date" className="input" value={current.day ?? ''} onChange={(e) => patch(current.id, { day: e.target.value || null })} aria-label="Data de postagem" />
-              </dd>
-              <dt><Icon name="bell" size={15} />Observação</dt>
-              <dd>
-                <select className="select" value={current.note ?? ''} onChange={(e) => patch(current.id, { note: e.target.value || null })} aria-label="Observação">
-                  <option value="">—</option>
-                  {notes.map((k) => <option key={k} value={k}>{k}</option>)}
-                </select>
-              </dd>
-              <dt><Icon name="users" size={15} />Com quem</dt>
-              <dd>
-                <select className="select" value={current.owner ?? ''} onChange={(e) => patch(current.id, { owner: e.target.value || null })} aria-label="Demanda atual está com">
-                  <option value="">—</option>
-                  {owners.map((k) => <option key={k} value={k}>{k}</option>)}
-                </select>
-              </dd>
+              ))}
             </dl>
             <div className="drawer-actions">
               {linkOf(current.id) ? (
@@ -226,12 +262,11 @@ export default function PlanBoard({
                 </a>
               )}
             </div>
-            <p className="hint">Tudo que você muda aqui vai direto para o Calendário mensal do Notion.</p>
+            <p className="hint">Tudo que você muda aqui vai direto para o Calendário mensal do Notion, só com as opções que já existem lá.</p>
           </aside>
         </div>,
         document.body
       )}
-      <span hidden>{month}</span>
     </div>
   );
 }

@@ -26,7 +26,9 @@ const TYPES = {
   },
   [PLANNING_DB]: {
     [PL.title]: 'title', [PL.client]: 'select', [PL.date]: 'date', [PL.status]: 'status', [PL.kind]: 'select',
-    [PL.note]: 'select', [PL.owner]: 'select', [PL.done]: 'checkbox', [PL.month]: 'select'
+    [PL.note]: 'select', [PL.owner]: 'select', [PL.done]: 'checkbox', [PL.month]: 'select',
+    [PL.recMonth]: 'select', [PL.editMonth]: 'select', [PL.designBy]: 'select', [PL.postedBy]: 'select',
+    [PL.briefBy]: 'multi_select', [PL.deadline]: 'formula'
   }
 };
 
@@ -37,8 +39,15 @@ export const PLAN_OPTIONS = {
   [PL.note]: ['Falta copy', 'Falta design', 'Falta edição', 'Aprovação post', 'Finalizado', 'Outros'],
   [PL.owner]: ['Yan', 'Marcos'],
   [PL.month]: ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'],
-  [PL.status]: ['Ideia', 'Realizando', 'Postado']
+  [PL.status]: ['Ideia', 'Realizando', 'Postado'],
+  [PL.briefBy]: ['Yan', 'Marcos', 'Cliente'],
+  [PL.designBy]: ['Yan', 'Marcos', 'Cliente'],
+  [PL.postedBy]: ['Yan', 'Marcos', 'Cliente']
 };
+PLAN_OPTIONS[PL.recMonth] = PLAN_OPTIONS[PL.month];
+PLAN_OPTIONS[PL.editMonth] = PLAN_OPTIONS[PL.month];
+const PLAN_COLORS = { 'Reels 1': 'orange', 'Reels 2': 'orange', 'Post 1': 'blue', 'Storys 1': 'yellow', Fotos: 'purple', Finalizado: 'green', Realizando: 'blue', Postado: 'green' };
+const colorOf = (prop, name) => (prop === PL.note && name !== 'Finalizado' ? 'red' : PLAN_COLORS[name] ?? 'blue');
 
 const norm = (id) => String(id).replace(/-/g, '').toLowerCase();
 const fmtId = (h) => `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
@@ -52,6 +61,8 @@ function toResponse(type, v) {
     }
     case 'select': return { type, select: v.select ? { name: v.select.name } : null };
     case 'status': return { type, status: v.status ? { name: v.status.name } : null };
+    case 'multi_select': return { type, multi_select: (v.multi_select ?? []).map((o) => ({ name: o.name })) };
+    case 'formula': return { type, formula: v.formula ?? { type: 'string', string: null } };
     case 'url': return { type, url: v.url ?? null };
     case 'email': return { type, email: v.email ?? null };
     case 'checkbox': return { type, checkbox: !!v.checkbox };
@@ -71,7 +82,7 @@ function toResponse(type, v) {
 function emptyProps(db) {
   const out = {};
   for (const [name, type] of Object.entries(TYPES[db])) {
-    out[name] = toResponse(type, type === 'title' || type === 'rich_text' ? { [type]: [] } : type === 'relation' ? { relation: [] } : type === 'files' ? { files: [] } : type === 'checkbox' ? { checkbox: false } : type === 'number' ? { number: null } : type === 'date' ? { date: null } : {});
+    out[name] = toResponse(type, type === 'title' || type === 'rich_text' ? { [type]: [] } : type === 'relation' ? { relation: [] } : type === 'files' ? { files: [] } : type === 'checkbox' ? { checkbox: false } : type === 'number' ? { number: null } : type === 'date' ? { date: null } : type === 'multi_select' ? { multi_select: [] } : type === 'formula' ? { formula: { type: 'string', string: null } } : {});
   }
   return out;
 }
@@ -89,9 +100,10 @@ function applyProps(page, db, props) {
   for (const [name, v] of Object.entries(props ?? {})) {
     const type = TYPES[db][name];
     if (!type) throw Object.assign(new Error(`Propriedade inexistente: ${name}`), { status: 400 });
-    if (db === PLANNING_DB && (type === 'select' || type === 'status')) {
-      const val = v[type]?.name;
-      if (val && !PLAN_OPTIONS[name].includes(val)) throw Object.assign(new Error(`Opção nova não permitida: ${name}=${val}`), { status: 400 });
+    if (db === PLANNING_DB && type === 'formula') throw Object.assign(new Error(`Fórmula não pode ser escrita: ${name}`), { status: 400 });
+    if (db === PLANNING_DB && (type === 'select' || type === 'status' || type === 'multi_select')) {
+      const vals = type === 'multi_select' ? (v.multi_select ?? []).map((o) => o.name) : [v[type]?.name].filter(Boolean);
+      for (const val of vals) if (!PLAN_OPTIONS[name].includes(val)) throw Object.assign(new Error(`Opção nova não permitida: ${name}=${val}`), { status: 400 });
     }
     page.properties[name] = toResponse(type, v);
   }
@@ -168,7 +180,7 @@ export function startMock(port) {
       if (req.method === 'GET' && (m = url.pathname.match(/^\/v1\/databases\/([^/]+)$/))) {
         const db = norm(m[1]);
         if (!TYPES[db]) return send(404, { object: 'error', status: 404, code: 'object_not_found', message: 'not found' });
-        const properties = Object.fromEntries(Object.entries(TYPES[db]).map(([n, t]) => [n, { type: t, ...(t === 'select' ? { select: { options: (PLAN_OPTIONS[n] ?? []).map((name) => ({ name })) } } : {}) }]));
+        const properties = Object.fromEntries(Object.entries(TYPES[db]).map(([n, t]) => [n, { type: t, ...(['select', 'multi_select', 'status'].includes(t) ? { [t]: { options: (PLAN_OPTIONS[n] ?? []).map((name) => ({ name, color: colorOf(n, name) })) } } : {}) }]));
         return send(200, { object: 'database', id: fmtId(db), properties });
       }
       if (req.method === 'GET' && (m = url.pathname.match(/^\/v1\/pages\/([^/]+)$/))) {

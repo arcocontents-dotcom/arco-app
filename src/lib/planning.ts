@@ -11,13 +11,16 @@ import {
 
 // Planejamento = o "🗓️ Calendário mensal" que a Arco já usava no Notion (ideias e produção).
 // O app lê e escreve nele direto: o que muda lá aparece aqui e vice-versa.
-// Regra de ouro: só mexe em Status, Observação, Finalizado, Data, Título, Tipo e Responsável,
-// sempre usando opções que já existem. Nunca apaga nada.
+// Regra de ouro: só usa opções que já existem no Notion e nunca apaga nada.
 
 const P = schema.planning;
 
 export const PLAN_STATUSES = ['Ideia', 'Realizando', 'Postado'] as const;
 export type PlanStatus = (typeof PLAN_STATUSES)[number];
+
+/** Campos de escolha única, na mesma ordem e com os mesmos nomes do Notion. */
+export const SELECT_FIELDS = ['owner', 'note', 'kind', 'month', 'recMonth', 'editMonth', 'designBy', 'postedBy'] as const;
+export type SelectField = (typeof SELECT_FIELDS)[number];
 
 export interface PlanItem {
   id: string;
@@ -30,15 +33,26 @@ export interface PlanItem {
   kind: string | null;
   note: string | null;
   owner: string | null;
+  month: string | null;
+  recMonth: string | null;
+  editMonth: string | null;
+  designBy: string | null;
+  postedBy: string | null;
+  briefBy: string[];
+  deadline: string | null;
   done: boolean;
 }
 
-export interface PlanOptions {
-  clients: string[];
-  kinds: string[];
-  notes: string[];
-  owners: string[];
+export interface PlanOpt {
+  name: string;
+  color: string;
 }
+
+/** Opções (com a cor do Notion) de cada campo. */
+export type PlanOptions = Record<SelectField | 'client' | 'status' | 'briefBy', PlanOpt[]> & {
+  /** Nomes dos clientes, usado para ligar o cliente do app. */
+  clients: string[];
+};
 
 export type PlanError = 'nao-configurado' | 'sem-acesso' | 'erro';
 
@@ -48,6 +62,21 @@ function status(p: PageObjectResponse['properties'][string] | undefined): string
   if (!p) return null;
   if (p.type === 'status') return p.status?.name ?? null;
   if (p.type === 'select') return p.select?.name ?? null;
+  return null;
+}
+
+function multi(p: PageObjectResponse['properties'][string] | undefined): string[] {
+  return p && p.type === 'multi_select' ? p.multi_select.map((o) => o.name) : [];
+}
+
+/** Prazo é fórmula no Notion: só lemos o resultado, como texto. */
+function formula(p: PageObjectResponse['properties'][string] | undefined): string | null {
+  if (!p || p.type !== 'formula') return null;
+  const f = p.formula as { type: string; string?: string | null; number?: number | null; boolean?: boolean | null; date?: { start: string } | null };
+  if (f.type === 'string') return f.string || null;
+  if (f.type === 'number') return f.number === null || f.number === undefined ? null : String(f.number);
+  if (f.type === 'boolean') return f.boolean ? 'Sim' : null;
+  if (f.type === 'date') return f.date?.start ?? null;
   return null;
 }
 
@@ -67,6 +96,13 @@ function toPlan(p: PageObjectResponse): PlanItem {
     kind: select(pr[P.kind]),
     note: select(pr[P.note]),
     owner: select(pr[P.owner]),
+    month: select(pr[P.month]),
+    recMonth: select(pr[P.recMonth]),
+    editMonth: select(pr[P.editMonth]),
+    designBy: select(pr[P.designBy]),
+    postedBy: select(pr[P.postedBy]),
+    briefBy: multi(pr[P.briefBy]),
+    deadline: formula(pr[P.deadline]),
     done: checkbox(pr[P.done])
   };
 }
@@ -79,16 +115,27 @@ function classify(e: unknown): PlanError {
   return 'erro';
 }
 
-/** Opções que já existem no Calendário mensal (clientes, tipos, observações, responsáveis). */
+/** Opções que já existem no Calendário mensal, com as cores do Notion. */
 export async function planOptions(): Promise<PlanOptions | PlanError> {
   if (!env.planningDb) return 'nao-configurado';
   try {
     return await memo('plan:schema', 300_000, async () => {
+      type Opt = { name: string; color?: string };
       const db = (await notion().databases.retrieve({ database_id: env.planningDb! })) as unknown as {
-        properties: Record<string, { type: string; select?: { options: { name: string }[] } }>;
+        properties: Record<string, { type: string; select?: { options: Opt[] }; multi_select?: { options: Opt[] }; status?: { options: Opt[] } }>;
       };
-      const opts = (name: string) => db.properties[name]?.select?.options.map((o) => o.name) ?? [];
-      return { clients: opts(P.client), kinds: opts(P.kind), notes: opts(P.note), owners: opts(P.owner) };
+      const opts = (name: string): PlanOpt[] => {
+        const pr = db.properties[name];
+        const list = pr?.select?.options ?? pr?.multi_select?.options ?? pr?.status?.options ?? [];
+        return list.map((o) => ({ name: o.name, color: o.color ?? 'default' }));
+      };
+      const out = {
+        client: opts(P.client),
+        status: opts(P.status),
+        briefBy: opts(P.briefBy),
+        ...Object.fromEntries(SELECT_FIELDS.map((f) => [f, opts(P[f])]))
+      } as Omit<PlanOptions, 'clients'>;
+      return { ...out, clients: out.client.map((o) => o.name) } as PlanOptions;
     });
   } catch (e) {
     return classify(e);
@@ -146,6 +193,12 @@ export interface PlanPatch {
   kind?: string | null;
   note?: string | null;
   owner?: string | null;
+  month?: string | null;
+  recMonth?: string | null;
+  editMonth?: string | null;
+  designBy?: string | null;
+  postedBy?: string | null;
+  briefBy?: string[];
   day?: string | null;
   done?: boolean;
 }
@@ -154,13 +207,16 @@ function patchProps(x: PlanPatch): Record<string, unknown> {
   const pr: Record<string, unknown> = {};
   if (x.title !== undefined) pr[P.title] = titleProp(x.title);
   if (x.status !== undefined) pr[P.status] = { status: { name: x.status } };
-  if (x.kind !== undefined) pr[P.kind] = { select: x.kind ? { name: x.kind } : null };
-  if (x.note !== undefined) pr[P.note] = { select: x.note ? { name: x.note } : null };
-  if (x.owner !== undefined) pr[P.owner] = { select: x.owner ? { name: x.owner } : null };
+  for (const f of SELECT_FIELDS) {
+    const v = x[f];
+    if (v !== undefined) pr[P[f]] = { select: v ? { name: v } : null };
+  }
+  if (x.briefBy !== undefined) pr[P.briefBy] = { multi_select: x.briefBy.map((name) => ({ name })) };
   if (x.done !== undefined) pr[P.done] = { checkbox: x.done };
   if (x.day !== undefined) {
     pr[P.date] = { date: x.day ? { start: x.day } : null };
-    if (x.day) pr[P.month] = { select: { name: MONTHS[Number(x.day.slice(5, 7)) - 1] } };
+    // Igual ao jeito da Arco: a data já preenche o "Referente ao mês" (se não vier um escolhido).
+    if (x.day && x.month === undefined) pr[P.month] = { select: { name: MONTHS[Number(x.day.slice(5, 7)) - 1] } };
   }
   return pr;
 }

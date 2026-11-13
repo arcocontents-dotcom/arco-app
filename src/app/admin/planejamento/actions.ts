@@ -5,7 +5,7 @@ import { getClientFresh, createContent, updateClient } from '@/lib/notion';
 import { parseDay, todayIn } from '@/lib/domain';
 import { env } from '@/lib/env';
 import {
-  createPlanItem, getPlanItem, kindToType, planOptions, updatePlanItem, PLAN_STATUSES,
+  createPlanItem, getPlanItem, kindToType, planOptions, updatePlanItem, PLAN_STATUSES, SELECT_FIELDS,
   type PlanPatch, type PlanStatus
 } from '@/lib/planning';
 
@@ -31,10 +31,18 @@ async function clean(x: PlanPatch): Promise<PlanPatch | string> {
     if (!(PLAN_STATUSES as readonly string[]).includes(x.status)) return 'Status inválido.';
     out.status = x.status as PlanStatus;
   }
+  const names = (f: keyof typeof o) => (o[f] as { name: string }[]).map((x) => x.name);
   const pick = (v: string | null | undefined, list: string[]) => (v === null || v === '' ? null : v && list.includes(v) ? v : undefined);
-  if (x.kind !== undefined) { const v = pick(x.kind, o.kinds); if (v === undefined) return 'Tipo inválido.'; out.kind = v; }
-  if (x.note !== undefined) { const v = pick(x.note, o.notes); if (v === undefined) return 'Observação inválida.'; out.note = v; }
-  if (x.owner !== undefined) { const v = pick(x.owner, o.owners); if (v === undefined) return 'Responsável inválido.'; out.owner = v; }
+  for (const f of SELECT_FIELDS) {
+    if (x[f] === undefined) continue;
+    const v = pick(x[f], names(f));
+    if (v === undefined) return 'Opção inválida.';
+    out[f] = v;
+  }
+  if (x.briefBy !== undefined) {
+    if (!Array.isArray(x.briefBy) || x.briefBy.some((v) => !names('briefBy').includes(v))) return 'Opção inválida.';
+    out.briefBy = [...new Set(x.briefBy)];
+  }
   if (x.day !== undefined) {
     if (x.day === null || x.day === '') out.day = null;
     else { const d = parseDay(x.day); if (!d) return 'Data inválida.'; out.day = d; }

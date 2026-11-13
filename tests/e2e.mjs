@@ -368,40 +368,67 @@ try {
     // ligou sozinho pelo nome do cliente
     assert.equal(textOf(A, 'Nome no Calendário mensal'), 'Studio Alfa');
     const col = (n) => pd.getByRole('region', { name: n });
-    await col('Ideias').getByText('Ideia de bastidores').waitFor();
-    await col('Em produção').getByText('Reels do lançamento').waitFor();
+    await col('Ideia').getByText('Ideia de bastidores').waitFor();
+    await col('Realizando').getByText('Reels do lançamento').waitFor();
     assert.equal(await pd.getByText('De outro cliente').count(), 0, 'não mostra cards de outro cliente');
     await pd.waitForTimeout(700);
     await shot(pd, '14-planejamento');
     // nova ideia direto no Notion
     await pd.getByLabel('Nova ideia').fill('Ideia nova do app');
     await pd.keyboard.press('Enter');
-    await col('Ideias').getByText('Ideia nova do app').waitFor();
+    await col('Ideia').getByText('Ideia nova do app').waitFor();
     await pd.waitForTimeout(600);
     const created = [...store.values()].find((x) => x.properties['Título do assunto']?.title?.[0]?.plain_text === 'Ideia nova do app');
     assert.ok(created, 'criou no Calendário mensal');
     assert.equal(created.properties['Cliente'].select.name, 'Studio Alfa');
     assert.equal(created.properties['Status'].status.name, 'Ideia');
     // editar pelo painel lateral
-    await col('Ideias').getByRole('button', { name: /Ideia de bastidores/ }).click();
+    await col('Ideia').getByRole('button', { name: /Ideia de bastidores/ }).click();
     const drawer = pd.getByRole('dialog', { name: 'Ideia de bastidores' });
     await drawer.waitFor();
-    await drawer.getByLabel('Tipo de demanda').selectOption('Post 1');
+    // propriedades iguais às do Notion, com as mesmas opções
+    for (const n of ['Cliente', 'Demanda atual está com', 'Status', 'Observação', 'Tipo de demanda', 'Data de postagem', 'Referente ao mês', 'Gravado quando', 'Editado quando', 'Prazo', 'Finalizado', 'Gravado/Briefing por', 'Editado/Design por', 'Postado por']) {
+      await drawer.locator('.nprop dt', { hasText: n }).first().waitFor();
+    }
+    const pickTag = async (label, option) => {
+      await drawer.getByRole('button', { name: label, exact: true }).click();
+      await pd.getByRole('listbox', { name: label }).getByRole('option', { name: option }).click();
+    };
+    await pickTag('Tipo de demanda', 'Post 1');
     await drawer.getByLabel('Data de postagem').fill('2026-11-25');
-    await drawer.getByRole('button', { name: 'Em produção' }).click();
-    await pd.waitForTimeout(800);
+    await pickTag('Status', 'Realizando');
+    await pickTag('Gravado/Briefing por', 'Yan');
+    await pd.getByRole('listbox', { name: 'Gravado/Briefing por' }).getByRole('option', { name: 'Cliente' }).click();
+    await drawer.locator('.nprop dt', { hasText: 'Prazo' }).click();
+    await pickTag('Postado por', 'Marcos');
+    await drawer.getByLabel('Finalizado').check({ force: true });
+    await pd.waitForTimeout(900);
     await shot(pd, '15-planejamento-card');
     assert.equal(page(PLAN1).properties['Tipo de demanda'].select.name, 'Post 1');
     assert.equal(page(PLAN1).properties['Data de postagem'].date.start, '2026-11-25');
     assert.equal(page(PLAN1).properties['Referente ao mês'].select.name, 'Novembro');
     assert.equal(page(PLAN1).properties['Status'].status.name, 'Realizando');
+    assert.deepEqual(page(PLAN1).properties['Gravado/Briefing por'].multi_select.map((o) => o.name), ['Yan', 'Cliente']);
+    assert.equal(page(PLAN1).properties['Postado por'].select.name, 'Marcos');
+    assert.equal(page(PLAN1).properties['Finalizado'].checkbox, true);
+    await drawer.getByLabel('Finalizado').uncheck({ force: true });
+    await pd.waitForTimeout(500);
+    assert.equal(page(PLAN1).properties['Finalizado'].checkbox, false);
     await drawer.getByRole('button', { name: 'Fechar' }).click();
     // arrastar de volta para Ideias
-    await col('Em produção').getByRole('button', { name: /Ideia de bastidores/ }).dragTo(col('Ideias'));
+    await col('Realizando').getByRole('button', { name: /Ideia de bastidores/ }).dragTo(col('Ideia'));
     await pd.waitForTimeout(800);
     assert.equal(page(PLAN1).properties['Status'].status.name, 'Ideia');
+    // abas por formato, como as visões do Notion
+    const tabs = pd.getByRole('navigation', { name: 'Formato' });
+    await tabs.getByRole('button', { name: /^Reels/ }).click();
+    await col('Realizando').getByText('Reels do lançamento').waitFor();
+    assert.equal(await pd.getByText('Ideia de bastidores').count(), 0, 'na aba Reels não aparece Post');
+    await tabs.getByRole('button', { name: /^Post/ }).click();
+    await col('Ideia').getByText('Ideia de bastidores').waitFor();
+    await tabs.getByRole('button', { name: /^Todos/ }).click();
     // enviar para aprovação cria o conteúdo ligado
-    await col('Em produção').getByRole('button', { name: /Reels do lançamento/ }).click();
+    await col('Realizando').getByRole('button', { name: /Reels do lançamento/ }).click();
     await pd.getByRole('button', { name: 'Enviar para aprovação' }).click();
     await pd.waitForURL(/\/admin\/conteudo\//, { waitUntil: 'commit' });
     const cid = pd.url().split('/admin/conteudo/')[1].split(/[?#]/)[0];

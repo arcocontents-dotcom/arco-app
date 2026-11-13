@@ -54,6 +54,12 @@
     "note": "Observação",
     "owner": "Demanda atual está com",
     "done": "Finalizado",
-    "month": "Referente ao mês"
+    "month": "Referente ao mês",
+    "recMonth": "Gravado quando",
+    "editMonth": "Editado quando",
+    "deadline": "Prazo",
+    "briefBy": "Gravado/Briefing por",
+    "designBy": "Editado/Design por",
+    "postedBy": "Postado por"
   }
 }

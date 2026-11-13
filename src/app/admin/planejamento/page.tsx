@@ -111,9 +111,7 @@ export default async function Planejamento({ searchParams }: { searchParams: Pro
         month={first}
         items={items}
         links={links}
-        kinds={options.kinds}
-        notes={options.notes}
-        owners={options.owners}
+        options={options}
       />
     </AdminShell>
   );
