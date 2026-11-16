@@ -27,6 +27,8 @@ import {
 import { CONTENT_TYPES, EMAIL_RE, normalizeEmail, normalizePhone, parseDay, type ContentType, type GeneralStatus } from '@/lib/domain';
 import { isOwnMediaUrl } from '@/lib/media';
 import { signLoginToken } from '@/lib/session';
+import { invalidate } from '@/lib/cache';
+import { syncClientsFromGestao } from '@/lib/gestao-sync';
 
 // ---------- clientes ----------
 
@@ -304,4 +306,12 @@ export async function notifyContentAction(contentId: string): Promise<{ ok: bool
   const sent = results.filter((r) => r === 'ok').length;
   if (!sent) return { ok: false, sent: 0, error: 'Não foi possível entregar no celular agora.' };
   return { ok: true, sent };
+}
+
+/** "Atualizar do Notion": checa a Gestão agora (sem esperar o minuto). */
+export async function syncGestaoAction() {
+  await requireAdmin();
+  invalidate('gestao:');
+  const r = await syncClientsFromGestao().catch(() => null);
+  redirect(`/admin/gestao?sync=${r?.status ?? 'erro'}&novos=${r?.created.length ?? 0}`);
 }

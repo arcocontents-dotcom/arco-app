@@ -49,6 +49,8 @@ export interface ClientRecord {
   /** Nome do cliente na coluna Cliente do Calendário mensal (planejamento). */
   calName: string;
   phone: string;
+  /** Página do cliente no Notion (Gestão). */
+  notionPage: string;
 }
 
 export interface PushSub {
@@ -146,7 +148,8 @@ function toClient(p: PageObjectResponse): ClientRecord {
     logoUrl: url(pr[C.logo]),
     cancelled: checkbox(pr[C.cancelled]),
     calName: text(pr[C.calName]).trim(),
-    phone: text(pr[C.phone]).trim()
+    phone: text(pr[C.phone]).trim(),
+    notionPage: text(pr[C.page]).trim()
   };
 }
 
@@ -246,13 +249,15 @@ export async function getClientFresh(id: string): Promise<ClientRecord | null> {
   }
 }
 
-export async function createClient(input: { name: string; instagram: string }): Promise<string> {
+export async function createClient(input: { name: string; instagram: string; calName?: string; notionPage?: string }): Promise<string> {
   const page = await notion().pages.create({
     parent: { database_id: env.clientsDb },
     properties: {
       [C.name]: titleProp(input.name),
-      [C.instagram]: rich(input.instagram.replace(/^@/, ''))
-    }
+      [C.instagram]: rich(input.instagram.replace(/^@/, '')),
+      ...(input.calName ? { [C.calName]: rich(input.calName) } : {}),
+      ...(input.notionPage ? { [C.page]: { url: input.notionPage } } : {})
+    } as never
   });
   invalidate('clients');
   return page.id;
@@ -260,10 +265,11 @@ export async function createClient(input: { name: string; instagram: string }): 
 
 export async function updateClient(
   id: string,
-  input: { name?: string; instagram?: string; approvers?: string[]; viewers?: string[]; logoUrl?: string | null; cancelled?: boolean; calName?: string }
+  input: { name?: string; instagram?: string; approvers?: string[]; viewers?: string[]; logoUrl?: string | null; cancelled?: boolean; calName?: string; notionPage?: string }
 ) {
   const properties: Record<string, unknown> = {};
   if (input.calName !== undefined) properties[C.calName] = rich(input.calName);
+  if (input.notionPage !== undefined) properties[C.page] = { url: input.notionPage || null };
   if (input.cancelled !== undefined) properties[C.cancelled] = { checkbox: input.cancelled };
   if (input.logoUrl !== undefined) properties[C.logo] = { url: input.logoUrl || null };
   if (input.name !== undefined) properties[C.name] = titleProp(input.name);

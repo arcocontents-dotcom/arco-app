@@ -432,7 +432,10 @@ function RoutineForm({
   const [type, setType] = useState<RoutineType>(row?.type ?? 'Tarefa');
   const [date, setDate] = useState(row?.date ?? '');
   const [urgency, setUrgency] = useState<RoutineRow['urgency']>(row?.urgency ?? 'Média');
-  const [client, setClient] = useState(row?.client ?? '');
+  const FREE = 'Freelancer · ';
+  const startFree = (row?.client ?? '').startsWith(FREE);
+  const [client, setClient] = useState(startFree ? '__free' : row?.client ?? '');
+  const [freeName, setFreeName] = useState(startFree ? row!.client.slice(FREE.length) : '');
   const [err, setErr] = useState<string | null>(null);
   const [confirmDel, setConfirmDel] = useState(false);
   const [pending, start] = useTransition();
@@ -445,7 +448,12 @@ function RoutineForm({
         setErr('Escolha a data de entrega.');
         return;
       }
-      const r = await saveRoutineAction(row?.id ?? null, { title, person: who, type, days: fixed ? row!.days : [], date: fixed ? null : date, urgency, client });
+      if (client === '__free' && !freeName.trim()) {
+        setErr('Escreva o nome do cliente freelancer.');
+        return;
+      }
+      const clientName = client === '__free' ? `${FREE}${freeName.trim()}` : client;
+      const r = await saveRoutineAction(row?.id ?? null, { title, person: who, type, days: fixed ? row!.days : [], date: fixed ? null : date, urgency, client: clientName });
       if (r.ok) onSaved();
       else setErr(r.error);
     });
@@ -518,8 +526,15 @@ function RoutineForm({
           <select className="ninput" value={client} onChange={(e) => setClient(e.target.value)} aria-label="Cliente (opcional)">
             <option value="">Nenhum</option>
             {clients.map((c) => <option key={c} value={c}>{c}</option>)}
+            <option value="__free">Cliente freelancer…</option>
           </select>
         </label>
+        {client === '__free' && (
+          <label className="rf-row">
+            <span className="rf-l">Freelancer</span>
+            <input className="ninput" style={{ flex: 1 }} placeholder="Nome do cliente freelancer" aria-label="Nome do cliente freelancer" value={freeName} autoFocus maxLength={80} onChange={(e) => setFreeName(e.target.value)} />
+          </label>
+        )}
 
         {err && <p className="error" role="alert" style={{ margin: 0 }}>{err}</p>}
         <button type="button" className="btn block" disabled={pending} onClick={save}><Icon name="check" size={16} />{pending ? 'Salvando…' : 'Salvar'}</button>

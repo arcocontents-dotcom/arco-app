@@ -2,13 +2,17 @@ import Icon from '@/components/Icon';
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/access';
 import { listAllOpenContents, listClients, sameId } from '@/lib/notion';
+import { syncClientsFromGestao } from '@/lib/gestao-sync';
+import { syncGestaoAction } from '../actions';
 import AdminShell from '@/components/AdminShell';
 import GestaoTabs from '@/components/GestaoTabs';
 
 export const dynamic = 'force-dynamic';
 
-export default async function Gestao() {
+export default async function Gestao({ searchParams }: { searchParams: Promise<{ sync?: string; novos?: string }> }) {
   await requireAdmin();
+  const sp = await searchParams;
+  const sync = await syncClientsFromGestao().catch(() => null);
   const [all, open] = await Promise.all([listClients(), listAllOpenContents().catch(() => [])]);
   const active = all.filter((c) => !c.cancelled);
   const removed = all.filter((c) => c.cancelled);
@@ -22,12 +26,22 @@ export default async function Gestao() {
           <h1 className="display rise" style={{ fontSize: 'clamp(44px, 7vw, 88px)', ['--d' as string]: '60ms' }}>Gestão</h1>
         </div>
         <div className="actions rise" style={{ ['--d' as string]: '120ms' }}>
+          <form action={syncGestaoAction}>
+            <button type="submit" className="btn outline small"><Icon name="undo" size={15} />Atualizar do Notion</button>
+          </form>
           <Link className="btn small" href="/admin/clientes/novo"><Icon name="plus" size={16} />Novo cliente</Link>
         </div>
       </div>
 
       <GestaoTabs tab="clientes" />
 
+      {sync?.status === 'sem-acesso' && (
+        <p className="hint rise" style={{ marginBottom: 16 }}>
+          Para cliente novo do Notion aparecer aqui sozinho: na página <b>Gestão</b> do Notion, clique em <b>•••</b> → <b>Conexões</b> e adicione a conexão do app. Nada é alterado lá.
+        </p>
+      )}
+      {sync?.created.length ? <p className="hint rise" style={{ marginBottom: 16 }}>Novos do Notion: {sync.created.join(', ')}.</p> : null}
+      {sp.sync === 'ok' && <p className="toast" role="status">{sp.novos && sp.novos !== '0' ? `${sp.novos} cliente(s) novo(s) do Notion.` : 'Tudo em dia com o Notion.'}</p>}
       <section className="rise" style={{ ['--d' as string]: '240ms' }}>
         <h2 className="label" style={{ marginBottom: 10 }}>Todos os clientes · {active.length}</h2>
         <div className="cal-wrap">

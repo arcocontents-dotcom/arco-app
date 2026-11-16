@@ -43,6 +43,10 @@ export const env = {
   get adminPassword() {
     return read('ADMIN_PASSWORD');
   },
+  /** Página Gestão do Notion: os clientes do toggle "Clientes ..." entram no app sozinhos. */
+  get gestaoPage() {
+    return read('NOTION_GESTAO_PAGE');
+  },
   /** Produção — rotina e lembretes (tabela do app). */
   get routineDb() {
     return read('NOTION_ROUTINE_DB');

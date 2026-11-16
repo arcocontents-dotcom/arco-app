@@ -1,6 +1,7 @@
 // Teste de ponta a ponta: Notion falso + app real + navegador real.
 // Uso: npm run build && node tests/e2e.mjs
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
 import { SignJWT } from 'jose';
@@ -33,6 +34,19 @@ const stat = (n) => ({ status: { name: n } });
 const PLAN1 = seedPage(PLANNING_DB, { 'Título do assunto': title('Ideia de bastidores'), Cliente: sel('Studio Alfa'), Status: stat('Ideia') });
 const PLAN2 = seedPage(PLANNING_DB, { 'Título do assunto': title('Reels do lançamento'), Cliente: sel('Studio Alfa'), Status: stat('Realizando'), 'Data de postagem': { date: { start: '2026-11-20' } }, 'Tipo de demanda': sel('Reels 1'), 'Observação': sel('Falta edição'), 'Demanda atual está com': sel('Yan') });
 seedBlocks(PLAN2, ['Objetivo: Mostrar o lançamento com força.', 'Legenda: Chegou a hora.', 'Referência: https://www.instagram.com/p/exemplo/', 'Imagens: https://midia.test/i1.jpg https://midia.test/i2.jpg']);
+// página Gestão do Notion: toggle "Clientes social media" com as páginas dos clientes
+const GESTAO = '55555555555555555555555555555555';
+const gb = (type, extra = {}) => ({ object: 'block', id: randomUUID(), type, has_children: false, archived: false, ...extra });
+const gCols = gb('column_list', { has_children: true });
+const gCol = gb('column', { has_children: true });
+const gToggle = gb('toggle', { has_children: true, toggle: { rich_text: [{ type: 'text', plain_text: 'Clientes social media', text: { content: 'Clientes social media' } }] } });
+const gBast = gb('toggle', { has_children: true, toggle: { rich_text: [{ type: 'text', plain_text: 'Bastidores', text: { content: 'Bastidores' } }] } });
+blocks.set(GESTAO, [gCols]);
+blocks.set(gCols.id.replace(/-/g, ''), [gCol]);
+blocks.set(gCol.id.replace(/-/g, ''), [gToggle, gBast]);
+const gClients = [gb('child_page', { child_page: { title: 'Studio Alfa' } }), gb('child_page', { child_page: { title: 'Beta Ltda' } })];
+blocks.set(gToggle.id.replace(/-/g, ''), gClients);
+blocks.set(gBast.id.replace(/-/g, ''), [gb('child_page', { child_page: { title: 'Cliente arquivado antigo' } })]);
 // produção da equipe (cliente fora do app, para não mexer nos testes do planejamento)
 const PRODA = seedPage(PLANNING_DB, { 'Título do assunto': title('Editar vídeo da obra'), Cliente: sel('Outro Cliente'), Status: stat('Realizando'), 'Data de postagem': { date: { start: '2026-11-19' } }, 'Tipo de demanda': sel('Reels 2'), 'Observação': sel('Falta edição'), 'Demanda atual está com': sel('Marcos') });
 seedPage(PLANNING_DB, { 'Título do assunto': title('Capa atrasada'), Cliente: sel('Outro Cliente'), Status: stat('Realizando'), 'Data de postagem': { date: { start: '2026-11-03' } }, 'Tipo de demanda': sel('Post 1'), 'Observação': sel('Falta design'), 'Demanda atual está com': sel('Lemuel') });
@@ -56,6 +70,7 @@ const app = spawn('npx', ['next', 'start', '-p', String(APP_PORT)], {
     NOTION_CONTENTS_DB: CONTENTS_DB,
     NOTION_PLANNING_DB: PLANNING_DB,
     NOTION_ROUTINE_DB: ROUTINE_DB,
+    NOTION_GESTAO_PAGE: GESTAO,
     ADMIN_PASSWORD: 'senha-do-admin-teste',
     NOTION_BASE_URL: `http://127.0.0.1:${MOCK_PORT}`,
     R2_PUBLIC_URL: 'https://midia.test',
@@ -757,6 +772,15 @@ try {
     await fy.getByLabel('Data de entrega').fill(today);
     await fy.getByRole('button', { name: 'Salvar' }).click();
     await colOf('Yan').getByText('Editar vídeo do cliente X').waitFor();
+    // cliente freelancer: escolhe e escreve o nome
+    await colOf('Yan').getByRole('button', { name: 'Adicionar task para Yan' }).click();
+    const ff = pd.getByRole('dialog', { name: 'Novo lembrete ou tarefa' });
+    await ff.getByLabel('Tarefa', { exact: true }).fill('Vídeo do casamento');
+    await ff.getByLabel('Data de entrega').fill(today);
+    await ff.getByLabel('Cliente (opcional)').selectOption('__free');
+    await ff.getByLabel('Nome do cliente freelancer').fill('João Silva');
+    await ff.getByRole('button', { name: 'Salvar' }).click();
+    await colOf('Yan').getByText('Freelancer · João Silva').waitFor();
     // lembrete da equipe: data de lançamento fixa (hoje) e data de entrega obrigatória
     await pd.getByRole('button', { name: 'Lembrete ou tarefa' }).click();
     const f = pd.getByRole('dialog', { name: 'Novo lembrete ou tarefa' });
@@ -833,6 +857,21 @@ try {
     assert.equal((await marcos.locator('b').textContent())?.trim(), '1', 'Marcos editou 1');
     await pd.waitForTimeout(700);
     await shot(pd, '23-producao-relatorio');
+  });
+
+  await step('cliente novo na Gestão do Notion entra no app sozinho', async () => {
+    gClients.push(gb('child_page', { child_page: { title: 'Imperial Casa & Conforto' } }));
+    await pd.goto(`${APP}/admin/gestao`);
+    await pd.getByRole('button', { name: 'Atualizar do Notion' }).click();
+    await pd.getByText('1 cliente(s) novo(s) do Notion.').waitFor();
+    await pd.getByRole('link', { name: /Imperial Casa & Conforto/ }).first().waitFor();
+    assert.equal(await pd.getByText('Cliente arquivado antigo').count(), 0, 'Bastidores não entra');
+    const imp = [...store.values()].find((x) => x.properties.Nome?.title?.[0]?.plain_text === 'Imperial Casa & Conforto');
+    assert.ok(imp, 'criado na tabela Clientes do app');
+    // não duplica
+    await pd.getByRole('button', { name: 'Atualizar do Notion' }).click();
+    await pd.getByText('Tudo em dia com o Notion.').waitFor();
+    assert.equal([...store.values()].filter((x) => x.properties.Nome?.title?.[0]?.plain_text === 'Imperial Casa & Conforto').length, 1);
   });
 
   await step('administrador entra na hora com senha (sem esperar link)', async () => {

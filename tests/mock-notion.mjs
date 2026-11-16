@@ -16,7 +16,7 @@ export const ROUTINE_DB = '44444444444444444444444444444444';
 const TYPES = {
   [CLIENTS_DB]: {
     [C.name]: 'title', [C.approvers]: 'rich_text', [C.viewers]: 'rich_text', [C.instagram]: 'rich_text',
-    [C.igConnected]: 'checkbox', [C.igUserId]: 'rich_text', [C.igToken]: 'rich_text', [C.igTokenExpires]: 'date', [C.logo]: 'url', [C.cancelled]: 'checkbox', [C.calName]: 'rich_text', [C.push]: 'rich_text'
+    [C.igConnected]: 'checkbox', [C.igUserId]: 'rich_text', [C.igToken]: 'rich_text', [C.igTokenExpires]: 'date', [C.logo]: 'url', [C.cancelled]: 'checkbox', [C.calName]: 'rich_text', [C.push]: 'rich_text', [C.page]: 'url'
   },
   [CONTENTS_DB]: {
     [K.title]: 'title', [K.client]: 'relation', [K.date]: 'date', [K.type]: 'select', [K.status]: 'select',
@@ -191,7 +191,7 @@ export function startMock(port) {
       }
       if ((m = url.pathname.match(/^\/v1\/blocks\/([^/]+)\/children$/))) {
         const key = norm(m[1]);
-        if (!store.has(key)) return send(404, { object: 'error', status: 404, code: 'object_not_found', message: 'not found' });
+        if (!store.has(key) && !blocks.has(key)) return send(404, { object: 'error', status: 404, code: 'object_not_found', message: 'not found' });
         const list = blocks.get(key) ?? [];
         if (req.method === 'GET') return send(200, { object: 'list', results: list, has_more: false, next_cursor: null });
         if (req.method === 'PATCH') {
