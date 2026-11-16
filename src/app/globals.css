@@ -1158,3 +1158,14 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .prod .pt-who { background: var(--fc); color: #fff; padding: 1px 6px; border-radius: 3px; }
 .prod .pt-who::before { display: none; }
 .prod .pt.f-story .pt-who { color: #3d2f05; }
+/* novos formatos das tasks (cores do Notion) */
+.f-postar { --fc: #0f7b6c; } .f-roteiro { --fc: #ad1a72; } .f-outro { --fc: #787774; }
+.prod .pt.f-postar { --fc: #0f7b6c; --fbg: #eef6f3; }
+.prod .pt.f-roteiro { --fc: #ad1a72; --fbg: #fbf0f6; }
+.prod .pt.f-outro { --fc: #787774; --fbg: #f4f4f3; }
+.prod .pt.f-capt { --fc: #e03e3e; --fbg: #fdeeee; }
+.prod.tv .pt.f-postar { --fc: #4dab9a; --fbg: #1d2f2b; }
+.prod.tv .pt.f-roteiro { --fc: #e255a1; --fbg: #3a1f2e; }
+.prod.tv .pt.f-outro { --fc: #979a9b; --fbg: #2a2b2c; }
+.prod.tv .pt.f-capt { --fc: #ff7369; --fbg: #3a1f1f; }
+.rf-fmt { flex-wrap: wrap; }

@@ -74,7 +74,8 @@
     "client": "Cliente",
     "doneOn": "Feito em",
     "active": "Ativo",
-    "format": "Formato"
+    "format": "Formato",
+    "formatOther": "Formato (outro)"
   },
   "shoot": {
     "title": "Captação",

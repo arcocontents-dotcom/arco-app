@@ -24,7 +24,9 @@ export type Urgency = 'atrasado' | 'alta' | 'media' | 'baixa';
 export const ROUTINE_TYPES = ['Tarefa fixa', 'Lembrete', 'Tarefa'] as const;
 export type RoutineType = (typeof ROUTINE_TYPES)[number];
 export const URGENCY_LABEL = ['Alta', 'Média', 'Baixa'] as const;
-export const FORMATS = ['Vídeo', 'Post', 'Story'] as const;
+export const FORMATS = ['Editar reels', 'Editar post', 'Editar story', 'Editar foto', 'Postar', 'Fazer roteiro', 'Outro'] as const;
+/** Nomes antigos que ainda podem existir no Notion. */
+const LEGACY_FORMAT: Record<string, TaskFormat> = { 'Vídeo': 'Editar reels', Post: 'Editar post', Story: 'Editar story' };
 export type TaskFormat = (typeof FORMATS)[number];
 
 export interface ProdTask {
@@ -48,6 +50,8 @@ export interface ProdTask {
   url: string;
   /** Dia em que a tarefa foi lançada (só nas tarefas e lembretes da equipe). */
   launched?: string | null;
+  /** Formato da task interna (para a cor). */
+  fmt?: string | null;
 }
 
 export interface Routine {
@@ -64,6 +68,8 @@ export interface Routine {
   /** Dia em que foi lançada (criada no Notion): fixo, ninguém altera. */
   created: string;
   format: TaskFormat | null;
+  /** Descrição quando o formato é "Outro". */
+  formatOther: string;
 }
 
 export const routineConfigured = () => !!env.routineDb;
@@ -108,7 +114,11 @@ function toRoutine(p: PageObjectResponse): Routine {
     doneOn: text(pr[R.doneOn]).split(/[\s,]+/).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)),
     active: checkbox(pr[R.active]),
     created: localParts(p.created_time, env.timeZone).day,
-    format: (FORMATS as readonly string[]).includes(select(pr[R.format]) ?? '') ? (select(pr[R.format]) as TaskFormat) : null
+    format: (() => {
+      const f = select(pr[R.format]) ?? '';
+      return (FORMATS as readonly string[]).includes(f) ? (f as TaskFormat) : LEGACY_FORMAT[f] ?? null;
+    })(),
+    formatOther: text(pr[R.formatOther])
   };
 }
 
@@ -251,7 +261,8 @@ export async function productionWeek(
       client: r.client || null,
       clientId: clients.find((c) => c.name === r.client)?.id ?? null,
       time: null,
-      kind: r.format,
+      kind: r.format === 'Outro' ? r.formatOther || 'Outro' : r.format,
+      fmt: r.format,
       note: null,
       type: r.type,
       url: `https://www.notion.so/${normId(r.id)}`,
@@ -316,6 +327,7 @@ export interface RoutineInput {
   urgency: (typeof URGENCY_LABEL)[number];
   client: string;
   format: TaskFormat | null;
+  formatOther: string;
 }
 
 function routineProps(x: RoutineInput) {
@@ -327,7 +339,8 @@ function routineProps(x: RoutineInput) {
     [R.date]: { date: x.type !== 'Tarefa fixa' && x.date ? { start: x.date } : null },
     [R.urgency]: { select: { name: x.urgency } },
     [R.client]: { rich_text: x.client ? [{ text: { content: x.client } }] : [] },
-    [R.format]: { select: x.format ? { name: x.format } : null }
+    [R.format]: { select: x.format ? { name: x.format } : null },
+    [R.formatOther]: { rich_text: x.format === 'Outro' && x.formatOther ? [{ text: { content: x.formatOther.slice(0, 120) } }] : [] }
   };
 }
 
@@ -510,9 +523,10 @@ export async function productionReport(first: string): Promise<ProdReport | stri
     // tarefas lançadas na Produção com formato, marcadas como feitas no mês
     const routines = await listRoutines().catch(() => [] as Routine[]);
     for (const r of routines) {
-      if (r.type === 'Tarefa fixa' || !r.format || !r.date || !isPerson(r.person)) continue;
+      const fm: Partial<Record<TaskFormat, Fmt>> = { 'Editar reels': 'reels', 'Editar post': 'post', 'Editar story': 'story', 'Editar foto': 'foto' };
+      const f = r.format ? fm[r.format] : undefined;
+      if (r.type === 'Tarefa fixa' || !f || !r.date || !isPerson(r.person)) continue;
       if (!r.doneOn.includes(r.date) || r.date < first || r.date > last) continue;
-      const f: Fmt = r.format === 'Vídeo' ? 'reels' : r.format === 'Post' ? 'post' : 'story';
       const add = (c: Counts) => { c[f]++; c.total++; };
       add(rep.people.find((x) => x.name === r.person)!.counts);
       add(rep.total);

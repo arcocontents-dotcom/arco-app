@@ -771,14 +771,23 @@ try {
     assert.equal(await fy.getByRole('button', { name: 'Yan' }).getAttribute('aria-pressed'), 'true', 'já vem com o Yan');
     await fy.getByLabel('Tarefa', { exact: true }).fill('Editar vídeo do cliente X');
     await fy.getByLabel('Data de entrega').fill(today);
-    await fy.getByRole('radio', { name: 'Vídeo' }).click();
+    await fy.getByRole('radio', { name: 'Editar reels' }).click();
     await fy.getByRole('button', { name: 'Salvar' }).click();
     await colOf('Yan').getByText('Editar vídeo do cliente X').waitFor();
     const vid = colOf('Yan').locator('article.pt', { hasText: 'Editar vídeo do cliente X' });
     assert.match((await vid.getAttribute('class')) ?? '', /f-reels/, 'cor de vídeo (laranja, igual ao Notion)');
-    await vid.getByText('Vídeo', { exact: true }).waitFor();
+    await vid.getByText('Editar reels', { exact: true }).waitFor();
     const vt = [...store.values()].find((x) => x.properties.Tarefa?.title?.[0]?.plain_text === 'Editar vídeo do cliente X');
-    assert.equal(vt.properties.Formato.select.name, 'Vídeo');
+    assert.equal(vt.properties.Formato.select.name, 'Editar reels');
+    // formato "Outro…": descreve a tarefa
+    await colOf('Marcos').getByRole('button', { name: 'Adicionar task para Marcos' }).click();
+    const fo = pd.getByRole('dialog', { name: 'Novo lembrete ou tarefa' });
+    await fo.getByLabel('Tarefa', { exact: true }).fill('Áudio do podcast');
+    await fo.getByLabel('Data de entrega').fill(today);
+    await fo.getByRole('radio', { name: 'Outro…' }).click();
+    await fo.getByLabel('Descreva o formato').fill('Tratar áudio');
+    await fo.getByRole('button', { name: 'Salvar' }).click();
+    await colOf('Marcos').locator('article.pt.f-outro', { hasText: 'Áudio do podcast' }).getByText('Tratar áudio').waitFor();
     // cliente freelancer: escolhe e escreve o nome
     await colOf('Yan').getByRole('button', { name: 'Adicionar task para Yan' }).click();
     const ff = pd.getByRole('dialog', { name: 'Novo lembrete ou tarefa' });

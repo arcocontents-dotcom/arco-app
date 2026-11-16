@@ -31,6 +31,7 @@ export interface Task {
   done: boolean;
   url: string;
   launched?: string | null;
+  fmt?: string | null;
 }
 export interface RoutineRow {
   id: string;
@@ -43,10 +44,17 @@ export interface RoutineRow {
   client: string;
   active: boolean;
   created: string;
-  format: 'Vídeo' | 'Post' | 'Story' | null;
+  format: TaskFormatName | null;
+  formatOther: string;
 }
 
 const TEAM: Person[] = ['Lemuel', 'Marcos', 'Yan', 'Rafa'];
+type TaskFormatName = 'Editar reels' | 'Editar post' | 'Editar story' | 'Editar foto' | 'Postar' | 'Fazer roteiro' | 'Outro';
+/** Formatos das tasks internas, nas cores do Notion. */
+const TASK_FORMATS: [TaskFormatName, string][] = [
+  ['Editar reels', 'f-reels'], ['Editar post', 'f-post'], ['Editar story', 'f-story'], ['Editar foto', 'f-foto'],
+  ['Postar', 'f-postar'], ['Fazer roteiro', 'f-roteiro'], ['Outro', 'f-outro']
+];
 const WD = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 const WD_LONG = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 const URG: Record<Urgency, { label: string; rank: number }> = {
@@ -56,9 +64,10 @@ const URG: Record<Urgency, { label: string; rank: number }> = {
   baixa: { label: 'Sem pressa', rank: 3 }
 };
 /** Cor do cartão: a mesma do Notion para o formato (ou do tipo, nas tarefas internas). */
-const fmtClass = (t: { source: string; kind: string | null; type: string }) => {
+const fmtClass = (t: { source: string; kind: string | null; type: string; fmt?: string | null }) => {
   const s = (t.kind ?? '').toLowerCase();
   if (t.source === 'captacao') return 'f-capt';
+  if (t.source === 'rotina' && t.fmt) return TASK_FORMATS.find(([n]) => n === t.fmt)?.[1] ?? 'f-outro';
   if (t.source === 'rotina' && !s) return t.type === 'Lembrete' ? 'f-lembrete' : t.type === 'Tarefa fixa' ? 'f-fixa' : 'f-avulsa';
   return s.startsWith('reels') || s.startsWith('víd') || s.startsWith('vid') ? 'f-reels' : s.startsWith('post') ? 'f-post' : s.startsWith('stor') ? 'f-story' : s.startsWith('foto') ? 'f-foto' : 'f-outro';
 };
@@ -467,6 +476,7 @@ function RoutineForm({
   const [date, setDate] = useState(row?.date ?? '');
   const [urgency, setUrgency] = useState<RoutineRow['urgency']>(row?.urgency ?? 'Média');
   const [format, setFormat] = useState<RoutineRow['format']>(row?.format ?? null);
+  const [formatOther, setFormatOther] = useState(row?.formatOther ?? '');
   // Cliente: da agência (lista), Freelancer ou Casamento (escreve o nome), ou nenhum
   type Kind = 'agencia' | 'freelancer' | 'casamento' | 'nenhum';
   const PREFIX: Record<'freelancer' | 'casamento', string> = { freelancer: 'Freelancer · ', casamento: 'Casamento · ' };
@@ -495,9 +505,13 @@ function RoutineForm({
         setErr('Escolha o cliente.');
         return;
       }
+      if (format === 'Outro' && !formatOther.trim()) {
+        setErr('Descreva o formato da tarefa.');
+        return;
+      }
       const clientName =
         ckind === 'freelancer' || ckind === 'casamento' ? `${PREFIX[ckind]}${freeName.trim()}` : ckind === 'agencia' ? client : '';
-      const r = await saveRoutineAction(row?.id ?? null, { title, person: who, type, days: fixed ? row!.days : [], date: fixed ? null : date, urgency, client: clientName, format });
+      const r = await saveRoutineAction(row?.id ?? null, { title, person: who, type, days: fixed ? row!.days : [], date: fixed ? null : date, urgency, client: clientName, format, formatOther });
       if (r.ok) onSaved();
       else setErr(r.error);
     });
@@ -559,14 +573,20 @@ function RoutineForm({
         <div className="rf-row">
           <span className="rf-l">Formato</span>
           <div className="rf-urg rf-fmt" role="radiogroup" aria-label="Formato">
-            {([['Vídeo', 'f-reels'], ['Post', 'f-post'], ['Story', 'f-story']] as const).map(([v, c]) => (
+            {TASK_FORMATS.map(([v, c]) => (
               <button key={v} type="button" role="radio" aria-checked={format === v} className={c} onClick={() => setFormat(format === v ? null : v)}>
-                <i />{v}
+                <i />{v === 'Outro' ? 'Outro…' : v}
               </button>
             ))}
             <button type="button" role="radio" aria-checked={format === null} onClick={() => setFormat(null)}>Nenhum</button>
           </div>
         </div>
+        {format === 'Outro' && (
+          <label className="rf-row">
+            <span className="rf-l" />
+            <input className="ninput" style={{ flex: 1 }} placeholder="Descreva (ex.: Tratar áudio)" aria-label="Descreva o formato" value={formatOther} autoFocus maxLength={120} onChange={(e) => setFormatOther(e.target.value)} />
+          </label>
+        )}
 
         <div className="rf-row">
           <span className="rf-l">Urgência</span>
