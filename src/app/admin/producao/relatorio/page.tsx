@@ -46,7 +46,7 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
     { label: 'Reels postados', n: ps?.reels ?? 0, sub: 'vídeos no feed', cls: 'f-reels' },
     { label: 'Posts estáticos', n: ps?.post ?? 0, sub: 'post, carrossel e fotos', cls: 'f-post' },
     { label: 'Stories postados', n: ps?.story ?? 0, sub: 'stories', cls: 'f-story' },
-    { label: 'Captações feitas', n: d?.team.captacoes ?? 0, sub: `${d?.team.captou ?? 0} vídeos captados`, cls: 'f-capt' }
+    { label: 'Captações feitas', n: d?.team.captacoes ?? 0, sub: `${d?.team.captou ?? 0} vídeos captados (sem repetir dupla)`, cls: 'f-capt' }
   ];
 
   return (
@@ -106,6 +106,9 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
                       <span className="db-l"><i />{x.label}</span>
                       <span className="db-bar" aria-hidden="true"><span style={{ width: `${Math.round((m![x.k] / max(x.k)) * 100)}%` }} /></span>
                       <b>{m![x.k]}</b>
+                      {x.k === 'captou' && p && p.dupla > 0 && (
+                        <small className="db-split">{m!.captou - p.dupla} sozinho · {p.dupla} em dupla (no total da equipe cada vídeo conta 1 vez)</small>
+                      )}
                       {x.k === 'postou' && p && (
                         <small className="db-split">
                           {[['reels', 'reels'], ['post', 'posts estáticos'], ['story', 'stories'], ['outro', 'outros']]
@@ -164,7 +167,7 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
             {METRICS.map((x) => (
               <div key={x.k} className={`db-team-i ${x.cls}`}>
                 <strong>{d?.team[x.k] ?? 0}</strong>
-                <span><i />{x.label}</span>
+                <span><i />{x.label}{x.k === 'captou' || x.k === 'captacoes' ? ' (sem repetir)' : ''}</span>
               </div>
             ))}
           </div>

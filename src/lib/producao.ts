@@ -485,7 +485,7 @@ export interface PostedTotals {
 
 export interface TeamDashboard {
   month: string;
-  people: { name: Person; m: MetricCounts; items: DashItem[]; posted: { reels: number; post: number; story: number; outro: number } }[];
+  people: { name: Person; m: MetricCounts; items: DashItem[]; posted: { reels: number; post: number; story: number; outro: number }; dupla: number }[];
   team: MetricCounts;
   posted: PostedTotals;
 }
@@ -530,7 +530,7 @@ export async function teamDashboard(first: string, today: string): Promise<TeamD
       listShoots(first, last).catch(() => [] as Shoot[]),
       listRoutines().catch(() => [] as Routine[])
     ]);
-    const people = TEAM.map((name) => ({ name, m: zeroM(), items: [] as DashItem[], posted: { reels: 0, post: 0, story: 0, outro: 0 } }));
+    const people = TEAM.map((name) => ({ name, m: zeroM(), items: [] as DashItem[], posted: { reels: 0, post: 0, story: 0, outro: 0 }, dupla: 0 }));
     const postedT: PostedTotals = { total: 0, reels: 0, post: 0, story: 0, outro: 0, equipe: 0, cliente: 0, semQuem: 0 };
     const team = zeroM();
     const bump = (who: Person, k: Metric, it: Omit<DashItem, 'k'>) => {
@@ -570,6 +570,7 @@ export async function teamDashboard(first: string, today: string): Promise<TeamD
         if (f !== 'post' && f !== 'foto') {
           bump(who, 'captou', card(p));
           videosRec.add(p.id);
+          if (crew.length > 1) people.find((x) => x.name === who)!.dupla++;
         }
         if (!cal) continue;
         const m = capByPerson.get(who) ?? new Map();
