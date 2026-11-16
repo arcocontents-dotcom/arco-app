@@ -6,6 +6,8 @@ import { MONTHS, addDays, addMonths, monthIdx, parseDay, todayIn, yearNum } from
 import { getPlanItem, linkedContents, listPlanning, matchCalName, planOptions, pullPostedFromPlan } from '@/lib/planning';
 import AdminShell from '@/components/AdminShell';
 import Icon from '@/components/Icon';
+import EntregasPanel from '@/components/EntregasPanel';
+import { entregasDoMes } from '@/lib/contrato';
 import PlanBoard from '@/components/PlanBoard';
 import CalNamePicker from '@/components/CalNamePicker';
 import PlanReport from '@/components/PlanReport';
@@ -93,7 +95,11 @@ export default async function Planejamento({ searchParams }: { searchParams: Pro
     );
   }
 
-  const [items, linked] = await Promise.all([listPlanning(cal, first, last), linkedContents(client.id).catch(() => [])]);
+  const [items, linked, entregas] = await Promise.all([
+    listPlanning(cal, first, last),
+    linkedContents(client.id).catch(() => []),
+    entregasDoMes(client, cal, first).catch(() => null)
+  ]);
   if (typeof items === 'string') {
     return <AdminShell section="planejamento" current={client.id}>{head}<p className="error">Não foi possível ler o Calendário mensal agora.</p></AdminShell>;
   }
@@ -117,6 +123,8 @@ export default async function Planejamento({ searchParams }: { searchParams: Pro
         <p className="hint" style={{ margin: 0 }}>Antes do mês começar, mande o planejamento para o cliente aprovar no WhatsApp. Depois, cada conteúdo é aprovado na semana dele.</p>
         <PlanReport clientId={client.id} clientName={client.name} month={first} appUrl={env.appUrl} />
       </div>
+      <div className="plan-layout">
+      <div className="plan-main">
       <PlanBoard
         key={`${client.id}-${first}-${openId ?? ''}`}
         clientId={client.id}
@@ -128,6 +136,9 @@ export default async function Planejamento({ searchParams }: { searchParams: Pro
         openId={openId}
         today={today}
       />
+      </div>
+      {entregas && <EntregasPanel data={entregas} monthLabel={`${MONTHS[monthIdx(first)]} ${yearNum(first)}`} clientName={client.name} />}
+      </div>
     </AdminShell>
   );
 }

@@ -47,6 +47,11 @@ blocks.set(gCol.id.replace(/-/g, ''), [gToggle, gBast]);
 const gClients = [gb('child_page', { child_page: { title: 'Studio Alfa' } }), gb('child_page', { child_page: { title: 'Beta Ltda' } })];
 blocks.set(gToggle.id.replace(/-/g, ''), gClients);
 blocks.set(gBast.id.replace(/-/g, ''), [gb('child_page', { child_page: { title: 'Cliente arquivado antigo' } })]);
+// página do Studio Alfa: "Combinado com a marca" (entregas do mês no Planejamento)
+const para = (t) => gb('paragraph', { paragraph: { rich_text: [{ type: 'text', plain_text: t, text: { content: t } }] } });
+const gComb = gb('toggle', { has_children: true, toggle: { rich_text: [{ type: 'text', plain_text: 'Combinado com a marca', text: { content: 'Combinado com a marca' } }] } });
+blocks.set(gClients[0].id.replace(/-/g, ''), [gComb]);
+blocks.set(gComb.id.replace(/-/g, ''), [para('Reels mensal: 4'), para('Post mensal: 2'), para('Story mensal: 0')]);
 // produção da equipe (cliente fora do app, para não mexer nos testes do planejamento)
 const PRODA = seedPage(PLANNING_DB, { 'Título do assunto': title('Editar vídeo da obra'), Cliente: sel('Outro Cliente'), Status: stat('Realizando'), 'Data de postagem': { date: { start: '2026-11-19' } }, 'Tipo de demanda': sel('Reels 2'), 'Observação': sel('Falta edição'), 'Demanda atual está com': sel('Marcos') });
 seedPage(PLANNING_DB, { 'Título do assunto': title('Capa atrasada'), Cliente: sel('Outro Cliente'), Status: stat('Realizando'), 'Data de postagem': { date: { start: '2026-11-03' } }, 'Tipo de demanda': sel('Post 1'), 'Observação': sel('Falta design'), 'Demanda atual está com': sel('Lemuel') });
@@ -567,6 +572,11 @@ try {
     assert.match((await nl.getAttribute('href')) ?? '', /^notion:\/\//);
     await pd.getByRole('dialog', { name: 'Reels do lançamento' }).getByRole('button', { name: 'Fechar' }).click();
     await pd.getByRole('tab', { name: 'Quadro' }).click();
+    // lateral: entregas do mês combinadas com a marca
+    const ent = pd.getByRole('complementary', { name: /^Entregas de/ });
+    await ent.getByText('Reels', { exact: true }).waitFor();
+    await ent.getByText(/\/4$/).first().waitFor();
+    await shot(pd, '15b-planejamento-entregas');
     // relatório do mês em PDF, pronto para o WhatsApp
     await pd.getByRole('button', { name: 'Planejamento do mês' }).click();
     const rep = pd.getByRole('dialog', { name: 'Planejamento do mês' });

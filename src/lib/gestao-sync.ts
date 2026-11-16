@@ -10,7 +10,7 @@ import { matchCalName, planOptions } from './planning';
 
 type Found = { id: string; title: string };
 
-const norm = (s: string) =>
+export const norm = (s: string) =>
   s
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
@@ -18,7 +18,7 @@ const norm = (s: string) =>
     .replace(/\b(arqui|arq|dra|dr)\b\.?/g, '')
     .replace(/[^a-z0-9]+/g, '');
 
-async function children(id: string) {
+export async function children(id: string) {
   const out: Array<{ id: string; type: string; has_children?: boolean; [k: string]: unknown }> = [];
   let cursor: string | undefined;
   do {
@@ -29,7 +29,7 @@ async function children(id: string) {
   return out;
 }
 
-const plain = (b: Record<string, unknown>, type: string) =>
+export const plain = (b: Record<string, unknown>, type: string) =>
   (((b[type] as { rich_text?: { plain_text: string }[] })?.rich_text ?? []).map((t) => t.plain_text).join('') || '').trim();
 
 /** Páginas de cliente dentro dos toggles "Clientes …" (até colunas → toggle → página). */
