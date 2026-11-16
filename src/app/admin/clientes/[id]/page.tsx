@@ -6,21 +6,18 @@ import { env } from '@/lib/env';
 import { getClientFresh, listContentsInRangeAdmin } from '@/lib/notion';
 import { addDays, formatPhone, todayIn } from '@/lib/domain';
 import ContentRow from '@/components/ContentRow';
-import { instagramConfigured } from '@/lib/instagram';
 import AdminShell from '@/components/AdminShell';
 import { XIcon } from '@/components/icons';
 import LogoUploader from '@/components/LogoUploader';
 import AccessLink from '@/components/AccessLink';
 import CancelClient from '@/components/CancelClient';
-import { addAccessAction, disconnectInstagramAction, removeAccessAction, setClientPhoneAction, updateClientAction } from '../../actions';
+import { addAccessAction, removeAccessAction, setClientPhoneAction, updateClientAction } from '../../actions';
 
 const OK: Record<string, string> = {
   criado: 'Cliente criado. Agora libere os e-mails.',
   salvo: 'Alterações salvas.',
   liberado: 'Acesso liberado.',
   removido: 'Acesso removido.',
-  'ig-ok': 'Instagram conectado.',
-  'ig-off': 'Instagram desconectado.',
   telefone: 'Celular salvo.'
 };
 const ERR: Record<string, string> = {
@@ -140,26 +137,6 @@ export default async function ClienteAcessos({
               </div>
               <button className="btn small" type="submit">Salvar</button>
             </form>
-          </section>
-          <section className="panel rise" style={{ ['--d' as string]: '180ms' }}>
-            <h2 className="label">Instagram</h2>
-            {c.igConnected ? (
-              <>
-                <span className="status s-Aprovado">Conectado{c.instagram ? ` · @${c.instagram}` : ''}</span>
-                <p className="hint">Os posts publicados desde 01/01/2026 aparecem sozinhos na aba Feed e se atualizam a cada 10 minutos.</p>
-                <form action={disconnectInstagramAction}>
-                  <input type="hidden" name="id" value={c.id} />
-                  <button className="btn outline small" type="submit">Desconectar</button>
-                </form>
-              </>
-            ) : instagramConfigured() ? (
-              <>
-                <p className="hint">A conta precisa ser Profissional (Comercial ou Criador). Quem tiver o login do cliente autoriza uma única vez.</p>
-                <a className="btn" href={`/api/instagram/connect?c=${c.id}`}>Conectar Instagram</a>
-              </>
-            ) : (
-              <p className="hint">A conexão com o Instagram fica disponível quando o app da Meta estiver configurado. Enquanto isso, o Feed mostra o que foi marcado como postado no app desde 01/01/2026.</p>
-            )}
           </section>
 
           <form action={updateClientAction} className="panel rise" style={{ ['--d' as string]: '240ms' }}>

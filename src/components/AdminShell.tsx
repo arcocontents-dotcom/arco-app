@@ -6,7 +6,7 @@ import { localParts, todayIn } from '@/lib/domain';
 import Icon from './Icon';
 import CommandPalette from './CommandPalette';
 
-type Section = 'calendario' | 'gestao' | 'pendencias' | 'planejamento';
+type Section = 'calendario' | 'gestao' | 'pendencias' | 'planejamento' | 'producao';
 
 /** Conteúdos que pedem ação: atrasados (data passou e não postou) e ajustes/reprovados. */
 export async function alerts() {
@@ -49,6 +49,9 @@ export default async function AdminShell({
           </Link>
           <Link href={current ? `/admin?c=${current}` : '/admin'} aria-current={section === 'calendario' ? 'page' : undefined}>
             <Icon name="calendar" /> <span>Aprovação</span>
+          </Link>
+          <Link href="/admin/producao" aria-current={section === 'producao' ? 'page' : undefined}>
+            <Icon name="users" /> <span>Produção</span>
           </Link>
           <Link href="/admin/gestao" aria-current={section === 'gestao' ? 'page' : undefined}>
             <Icon name="grid" /> <span>Gestão</span>

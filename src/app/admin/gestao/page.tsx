@@ -57,7 +57,7 @@ export default async function Gestao() {
                       </Link>
                     </td>
                     <td>{emails ? `${emails} e-mail${emails > 1 ? 's' : ''}` : <span className="s-Ajustes">Sem acesso</span>}</td>
-                    <td>{c.igConnected ? <span className="s-Aprovado">Conectado</span> : c.instagram ? `@${c.instagram}` : '—'}</td>
+                    <td>{c.instagram ? `@${c.instagram}` : '—'}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         {ag > 0 && <span className="pill s-Aguardando">{ag} aguardando</span>}

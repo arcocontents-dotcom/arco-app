@@ -9,8 +9,9 @@ import { safeNext } from '@/lib/next-path';
 import { sendLoginEmail } from '@/lib/mail';
 import { signLoginToken, startSession, verifyLoginToken } from '@/lib/session';
 import { allow } from '@/lib/ratelimit';
+import { createHash, timingSafeEqual } from 'node:crypto';
 
-export type LoginState = { status: 'idle' | 'sent' | 'error'; message?: string; email?: string };
+export type LoginState = { status: 'idle' | 'sent' | 'error' | 'password'; message?: string; email?: string };
 
 export async function requestLink(_prev: LoginState, form: FormData): Promise<LoginState> {
   const email = normalizeEmail(String(form.get('email') ?? ''));
@@ -29,6 +30,9 @@ export async function requestLink(_prev: LoginState, form: FormData): Promise<Lo
     // Mesma resposta de sucesso: não revela nada, só não envia de novo.
     return { status: 'sent', email };
   }
+
+  // Administrador com senha configurada: entra na hora, sem esperar o link.
+  if (email === env.adminEmail && env.adminPassword) return { status: 'password', email };
 
   try {
     const viewer = await resolveViewer(email);
@@ -57,4 +61,24 @@ export async function confirmLogin(form: FormData) {
   if (!viewer) redirect('/entrar?e=sem-acesso');
   await startSession(email);
   redirect(next);
+}
+
+/** Entrada do administrador com senha (ADMIN_PASSWORD no Cloudflare). */
+export async function passwordLogin(_prev: LoginState, form: FormData): Promise<LoginState> {
+  const email = normalizeEmail(String(form.get('email') ?? ''));
+  const password = String(form.get('password') ?? '');
+  const h = await headers();
+  const origin = h.get('origin');
+  if (origin && origin !== env.appUrl && process.env.NODE_ENV === 'production') return { status: 'error', message: 'Origem inválida.' };
+  const ip = h.get('cf-connecting-ip') ?? h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'local';
+  if (!allow(`pw:ip:${ip}`, 8, 900_000) || !allow('pw:admin', 30, 3600_000)) {
+    return { status: 'password', email, message: 'Muitas tentativas. Espere alguns minutos.' };
+  }
+  const real = env.adminPassword;
+  const hash = (s: string) => createHash('sha256').update(s).digest();
+  const ok = !!real && email === env.adminEmail && timingSafeEqual(hash(password), hash(real));
+  if (!ok) return { status: 'password', email, message: 'Senha incorreta.' };
+  await startSession(email);
+  const next = safeNext(form.get('next'));
+  redirect(next === '/' ? '/admin' : next);
 }

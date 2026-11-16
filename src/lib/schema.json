@@ -62,5 +62,16 @@
     "briefBy": "Gravado/Briefing por",
     "designBy": "Editado/Design por",
     "postedBy": "Postado por"
+  },
+  "routine": {
+    "title": "Tarefa",
+    "person": "Pessoa",
+    "type": "Tipo",
+    "days": "Dias",
+    "date": "Data",
+    "urgency": "Urgência",
+    "client": "Cliente",
+    "doneOn": "Feito em",
+    "active": "Ativo"
   }
 }

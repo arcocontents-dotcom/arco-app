@@ -17,7 +17,6 @@ import {
   getClientFresh,
   setClientPhone,
   getContentFresh,
-  setClientInstagram,
   setPosted,
   getClientPushSubs,
   setClientPushSubs,
@@ -144,13 +143,6 @@ export async function setClientPhoneAction(form: FormData) {
   if (phone === null) redirect(`/admin/clientes/${id}?e=telefone`);
   await setClientPhone(id, phone);
   redirect(`/admin/clientes/${id}?ok=telefone`);
-}
-
-export async function disconnectInstagramAction(form: FormData) {
-  await requireAdmin();
-  const id = String(form.get('id') ?? '');
-  await setClientInstagram(id, null);
-  redirect(`/admin/clientes/${id}?ok=ig-off`);
 }
 
 // ---------- conteúdos ----------

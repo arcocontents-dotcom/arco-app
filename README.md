@@ -13,7 +13,6 @@ Calendário semanal e mensal, prévia do feed e aprovação de Reels, Post, Carr
 | Dados | Notion: bases **Clientes** e **Conteúdos** na página "Arco app" | grátis |
 | Vídeos e imagens | Cloudflare R2 (vídeos são comprimidos no navegador antes do envio) | grátis até 10 GB |
 | E-mail de login | Resend | grátis até 3.000/mês |
-| Instagram | Instagram API com Instagram Login | grátis |
 
 Não renomeie as colunas das bases do Notion: o app lê pelos nomes (ver `src/lib/schema.json`).
 Conteúdo criado direto no Notion só aparece para o cliente quando o **Status** for diferente de "Rascunho" (ex.: "Aguardando").
@@ -37,14 +36,6 @@ Conteúdo criado direto no Notion só aparece para o cliente quando o **Status**
    - `TOKEN_ENC_KEY`: `openssl rand -base64 32`
 6. Faça um novo deploy. Entre em `/entrar` com `arcocontents@gmail.com`.
 
-## Instagram (quando quiser)
-
-1. developers.facebook.com → criar app → produto **Instagram** → "API setup with Instagram login".
-2. Redirect URI: `https://SEU-APP/api/instagram/callback`.
-3. Copie App ID e App Secret para `IG_APP_ID` e `IG_APP_SECRET`.
-4. Enquanto a Meta não aprovar o app (App Review), só contas adicionadas como testers conseguem conectar.
-5. No painel: cliente → Acessos → **Conectar Instagram**. O token é guardado criptografado e renovado sozinho.
-
 ## Desenvolvimento
 
 ```bash
@@ -60,3 +51,14 @@ Sem `RESEND_API_KEY`, o link de login aparece no log do servidor.
 ## Fonte
 
 Gotham é paga. Com a licença web, coloque os `.woff2` em `public/fonts/` e ative `fonts.css` em `src/app/layout.tsx`. Até lá, Montserrat.
+
+## Produção da equipe
+
+- Aba **Produção** no painel: o que cada pessoa (Lemuel, Marcos, Yan, Rafa) precisa fazer na semana.
+- Conteúdos vêm do 🗓️ Calendário mensal pela etiqueta **Demanda atual está com**.
+- Tarefas fixas, lembretes e tarefas avulsas ficam na tabela do app **Produção — rotina e lembretes** (`NOTION_ROUTINE_DB`).
+- **Abrir na TV** gera um link fixo, só leitura, que se atualiza sozinho a cada minuto.
+
+## Entrada do administrador
+
+Com o secret `ADMIN_PASSWORD` no Cloudflare, ao digitar o e-mail do administrador aparece um campo de senha e a entrada é imediata (sem link por e-mail). Os clientes continuam entrando pelo link.

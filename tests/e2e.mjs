@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
 import { SignJWT } from 'jose';
 import { chromium } from 'playwright';
-import { CLIENTS_DB, CONTENTS_DB, PLANNING_DB, blocks, seedBlocks, seedPage, startMock, store } from './mock-notion.mjs';
+import { CLIENTS_DB, CONTENTS_DB, PLANNING_DB, ROUTINE_DB, blocks, seedBlocks, seedPage, startMock, store } from './mock-notion.mjs';
 
 const MOCK_PORT = 4010;
 const APP_PORT = 3100;
@@ -33,6 +33,10 @@ const stat = (n) => ({ status: { name: n } });
 const PLAN1 = seedPage(PLANNING_DB, { 'Título do assunto': title('Ideia de bastidores'), Cliente: sel('Studio Alfa'), Status: stat('Ideia') });
 const PLAN2 = seedPage(PLANNING_DB, { 'Título do assunto': title('Reels do lançamento'), Cliente: sel('Studio Alfa'), Status: stat('Realizando'), 'Data de postagem': { date: { start: '2026-11-20' } }, 'Tipo de demanda': sel('Reels 1'), 'Observação': sel('Falta edição'), 'Demanda atual está com': sel('Yan') });
 seedBlocks(PLAN2, ['Objetivo: Mostrar o lançamento com força.', 'Legenda: Chegou a hora.', 'Referência: https://www.instagram.com/p/exemplo/', 'Imagens: https://midia.test/i1.jpg https://midia.test/i2.jpg']);
+// produção da equipe (cliente fora do app, para não mexer nos testes do planejamento)
+const PRODA = seedPage(PLANNING_DB, { 'Título do assunto': title('Editar vídeo da obra'), Cliente: sel('Outro Cliente'), Status: stat('Realizando'), 'Data de postagem': { date: { start: '2026-11-19' } }, 'Tipo de demanda': sel('Reels 2'), 'Observação': sel('Falta edição'), 'Demanda atual está com': sel('Marcos') });
+seedPage(PLANNING_DB, { 'Título do assunto': title('Capa atrasada'), Cliente: sel('Outro Cliente'), Status: stat('Realizando'), 'Data de postagem': { date: { start: '2026-11-03' } }, 'Tipo de demanda': sel('Post 1'), 'Observação': sel('Falta design'), 'Demanda atual está com': sel('Lemuel') });
+const ROUT = seedPage(ROUTINE_DB, { Tarefa: title('Alimentar o Notion'), Pessoa: sel('Rafa'), Tipo: sel('Tarefa fixa'), Dias: { multi_select: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((name) => ({ name })) }, 'Urgência': sel('Média'), Ativo: { checkbox: true } });
 const PLANX = seedPage(PLANNING_DB, { 'Título do assunto': title('De outro cliente'), Cliente: sel('Outro Cliente'), Status: stat('Ideia') });
 const page = (id) => store.get(id.replace(/-/g, ''));
 const selOf = (id, prop) => page(id).properties[prop].select?.name ?? null;
@@ -51,6 +55,8 @@ const app = spawn('npx', ['next', 'start', '-p', String(APP_PORT)], {
     NOTION_CLIENTS_DB: CLIENTS_DB,
     NOTION_CONTENTS_DB: CONTENTS_DB,
     NOTION_PLANNING_DB: PLANNING_DB,
+    NOTION_ROUTINE_DB: ROUTINE_DB,
+    ADMIN_PASSWORD: 'senha-do-admin-teste',
     NOTION_BASE_URL: `http://127.0.0.1:${MOCK_PORT}`,
     R2_PUBLIC_URL: 'https://midia.test',
     NEXT_TELEMETRY_DISABLED: '1'
@@ -727,6 +733,76 @@ try {
     assert.equal(created.properties.Status.select.name, 'Rascunho');
     assert.equal(created.properties.Tipo.select.name, 'Carrossel');
     assert.equal(created.properties.Data.date.start.slice(0, 10), '2026-11-20');
+  });
+  await step('produção da equipe: por pessoa, rotina, lembrete, passar a vez, semana, cliente e TV', async () => {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Cuiaba', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    await pd.goto(`${APP}/admin/producao`);
+    const colOf = (n) => pd.getByRole('region', { name: n }).or(pd.locator(`section.pcol[aria-label="${n}"]`)).first();
+    await colOf('Marcos').getByText('Editar vídeo da obra').waitFor();
+    await colOf('Marcos').getByText('Falta edição').waitFor();
+    await colOf('Lemuel').getByText('Capa atrasada').waitFor();
+    await colOf('Lemuel').getByText(/^Atrasado/).first().waitFor();
+    await colOf('Rafa').getByText('Alimentar o Notion').first().waitFor();
+    await shot(pd, '20-producao');
+    // tarefa fixa: marcar feito guarda o dia no Notion
+    await colOf('Rafa').getByRole('button', { name: 'Marcar como feito: Alimentar o Notion' }).first().click();
+    await colOf('Rafa').getByRole('button', { name: 'Desmarcar: Alimentar o Notion' }).first().waitFor();
+    await pd.waitForTimeout(700);
+    assert.match(page(ROUT).properties['Feito em'].rich_text.map((t) => t.plain_text).join(''), new RegExp(today));
+    // lembrete da equipe
+    await pd.getByRole('button', { name: 'Lembrete ou tarefa' }).click();
+    const f = pd.getByRole('dialog', { name: 'Novo lembrete ou tarefa' });
+    await f.getByLabel('Tarefa').fill('Aguar as plantas');
+    await f.getByRole('button', { name: 'Equipe' }).click();
+    await f.getByRole('button', { name: 'Sáb' }).click();
+    await f.getByRole('button', { name: 'Dom' }).click();
+    await f.getByRole('radio', { name: 'Baixa' }).click();
+    await f.getByRole('button', { name: 'Salvar' }).click();
+    await pd.locator('.pteam').getByText('Aguar as plantas').waitFor();
+    const plant = [...store.values()].find((x) => x.properties.Tarefa?.title?.[0]?.plain_text === 'Aguar as plantas');
+    assert.equal(plant.properties.Pessoa.select.name, 'Equipe');
+    assert.equal(plant.properties.Tipo.select.name, 'Lembrete');
+    assert.equal(plant.properties.Dias.multi_select.length, 7);
+    // passar o conteúdo para o Yan (etiqueta "Demanda atual está com")
+    await colOf('Marcos').getByLabel('Passar Editar vídeo da obra para').selectOption('Yan');
+    await colOf('Yan').getByText('Editar vídeo da obra').waitFor();
+    await pd.waitForTimeout(500);
+    assert.equal(page(PRODA).properties['Demanda atual está com'].select.name, 'Yan');
+    // visão por semana e filtro por cliente
+    await pd.getByRole('tab', { name: 'Semana' }).click();
+    await pd.locator('.pteam.late').getByText('Capa atrasada').waitFor();
+    await pd.getByRole('region', { name: /^Quinta 19$/ }).or(pd.locator('section.pday[aria-label="Quinta 19"]')).first().getByText('Editar vídeo da obra').waitFor();
+    await shot(pd, '21-producao-semana');
+    await pd.getByLabel('Cliente', { exact: true }).selectOption('Outro Cliente');
+    assert.equal(await pd.getByText('Alimentar o Notion').count(), 0, 'filtro de cliente esconde o resto');
+    // TV: link fixo, sem login, só leitura
+    const { createHmac } = await import('node:crypto');
+    const key = createHmac('sha256', Buffer.from(SECRET)).update('arco-tv-producao-v1').digest('base64url').slice(0, 28);
+    const tvCtx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+    const tv = await tvCtx.newPage();
+    const bad = await tv.goto(`${APP}/tv/producao?k=errada`);
+    assert.equal(bad.status(), 404);
+    await tv.goto(`${APP}/tv/producao?k=${key}`);
+    await tv.locator('section.pcol[aria-label="Yan"]').getByText('Editar vídeo da obra').waitFor();
+    assert.equal(await tv.getByLabel(/^Passar /).count(), 0, 'TV não deixa editar');
+    await tv.waitForTimeout(600);
+    await tv.screenshot({ path: `${SHOTS}/22-producao-tv.png` });
+    await tvCtx.close();
+  });
+
+  await step('administrador entra na hora com senha (sem esperar link)', async () => {
+    const c = await browser.newContext();
+    const p = await c.newPage();
+    await p.goto(`${APP}/entrar`);
+    await p.getByLabel('Seu e-mail').fill('arcocontents@gmail.com');
+    await p.getByRole('button', { name: 'Receber link de acesso' }).click();
+    await p.getByLabel('Senha').fill('errada');
+    await p.getByRole('button', { name: 'Entrar' }).click();
+    await p.getByText('Senha incorreta.').waitFor();
+    await p.getByLabel('Senha').fill('senha-do-admin-teste');
+    await p.getByRole('button', { name: 'Entrar' }).click();
+    await p.waitForURL(/\/admin/);
+    await c.close();
   });
   await ctxAdm.close();
 } finally {

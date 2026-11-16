@@ -65,7 +65,7 @@ function status(p: PageObjectResponse['properties'][string] | undefined): string
   return null;
 }
 
-function multi(p: PageObjectResponse['properties'][string] | undefined): string[] {
+export function multi(p: PageObjectResponse['properties'][string] | undefined): string[] {
   return p && p.type === 'multi_select' ? p.multi_select.map((o) => o.name) : [];
 }
 

@@ -1,0 +1,76 @@
+'use server';
+
+import { requireAdmin } from '@/lib/access';
+import { parseDay } from '@/lib/domain';
+import {
+  ROUTINE_TYPES, TEAM, URGENCY_LABEL, WEEKDAYS, createRoutine, passContent, setRoutineDone, trashRoutine, updateRoutine,
+  type RoutineInput
+} from '@/lib/producao';
+
+type R<T = object> = ({ ok: true } & T) | { ok: false; error: string };
+
+function clean(x: Partial<RoutineInput>): RoutineInput | string {
+  const title = String(x.title ?? '').trim().slice(0, 200);
+  if (!title) return 'Escreva a tarefa.';
+  const person = String(x.person ?? '');
+  if (!(TEAM as readonly string[]).includes(person) && person !== 'Equipe') return 'Escolha quem faz.';
+  const type = String(x.type ?? '');
+  if (!(ROUTINE_TYPES as readonly string[]).includes(type)) return 'Tipo inválido.';
+  const days = (Array.isArray(x.days) ? x.days : []).filter((d) => (WEEKDAYS as readonly string[]).includes(d));
+  if (type !== 'Tarefa' && !days.length) return 'Marque pelo menos um dia da semana.';
+  const date = x.date ? parseDay(String(x.date)) : null;
+  const urgency = (URGENCY_LABEL as readonly string[]).includes(String(x.urgency)) ? (x.urgency as RoutineInput['urgency']) : 'Média';
+  return { title, person: person as RoutineInput['person'], type: type as RoutineInput['type'], days, date, urgency, client: String(x.client ?? '').trim().slice(0, 120) };
+}
+
+export async function toggleRoutineAction(id: string, day: string, done: boolean): Promise<R> {
+  await requireAdmin();
+  const d = parseDay(day);
+  if (!d) return { ok: false, error: 'Dia inválido.' };
+  try {
+    await setRoutineDone(id, d, done);
+    return { ok: true };
+  } catch (e) {
+    console.error('[producao] feito', e);
+    return { ok: false, error: 'Não foi possível salvar no Notion.' };
+  }
+}
+
+export async function saveRoutineAction(id: string | null, x: Partial<RoutineInput>): Promise<R<{ id: string }>> {
+  await requireAdmin();
+  const v = clean(x);
+  if (typeof v === 'string') return { ok: false, error: v };
+  try {
+    if (id) {
+      await updateRoutine(id, v);
+      return { ok: true, id };
+    }
+    return { ok: true, id: await createRoutine(v) };
+  } catch (e) {
+    console.error('[producao] salvar', e);
+    return { ok: false, error: 'Não foi possível salvar no Notion.' };
+  }
+}
+
+export async function trashRoutineAction(id: string): Promise<R> {
+  await requireAdmin();
+  try {
+    await trashRoutine(id);
+    return { ok: true };
+  } catch (e) {
+    console.error('[producao] apagar', e);
+    return { ok: false, error: 'Não foi possível apagar.' };
+  }
+}
+
+export async function passContentAction(id: string, to: string): Promise<R> {
+  await requireAdmin();
+  if (!(TEAM as readonly string[]).includes(to) && to !== 'Finalizado') return { ok: false, error: 'Pessoa inválida.' };
+  try {
+    await passContent(id, to as (typeof TEAM)[number] | 'Finalizado');
+    return { ok: true };
+  } catch (e) {
+    console.error('[producao] passar', e);
+    return { ok: false, error: 'Não foi possível atualizar no Notion.' };
+  }
+}

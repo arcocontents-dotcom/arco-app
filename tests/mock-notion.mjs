@@ -11,6 +11,7 @@ const PL = schema.planning;
 export const CLIENTS_DB = '11111111111111111111111111111111';
 export const CONTENTS_DB = '22222222222222222222222222222222';
 export const PLANNING_DB = '33333333333333333333333333333333';
+export const ROUTINE_DB = '44444444444444444444444444444444';
 
 const TYPES = {
   [CLIENTS_DB]: {
@@ -29,6 +30,9 @@ const TYPES = {
     [PL.note]: 'select', [PL.owner]: 'select', [PL.done]: 'checkbox', [PL.month]: 'select',
     [PL.recMonth]: 'select', [PL.editMonth]: 'select', [PL.designBy]: 'select', [PL.postedBy]: 'select',
     [PL.briefBy]: 'multi_select', [PL.deadline]: 'formula'
+  },
+  [ROUTINE_DB]: {
+    Tarefa: 'title', Pessoa: 'select', Tipo: 'select', Dias: 'multi_select', Data: 'date', 'Urgência': 'select', Cliente: 'rich_text', 'Feito em': 'rich_text', Ativo: 'checkbox'
   }
 };
 
@@ -37,7 +41,7 @@ export const PLAN_OPTIONS = {
   [PL.client]: ['Studio Alfa', 'Beta Ltda', 'Outro Cliente'],
   [PL.kind]: ['Reels 1', 'Reels 2', 'Post 1', 'Storys 1', 'Fotos'],
   [PL.note]: ['Falta copy', 'Falta design', 'Falta edição', 'Aprovação post', 'Finalizado', 'Outros'],
-  [PL.owner]: ['Yan', 'Marcos'],
+  [PL.owner]: ['Lemuel', 'Rafa', 'Yan', 'Marcos', 'Finalizado'],
   [PL.month]: ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'],
   [PL.status]: ['Ideia', 'Realizando', 'Postado'],
   [PL.briefBy]: ['Yan', 'Marcos', 'Cliente'],
@@ -141,7 +145,7 @@ function match(page, f) {
     if (f.select.is_not_empty) return n !== null;
     if (f.select.is_empty) return n === null;
   }
-  if (f.status) return (p.status?.name ?? null) === f.status.equals;
+  if (f.status) return 'does_not_equal' in f.status ? (p.status?.name ?? null) !== f.status.does_not_equal : (p.status?.name ?? null) === f.status.equals;
   if (f.checkbox) return p.checkbox === f.checkbox.equals;
   if (f.date) {
     if (f.date.is_empty) return !p.date?.start;

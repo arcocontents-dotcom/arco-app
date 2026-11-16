@@ -19,7 +19,6 @@ import {
   yearNum
 } from '@/lib/domain';
 import { listContentsInRange, listOpenContents, listPostedContents, type ContentRecord } from '@/lib/notion';
-import { getPublishedMedia } from '@/lib/instagram';
 import { contentThumb, cssUrl, dayStatus } from '@/lib/view';
 import ClientTop from '@/components/ClientTop';
 import ContentRow from '@/components/ContentRow';
@@ -67,7 +66,7 @@ export default async function ClientPage({
       )}
       {view === 'semana' && <Week {...{ client: client.id, day, today, href, waiting, canApprove, base }} />}
       {view === 'mes' && <Month {...{ client: client.id, day, today, href, base }} />}
-      {view === 'feed' && <Feed {...{ client: client.id, href, base, open, igUser: client.instagram, igOn: client.igConnected, logo: client.logoUrl, name: client.name }} />}
+      {view === 'feed' && <Feed {...{ client: client.id, href, base, open, igUser: client.instagram, logo: client.logoUrl, name: client.name }} />}
     </main>
   );
 }
@@ -190,16 +189,15 @@ async function Month({
 }
 
 async function Feed({
-  client, href, base, open, igUser, igOn, logo, name
+  client, href, base, open, igUser, logo, name
 }: {
   client: string; href: (v: View, d?: string) => string; base: string; open: ContentRecord[];
-  igUser: string; igOn: boolean; logo: string | null; name: string;
+  igUser: string; logo: string | null; name: string;
 }) {
   const scheduled = open
     .filter((c) => c.type !== 'Story')
     .sort((a, b) => (b.dateIso ?? '').localeCompare(a.dateIso ?? ''));
-  const ig = igOn ? await getPublishedMedia(client).catch(() => []) : [];
-  const posted = ig.length ? [] : await listPostedContents(client).catch(() => []);
+  const posted = await listPostedContents(client).catch(() => []);
   return (
     <>
       <div className="page-head">
@@ -219,11 +217,6 @@ async function Feed({
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span style={{ fontWeight: 600 }}>{igUser ? `@${igUser}` : name}</span>
-          {igOn ? (
-            <span className="status s-Aprovado">Instagram conectado</span>
-          ) : (
-            <span className="hint">Instagram ainda não conectado</span>
-          )}
         </div>
       </div>
       <div className="grid3">
@@ -235,13 +228,6 @@ async function Feed({
             <span className={`badge s-${c.status}`}>{c.status}</span>
           </Link>
         ))}
-        {ig.map((m, i) => (
-          <a key={m.id} href={m.permalink} target="_blank" rel="noopener noreferrer" className="tile rise" style={{ ['--d' as string]: `${240 + (scheduled.length + i) * 30}ms` }} aria-label="Post publicado no Instagram (abre em nova aba)">
-            <img src={m.thumb} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" />
-            {m.type === 'VIDEO' && <span className="kind"><PlayIcon size={14} /></span>}
-            {m.type === 'CAROUSEL_ALBUM' && <span className="kind"><StackIcon /></span>}
-          </a>
-        ))}
         {posted.filter((c) => c.type !== 'Story').map((c, i) => (
           <Link key={c.id} href={`${base}/${c.id}`} className="tile rise" style={{ ...cssUrl(null), ['--d' as string]: `${240 + (scheduled.length + i) * 30}ms` }} aria-label={`${c.title}, postado`}>
             {contentThumb(c) ? <img src={contentThumb(c)!} alt="" loading="lazy" decoding="async" /> : null}
@@ -250,7 +236,7 @@ async function Feed({
           </Link>
         ))}
       </div>
-      {!scheduled.length && !ig.length && !posted.length && <p className="empty" style={{ padding: '28px 24px' }}>Ainda não há posts por aqui.</p>}
+      {!scheduled.length && !posted.length && <p className="empty" style={{ padding: '28px 24px' }}>Ainda não há posts por aqui.</p>}
     </>
   );
 }

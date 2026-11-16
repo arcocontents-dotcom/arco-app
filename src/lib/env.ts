@@ -39,6 +39,14 @@ export const env = {
   get planningDb() {
     return read('NOTION_PLANNING_DB');
   },
+  /** Senha do administrador (secret no Cloudflare): entra na hora, sem link por e-mail. */
+  get adminPassword() {
+    return read('ADMIN_PASSWORD');
+  },
+  /** Produção — rotina e lembretes (tabela do app). */
+  get routineDb() {
+    return read('NOTION_ROUTINE_DB');
+  },
   get vapidPublicKey() {
     return read('VAPID_PUBLIC_KEY');
   },
@@ -75,12 +83,6 @@ export const env = {
   },
   get r2PublicUrl() {
     return need('R2_PUBLIC_URL').replace(/\/$/, '');
-  },
-  get igAppId() {
-    return read('IG_APP_ID');
-  },
-  get igAppSecret() {
-    return read('IG_APP_SECRET');
   },
   get tokenEncKey() {
     return need('TOKEN_ENC_KEY');

@@ -1,10 +1,26 @@
 'use client';
 
 import { useActionState } from 'react';
-import { requestLink, type LoginState } from './actions';
+import { passwordLogin, requestLink, type LoginState } from './actions';
 
 export default function LoginForm({ notice }: { notice?: string }) {
   const [state, action, pending] = useActionState<LoginState, FormData>(requestLink, { status: 'idle' });
+  const [pw, pwAction, pwPending] = useActionState<LoginState, FormData>(passwordLogin, { status: 'idle' });
+
+  if (state.status === 'password') {
+    return (
+      <form action={pwAction} className="rise" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <input type="hidden" name="email" value={state.email} />
+        <p className="label">Administrador · {state.email}</p>
+        <label htmlFor="password" className="label">Senha</label>
+        <input id="password" name="password" type="password" autoComplete="current-password" required autoFocus className="input" />
+        {pw.message && <p role="alert" className="error" style={{ color: '#e59a8c' }}>{pw.message}</p>}
+        <button type="submit" className="btn light block" disabled={pwPending} style={{ marginTop: 10 }}>
+          {pwPending ? 'Entrando…' : 'Entrar'}
+        </button>
+      </form>
+    );
+  }
 
   if (state.status === 'sent') {
     return (

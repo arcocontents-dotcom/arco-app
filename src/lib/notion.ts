@@ -44,7 +44,6 @@ export interface ClientRecord {
   approvers: string[];
   viewers: string[];
   instagram: string;
-  igConnected: boolean;
   logoUrl: string | null;
   cancelled: boolean;
   /** Nome do cliente na coluna Cliente do Calendário mensal (planejamento). */
@@ -144,7 +143,6 @@ function toClient(p: PageObjectResponse): ClientRecord {
     approvers: parseEmails(text(pr[C.approvers])),
     viewers: parseEmails(text(pr[C.viewers])),
     instagram: text(pr[C.instagram]).replace(/^@/, ''),
-    igConnected: checkbox(pr[C.igConnected]),
     logoUrl: url(pr[C.logo]),
     cancelled: checkbox(pr[C.cancelled]),
     calName: text(pr[C.calName]).trim(),
@@ -248,15 +246,6 @@ export async function getClientFresh(id: string): Promise<ClientRecord | null> {
   }
 }
 
-export async function getClientInstagramSecrets(id: string): Promise<{ userId: string; token: string; expires: string | null } | null> {
-  const p = await notion().pages.retrieve({ page_id: id });
-  if (!isPage(p)) return null;
-  const token = text(p.properties[C.igToken]);
-  const userId = text(p.properties[C.igUserId]);
-  if (!token || !userId) return null;
-  return { userId, token, expires: date(p.properties[C.igTokenExpires]) };
-}
-
 export async function createClient(input: { name: string; instagram: string }): Promise<string> {
   const page = await notion().pages.create({
     parent: { database_id: env.clientsDb },
@@ -315,34 +304,6 @@ export async function getClientPushSubs(id: string): Promise<PushSub[]> {
 
 export async function setClientPushSubs(id: string, subs: PushSub[]) {
   await notion().pages.update({ page_id: id, properties: { [C.push]: rich(JSON.stringify(subs.slice(-10))) } as never });
-}
-
-export async function setClientInstagram(
-  id: string,
-  ig: { userId: string; username: string; encToken: string; expires: string } | null
-) {
-  const properties: Record<string, unknown> = ig
-    ? {
-        [C.igConnected]: { checkbox: true },
-        [C.igUserId]: rich(ig.userId),
-        [C.igToken]: rich(ig.encToken),
-        [C.igTokenExpires]: { date: { start: ig.expires } },
-        ...(ig.username ? { [C.instagram]: rich(ig.username) } : {})
-      }
-    : {
-        [C.igConnected]: { checkbox: false },
-        [C.igUserId]: rich(''),
-        [C.igToken]: rich(''),
-        [C.igTokenExpires]: { date: null }
-      };
-  await notion().pages.update({ page_id: id, properties: properties as never });
-  invalidate('clients');
-  invalidate(`ig:${normId(id)}`);
-}
-
-export async function listClientsWithInstagram(): Promise<{ id: string; expires: string | null }[]> {
-  const pages = await queryAll(env.clientsDb, { filter: { property: C.igConnected, checkbox: { equals: true } } });
-  return pages.map((p) => ({ id: p.id, expires: date(p.properties[C.igTokenExpires]) }));
 }
 
 // ---------------- conteúdos ----------------
