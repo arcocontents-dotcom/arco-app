@@ -777,10 +777,21 @@ try {
     const ff = pd.getByRole('dialog', { name: 'Novo lembrete ou tarefa' });
     await ff.getByLabel('Tarefa', { exact: true }).fill('Vídeo do casamento');
     await ff.getByLabel('Data de entrega').fill(today);
-    await ff.getByLabel('Cliente (opcional)').selectOption('__free');
+    await ff.getByRole('radio', { name: 'Freelancer' }).click();
     await ff.getByLabel('Nome do cliente freelancer').fill('João Silva');
     await ff.getByRole('button', { name: 'Salvar' }).click();
     await colOf('Yan').getByText('Freelancer · João Silva').waitFor();
+    // casamento: escreve o nome do casal
+    await colOf('Rafa').getByRole('button', { name: 'Adicionar task para Rafa' }).click();
+    const fc = pd.getByRole('dialog', { name: 'Novo lembrete ou tarefa' });
+    await fc.getByLabel('Tarefa', { exact: true }).fill('Editar teaser');
+    await fc.getByLabel('Data de entrega').fill(today);
+    await fc.getByRole('radio', { name: 'Casamento' }).click();
+    await fc.getByRole('button', { name: 'Salvar' }).click();
+    await fc.getByText('Escreva o nome do casal.').waitFor();
+    await fc.getByLabel('Nome do casal').fill('Ana e Pedro');
+    await fc.getByRole('button', { name: 'Salvar' }).click();
+    await colOf('Rafa').getByText('Casamento · Ana e Pedro').waitFor();
     // lembrete da equipe: data de lançamento fixa (hoje) e data de entrega obrigatória
     await pd.getByRole('button', { name: 'Lembrete ou tarefa' }).click();
     const f = pd.getByRole('dialog', { name: 'Novo lembrete ou tarefa' });

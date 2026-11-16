@@ -127,7 +127,7 @@ export default function ProducaoBoard({
   );
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const end = days[6];
-  const clientNames = useMemo(() => [...new Set(tasks.map((t) => t.client).filter(Boolean) as string[])].sort(), [tasks]);
+  const clientNames = useMemo(() => [...new Set(tasks.map((t) => t.client).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' })), [tasks]);
   const pending = (list: Task[]) => list.filter((t) => !t.done).length;
 
   function toggle(t: Task) {
@@ -432,10 +432,14 @@ function RoutineForm({
   const [type, setType] = useState<RoutineType>(row?.type ?? 'Tarefa');
   const [date, setDate] = useState(row?.date ?? '');
   const [urgency, setUrgency] = useState<RoutineRow['urgency']>(row?.urgency ?? 'Média');
-  const FREE = 'Freelancer · ';
-  const startFree = (row?.client ?? '').startsWith(FREE);
-  const [client, setClient] = useState(startFree ? '__free' : row?.client ?? '');
-  const [freeName, setFreeName] = useState(startFree ? row!.client.slice(FREE.length) : '');
+  // Cliente: da agência (lista), Freelancer ou Casamento (escreve o nome), ou nenhum
+  type Kind = 'agencia' | 'freelancer' | 'casamento' | 'nenhum';
+  const PREFIX: Record<'freelancer' | 'casamento', string> = { freelancer: 'Freelancer · ', casamento: 'Casamento · ' };
+  const rc = row?.client ?? '';
+  const startKind: Kind = rc.startsWith(PREFIX.freelancer) ? 'freelancer' : rc.startsWith(PREFIX.casamento) ? 'casamento' : rc ? 'agencia' : 'nenhum';
+  const [ckind, setCkind] = useState<Kind>(startKind);
+  const [client, setClient] = useState(startKind === 'agencia' ? rc : '');
+  const [freeName, setFreeName] = useState(startKind === 'freelancer' || startKind === 'casamento' ? rc.slice(PREFIX[startKind].length) : '');
   const [err, setErr] = useState<string | null>(null);
   const [confirmDel, setConfirmDel] = useState(false);
   const [pending, start] = useTransition();
@@ -448,11 +452,16 @@ function RoutineForm({
         setErr('Escolha a data de entrega.');
         return;
       }
-      if (client === '__free' && !freeName.trim()) {
-        setErr('Escreva o nome do cliente freelancer.');
+      if ((ckind === 'freelancer' || ckind === 'casamento') && !freeName.trim()) {
+        setErr(ckind === 'casamento' ? 'Escreva o nome do casal.' : 'Escreva o nome do cliente freelancer.');
         return;
       }
-      const clientName = client === '__free' ? `${FREE}${freeName.trim()}` : client;
+      if (ckind === 'agencia' && !client) {
+        setErr('Escolha o cliente.');
+        return;
+      }
+      const clientName =
+        ckind === 'freelancer' || ckind === 'casamento' ? `${PREFIX[ckind]}${freeName.trim()}` : ckind === 'agencia' ? client : '';
       const r = await saveRoutineAction(row?.id ?? null, { title, person: who, type, days: fixed ? row!.days : [], date: fixed ? null : date, urgency, client: clientName });
       if (r.ok) onSaved();
       else setErr(r.error);
@@ -521,18 +530,37 @@ function RoutineForm({
           </div>
         </div>
 
-        <label className="rf-row">
+        <div className="rf-row">
           <span className="rf-l">Cliente</span>
-          <select className="ninput" value={client} onChange={(e) => setClient(e.target.value)} aria-label="Cliente (opcional)">
-            <option value="">Nenhum</option>
-            {clients.map((c) => <option key={c} value={c}>{c}</option>)}
-            <option value="__free">Cliente freelancer…</option>
-          </select>
-        </label>
-        {client === '__free' && (
+          <div className="rf-urg rf-ckind" role="radiogroup" aria-label="Tipo de cliente">
+            {([['agencia', 'Cliente'], ['freelancer', 'Freelancer'], ['casamento', 'Casamento'], ['nenhum', 'Nenhum']] as [Kind, string][]).map(([v, l]) => (
+              <button key={v} type="button" role="radio" aria-checked={ckind === v} onClick={() => { setCkind(v); setErr(null); }}>{l}</button>
+            ))}
+          </div>
+        </div>
+        {ckind === 'agencia' && (
           <label className="rf-row">
-            <span className="rf-l">Freelancer</span>
-            <input className="ninput" style={{ flex: 1 }} placeholder="Nome do cliente freelancer" aria-label="Nome do cliente freelancer" value={freeName} autoFocus maxLength={80} onChange={(e) => setFreeName(e.target.value)} />
+            <span className="rf-l" />
+            <select className="ninput" style={{ flex: 1 }} value={client} onChange={(e) => setClient(e.target.value)} aria-label="Cliente da agência">
+              <option value="">Escolha o cliente…</option>
+              {clients.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+        )}
+        {(ckind === 'freelancer' || ckind === 'casamento') && (
+          <label className="rf-row">
+            <span className="rf-l" />
+            <input
+              key={ckind}
+              className="ninput"
+              style={{ flex: 1 }}
+              placeholder={ckind === 'casamento' ? 'Nome do casal (ex.: Ana e Pedro)' : 'Nome do cliente freelancer'}
+              aria-label={ckind === 'casamento' ? 'Nome do casal' : 'Nome do cliente freelancer'}
+              value={freeName}
+              autoFocus
+              maxLength={80}
+              onChange={(e) => setFreeName(e.target.value)}
+            />
           </label>
         )}
 

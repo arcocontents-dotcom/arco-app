@@ -220,7 +220,12 @@ export const titleProp = (s: string) => ({ title: [{ type: 'text' as const, text
 
 async function fetchClients(): Promise<ClientRecord[]> {
   const pages = await queryAll(env.clientsDb, { sorts: [{ property: C.name, direction: 'ascending' }] });
-  return pages.filter((p) => !p.archived).map(toClient);
+  // ordem alfabética pelo nome como aparece (ignora acento, maiúscula e pontuação)
+  const key = (n: string) => n.trim();
+  return pages
+    .filter((p) => !p.archived)
+    .map(toClient)
+    .sort((a, b) => key(a.name).localeCompare(key(b.name), 'pt-BR', { sensitivity: 'base', ignorePunctuation: true }));
 }
 
 export function listClients(): Promise<ClientRecord[]> {
