@@ -742,7 +742,7 @@ try {
     await colOf('Marcos').getByText('Falta edição').waitFor();
     await colOf('Lemuel').getByText('Capa atrasada').waitFor();
     await colOf('Lemuel').getByText(/^Atrasado/).first().waitFor();
-    await colOf('Rafa').getByText('Alimentar o Notion').first().waitFor();
+    await pd.locator('.pfixed[aria-label="Fixas de Rafa"]').getByText('Alimentar o Notion').waitFor();
     await shot(pd, '20-producao');
     // tarefa fixa: marcar feito guarda o dia no Notion
     await colOf('Rafa').getByRole('button', { name: 'Marcar como feito: Alimentar o Notion' }).first().click();

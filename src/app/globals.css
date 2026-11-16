@@ -1019,3 +1019,20 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .prod.tv .pteam, .prod.tv .pteam.late { background: #1c1c1c; border-color: #333; }
 .prod.tv .pgroup.late { color: #fff; }
 .prod.tv .pprog span { background: #f2f0ec; }
+/* tarefas fixas: fixadas no topo da coluna, em linha */
+.pfixed { margin: 0 8px 10px; padding: 8px; background: #fff; border: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.pfixed-l { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.pfixed-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.pfix { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 5px 9px 5px 6px; border: 1px solid var(--line); border-radius: 999px; background: #f4f4f3; font: inherit; font-size: 12px; color: var(--ink); cursor: pointer; transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease; }
+.pfix:hover:not(:disabled) { border-color: var(--ink); }
+.pfix:disabled { cursor: default; }
+.pfix-box { width: 15px; height: 15px; flex: none; border-radius: 50%; border: 1.4px solid #9b9a97; display: flex; align-items: center; justify-content: center; }
+.pfix-t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pfix.on { opacity: 0.55; }
+.pfix.on .pfix-t { text-decoration: line-through; }
+.pfix.on .pfix-box { background: var(--ink); border-color: var(--ink); }
+.pfix.on .pfix-box .ic { color: #fff !important; }
+.prod.tv .pfixed { background: #1c1c1c; border-color: #333; }
+.prod.tv .pfix { background: #262626; border-color: #3a3a3a; color: #f2f0ec; font-size: 15px; }
+.prod.tv .pfix.on .pfix-box { background: #f2f0ec; border-color: #f2f0ec; }
+.prod.tv .pfix.on .pfix-box .ic { color: #121212 !important; }

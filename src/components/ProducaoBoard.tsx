@@ -214,13 +214,16 @@ export default function ProducaoBoard({
     // tarefas fixas e lembretes repetem: na visão por pessoa, só o de hoje (a semana mostra todos)
     const repeats = (t: Task) => t.source === 'rotina' && t.type !== 'Tarefa';
     const mine = visible.filter((t) => t.person === p && (!repeats(t) || t.day === today));
-    const late = mine.filter((t) => t.urgency === 'atrasado' && !t.done && (!t.day || t.day < today));
+    // tarefas fixas de hoje ficam fixadas no topo, em linha, fora da lista por data
+    const fixed = mine.filter((t) => t.source === 'rotina' && t.type === 'Tarefa fixa' && t.day === today);
+    const rest = mine.filter((t) => !fixed.includes(t));
+    const late = rest.filter((t) => t.urgency === 'atrasado' && !t.done && (!t.day || t.day < today));
     // entregues de antes desta semana (marcados agora) descem para "Entregues", no fim
-    const older = mine.filter((t) => t.done && t.day && t.day < start);
+    const older = rest.filter((t) => t.done && t.day && t.day < start);
     const groups = days
-      .map((d) => ({ d, list: mine.filter((t) => t.day === d && !late.includes(t)) }))
+      .map((d) => ({ d, list: rest.filter((t) => t.day === d && !late.includes(t)) }))
       .filter((g) => g.list.length && (g.d >= today || g.list.some((t) => t.done)));
-    const undated = mine.filter((t) => !t.day && !late.includes(t));
+    const undated = rest.filter((t) => !t.day && !late.includes(t));
     return (
       <section key={p} className={`pcol w-${p.toLowerCase()}`} aria-label={p}>
         <header>
@@ -232,6 +235,27 @@ export default function ProducaoBoard({
           <div className="pprog" aria-label={`${mine.length - pending(mine)} de ${mine.length} entregues`}>
             <span style={{ width: `${Math.round(((mine.length - pending(mine)) / mine.length) * 100)}%` }} />
             <small>{mine.length - pending(mine)} de {mine.length} entregues</small>
+          </div>
+        )}
+        {fixed.length > 0 && (
+          <div className="pfixed" aria-label={`Fixas de ${p}`}>
+            <span className="pfixed-l">Fixas do dia</span>
+            <div className="pfixed-row">
+              {fixed.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  className={`pfix${t.done ? ' on' : ''}`}
+                  onClick={() => toggle(t)}
+                  disabled={tv}
+                  aria-pressed={t.done}
+                  aria-label={`${t.done ? 'Desmarcar' : 'Marcar como feito'}: ${t.title}`}
+                >
+                  <span className="pfix-box">{t.done && <Icon name="check" size={11} />}</span>
+                  <span className="pfix-t">{t.title}</span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
         <div className="pcol-list">
@@ -259,7 +283,7 @@ export default function ProducaoBoard({
               {older.map((t) => card(t, false, true))}
             </>
           )}
-          {!mine.length && <p className="pempty">Nada por aqui 🎉</p>}
+          {!rest.length && <p className="pempty">{fixed.length ? 'Sem outras tarefas' : 'Nada por aqui 🎉'}</p>}
         </div>
       </section>
     );
