@@ -1,44 +1,16 @@
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/access';
 import { env } from '@/lib/env';
-import { listClients } from '@/lib/notion';
-import { MONTHS, addDays, addMonths, dayNum, monthGrid, parseDay, todayIn, yearNum } from '@/lib/domain';
-import { TEAM, productionWeek, type ProdTask } from '@/lib/producao';
+import { listAllContentsInRange, listClients } from '@/lib/notion';
+import { MONTHS, addDays, addMonths, monthGrid, parseDay, todayIn, yearNum } from '@/lib/domain';
+import { METRICS, TEAM, productionWeek, teamDashboard, type Metric } from '@/lib/producao';
 import AdminShell from '@/components/AdminShell';
 import Icon from '@/components/Icon';
 import ProdTabs from '@/components/ProdTabs';
 
 export const dynamic = 'force-dynamic';
 
-// Relatório da Produção: tudo vem só do que está na aba Produção (tarefas lançadas e marcadas).
-
-const CATS = [
-  { k: 'reels', label: 'Reels', cls: 'f-reels' },
-  { k: 'post', label: 'Post', cls: 'f-post' },
-  { k: 'story', label: 'Story', cls: 'f-story' },
-  { k: 'foto', label: 'Foto', cls: 'f-foto' },
-  { k: 'postar', label: 'Postar', cls: 'f-postar' },
-  { k: 'roteiro', label: 'Roteiro', cls: 'f-roteiro' },
-  { k: 'captacao', label: 'Captação', cls: 'f-capt' },
-  { k: 'outro', label: 'Outros', cls: 'f-outro' }
-] as const;
-type Cat = (typeof CATS)[number]['k'];
-
-function catOf(t: ProdTask): Cat {
-  if (t.source === 'captacao') return 'captacao';
-  const f = (t.source === 'rotina' ? t.fmt ?? '' : t.kind ?? '').toLowerCase();
-  if (f.includes('reels') || f.startsWith('víd')) return 'reels';
-  if (f.startsWith('postar')) return 'postar';
-  if (f.includes('post')) return 'post';
-  if (f.includes('stor')) return 'story';
-  if (f.includes('foto')) return 'foto';
-  if (f.includes('roteiro')) return 'roteiro';
-  return 'outro';
-}
-
-type Stat = { total: number; done: number; late: number; cats: Record<Cat, number> };
-const empty = (): Stat => ({ total: 0, done: 0, late: 0, cats: Object.fromEntries(CATS.map((c) => [c.k, 0])) as Record<Cat, number> });
-const pct = (s: Stat) => (s.total ? Math.round((s.done / s.total) * 100) : 0);
+// Dashboard da produção da equipe: o que cada um captou, editou e postou no mês.
 
 export default async function RelatorioProducao({ searchParams }: { searchParams: Promise<{ m?: string }> }) {
   await requireAdmin();
@@ -48,48 +20,49 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
   const last = addDays(addMonths(first, 1), -1);
   const grid = monthGrid(first);
   const clients = (await listClients()).filter((c) => !c.cancelled);
-  const data = await productionWeek(grid[0].day, today, clients.map((c) => ({ id: c.id, name: c.name, calName: c.calName })), grid[grid.length - 1].day);
+  const [dash, contents, week] = await Promise.all([
+    teamDashboard(first, today),
+    listAllContentsInRange(first, last).catch(() => []),
+    productionWeek(grid[0].day, today, clients.map((c) => ({ id: c.id, name: c.name, calName: c.calName })), grid[grid.length - 1].day).catch(() => null)
+  ]);
 
-  // Só o que é do mês; tarefas fixas ficam à parte (são diárias)
-  const inMonth = data.tasks.filter((t) => t.day && t.day >= first && t.day <= last && t.person !== 'Equipe');
-  const tasks = inMonth.filter((t) => t.type !== 'Tarefa fixa');
-  const fixed = inMonth.filter((t) => t.type === 'Tarefa fixa' && t.day! <= today);
-
-  const add = (s: Stat, t: ProdTask) => {
-    s.total++;
-    if (t.done) {
-      s.done++;
-      s.cats[catOf(t)]++;
-    } else if (t.day! < today) s.late++;
+  // Aprovação: conteúdos do mês que o cliente aprovou ou que já foram postados
+  const made = contents.filter((c) => c.status === 'Aprovado' || c.status === 'Postado');
+  const count = (types: string[]) => {
+    const xs = made.filter((c) => types.includes(c.type));
+    return { n: xs.length, posted: xs.filter((c) => c.status === 'Postado').length };
   };
-  const total = empty();
-  const people = TEAM.map((name) => ({ name, s: empty(), fixedDone: 0, fixedTotal: 0 }));
-  for (const t of tasks) {
-    add(total, t);
-    const p = people.find((x) => x.name === t.person);
-    if (p) add(p.s, t);
+  const posts = count(['Post', 'Carrossel']);
+  const videos = count(['Reels']);
+  const stories = count(['Story']);
+  const d = typeof dash === 'string' ? null : dash;
+
+  // Efetividade: tarefas lançadas na aba Produção com entrega no mês
+  const eff = new Map<string, { done: number; total: number }>();
+  for (const t of week?.tasks ?? []) {
+    if (!t.day || t.day < first || t.day > last || t.type === 'Tarefa fixa' || t.person === 'Equipe') continue;
+    const e = eff.get(t.person) ?? { done: 0, total: 0 };
+    e.total++;
+    if (t.done) e.done++;
+    eff.set(t.person, e);
   }
-  for (const t of fixed) {
-    const p = people.find((x) => x.name === t.person);
-    if (!p) continue;
-    p.fixedTotal++;
-    if (t.done) p.fixedDone++;
-  }
-  const weeks: { start: string; s: Stat }[] = [];
-  for (let d = grid[0].day; d <= last; d = addDays(d, 7)) {
-    const s = empty();
-    for (const t of tasks) if (t.day! >= d && t.day! <= addDays(d, 6)) add(s, t);
-    weeks.push({ start: d, s });
-  }
-  const best = [...people].filter((p) => p.s.done).sort((a, b) => b.s.done - a.s.done)[0];
-  const q = (d: string) => `/admin/producao/relatorio?m=${d.slice(0, 7)}`;
+
+  const max = (k: Metric) => Math.max(1, ...(d?.people ?? []).map((p) => p.m[k]));
+  const sum = (m: Record<Metric, number>) => METRICS.reduce((a, x) => a + m[x.k], 0);
+  const q = (x: string) => `/admin/producao/relatorio?m=${x.slice(0, 7)}`;
+  const kpis = [
+    { label: 'Posts feitos', n: posts.n, sub: `${posts.posted} postados · aprovação`, cls: 'f-post' },
+    { label: 'Vídeos feitos', n: videos.n, sub: `${videos.posted} postados · aprovação`, cls: 'f-reels' },
+    { label: 'Stories feitos', n: stories.n, sub: `${stories.posted} postados · aprovação`, cls: 'f-story' },
+    { label: 'Captações feitas', n: d?.team.captacoes ?? 0, sub: 'Notion · 📸 Captações', cls: 'f-capt' }
+  ];
 
   return (
     <AdminShell section="producao">
       <div className="toolbar">
         <div className="page-title">
-          <p className="label rise ic-inline"><Icon name="chart" size={14} />Tudo o que foi lançado e entregue na Produção</p>
-          <h1 className="display rise" style={{ fontSize: 'clamp(40px, 6vw, 80px)', ['--d' as string]: '60ms' }}>Relatório</h1>
+          <p className="label rise ic-inline"><Icon name="chart" size={14} />Produção geral da equipe</p>
+          <h1 className="display rise" style={{ fontSize: 'clamp(40px, 6vw, 80px)', ['--d' as string]: '60ms' }}>Dashboard</h1>
         </div>
         <div className="actions rise" style={{ ['--d' as string]: '100ms', alignItems: 'center' }}>
           <Link className="icon-btn" href={q(addMonths(first, -1))} aria-label="Mês anterior"><Icon name="left" /></Link>
@@ -100,68 +73,74 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
       <ProdTabs active="relatorio" />
 
       <div className="rp">
-        <section className="rp-kpis four rise" aria-label="Totais do mês">
-          <div className="rp-kpi main"><strong>{pct(total)}%</strong><span>Efetividade da equipe</span></div>
-          <div className="rp-kpi"><strong>{total.done}</strong><span>Entregues</span></div>
-          <div className="rp-kpi"><strong>{total.total}</strong><span>Lançadas</span></div>
-          <div className="rp-kpi late"><strong>{total.late}</strong><span>Atrasadas</span></div>
+        <section className="db-kpis rise" aria-label="Totais do mês">
+          {kpis.map((k) => (
+            <div key={k.label} className={`db-kpi ${k.cls}`}>
+              <span className="db-kpi-l"><i />{k.label}</span>
+              <strong>{k.n}</strong>
+              <small>{k.sub}</small>
+            </div>
+          ))}
         </section>
 
-        <section className="rp-card rise" aria-label="Por pessoa" style={{ ['--d' as string]: '80ms' }}>
-          <h2 className="label">Por pessoa{best ? ` · quem mais entregou: ${best.name}` : ''}</h2>
-          <div className="rp-people">
-            {people.map((p) => (
-              <div key={p.name} className="rp-person">
-                <span className="pav">{p.name.charAt(0)}</span>
-                <div className="rp-person-main">
-                  <div className="rp-person-top">
-                    <strong>{p.name}</strong>
-                    <span className="rp-nums">
-                      {CATS.filter((c) => p.s.cats[c.k]).map((c) => (
-                        <span key={c.k} className={`rp-num ${c.cls}`}><i />{p.s.cats[c.k]} <small>{c.label}</small></span>
-                      ))}
-                    </span>
-                    <span className="rp-rec">
-                      {p.s.done} de {p.s.total} entregues{p.s.late ? ` · ${p.s.late} atrasada${p.s.late > 1 ? 's' : ''}` : ''}
-                      {p.fixedTotal ? ` · fixas ${p.fixedDone}/${p.fixedTotal}` : ''}
-                    </span>
-                    <b>{pct(p.s)}%</b>
+        {!d && <p className="hint">Não deu para ler o Calendário mensal agora. Tente atualizar a página.</p>}
+
+        <section className="db-people" aria-label="Por pessoa">
+          {TEAM.map((name, i) => {
+            const p = d?.people.find((x) => x.name === name);
+            const m = p?.m;
+            const e = eff.get(name);
+            const rows = METRICS.filter((x) => (m?.[x.k] ?? 0) > 0);
+            const zeros = METRICS.filter((x) => !(m?.[x.k] ?? 0));
+            return (
+              <article key={name} className="db-person rise" style={{ ['--d' as string]: `${80 + i * 40}ms` }}>
+                <header>
+                  <span className="pav">{name.charAt(0)}</span>
+                  <div>
+                    <strong>{name}</strong>
+                    <small>{m ? sum(m) : 0} entregas no mês</small>
                   </div>
-                  <div className="rp-bar" aria-hidden="true"><span style={{ width: `${pct(p.s)}%` }} /></div>
-                </div>
+                  {e && e.total > 0 && (
+                    <span className="db-eff" title="Tarefas da aba Produção entregues">
+                      <b>{Math.round((e.done / e.total) * 100)}%</b>
+                      <small>{e.done}/{e.total} tasks</small>
+                    </span>
+                  )}
+                </header>
+                <ul>
+                  {rows.map((x) => (
+                    <li key={x.k} className={x.cls}>
+                      <span className="db-l"><i />{x.label}</span>
+                      <span className="db-bar" aria-hidden="true"><span style={{ width: `${Math.round((m![x.k] / max(x.k)) * 100)}%` }} /></span>
+                      <b>{m![x.k]}</b>
+                    </li>
+                  ))}
+                  {!rows.length && <li className="db-empty">Nada registrado neste mês.</li>}
+                </ul>
+                {rows.length > 0 && zeros.length > 0 && (
+                  <p className="db-zeros">Sem registro: {zeros.map((x) => x.label.toLowerCase()).join(', ')}</p>
+                )}
+              </article>
+            );
+          })}
+        </section>
+
+        <section className="rp-card rise" aria-label="Equipe no mês" style={{ ['--d' as string]: '260ms' }}>
+          <h2 className="label">Equipe no mês</h2>
+          <div className="db-team">
+            {METRICS.map((x) => (
+              <div key={x.k} className={`db-team-i ${x.cls}`}>
+                <strong>{d?.team[x.k] ?? 0}</strong>
+                <span><i />{x.label}</span>
               </div>
             ))}
           </div>
         </section>
 
-        <div className="rp-grid">
-          <section className="rp-card rise" aria-label="Por semana" style={{ ['--d' as string]: '120ms' }}>
-            <h2 className="label">Por semana · entregues de lançadas</h2>
-            <div className="rp-weeks">
-              {weeks.map((w) => (
-                <div key={w.start} className="rp-week">
-                  <span className="rp-week-l">{dayNum(w.start)}–{dayNum(addDays(w.start, 6))}</span>
-                  <div className="rp-bar" aria-hidden="true"><span style={{ width: `${pct(w.s)}%` }} /></div>
-                  <b>{w.s.done}/{w.s.total}</b>
-                </div>
-              ))}
-            </div>
-          </section>
-          <section className="rp-card rise" aria-label="Por formato" style={{ ['--d' as string]: '160ms' }}>
-            <h2 className="label">Entregues por formato</h2>
-            <ul className="rp-clients">
-              {CATS.map((c) => (
-                <li key={c.k}>
-                  <span className={`rp-num ${c.cls}`}><i />{c.label}</span>
-                  <b>{total.cats[c.k]}</b>
-                </li>
-              ))}
-            </ul>
-          </section>
-        </div>
-
         <p className="hint rp-note">
-          Conta as tarefas da aba <b>Produção</b> com entrega no mês: conteúdos com a pessoa, tasks lançadas e captações. <b>Entregue</b> = marcada como feita. Tarefas fixas aparecem à parte (são diárias).
+          Posts, vídeos e stories feitos vêm da <b>Aprovação</b> (aprovados ou postados no mês). Captações vêm do <b>📸 Captações</b> no Notion.
+          Por pessoa: <b>captou</b> = “Gravado/Briefing por”, <b>editou</b> = “Editado/Design por”, <b>postou</b> = “Postado por” no Calendário mensal,
+          somados às tasks da aba Produção marcadas como feitas (Editar…, Postar, Fazer roteiro).
         </p>
       </div>
     </AdminShell>

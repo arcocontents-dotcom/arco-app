@@ -412,54 +412,49 @@ export async function passContent(id: string, to: Person | 'Finalizado', editedB
   invalidate('prod:');
 }
 
-// ---------- relatório da produção ----------
+// ---------- dashboard da produção (equipe) ----------
 
-export type Fmt = 'reels' | 'post' | 'story' | 'foto';
+export const METRICS = [
+  { k: 'captacoes', label: 'Captações', cls: 'f-capt' },
+  { k: 'captou', label: 'Vídeos captados', cls: 'f-capt' },
+  { k: 'reels', label: 'Vídeos editados', cls: 'f-reels' },
+  { k: 'post', label: 'Posts editados', cls: 'f-post' },
+  { k: 'story', label: 'Stories editados', cls: 'f-story' },
+  { k: 'foto', label: 'Fotos editadas', cls: 'f-foto' },
+  { k: 'postou', label: 'Postagens feitas', cls: 'f-postar' },
+  { k: 'roteiro', label: 'Roteiros', cls: 'f-roteiro' }
+] as const;
+export type Metric = (typeof METRICS)[number]['k'];
+export type MetricCounts = Record<Metric, number>;
+const zeroM = (): MetricCounts => Object.fromEntries(METRICS.map((m) => [m.k, 0])) as MetricCounts;
+
+type Fmt = 'reels' | 'post' | 'story' | 'foto';
 const fmtOf = (k: string | null): Fmt | null => {
   const s = (k ?? '').toLowerCase();
-  return s.startsWith('reels') ? 'reels' : s.startsWith('post') ? 'post' : s.startsWith('stor') ? 'story' : s.startsWith('foto') ? 'foto' : null;
+  return s.startsWith('reels') || s.startsWith('víd') ? 'reels' : s.startsWith('post') || s.startsWith('carross') ? 'post' : s.startsWith('stor') ? 'story' : s.startsWith('foto') ? 'foto' : null;
 };
-export type Counts = Record<Fmt, number> & { total: number };
-const zero = (): Counts => ({ reels: 0, post: 0, story: 0, foto: 0, total: 0 });
 
-export interface ProdReport {
+export interface TeamDashboard {
   month: string;
-  people: { name: Person; counts: Counts; shoots: number; recorded: number }[];
-  total: Counts;
-  /** Captações realizadas no mês. */
-  shoots: number;
-  /** Conteúdos gravados no mês (Gravado/Briefing por + Gravado quando). */
-  recorded: number;
-  /** Entregues no mês sem "Editado/Design por" marcado. */
-  noEditor: number;
-  weeks: { start: string; counts: Counts }[];
-  clients: { name: string; counts: Counts }[];
+  people: { name: Person; m: MetricCounts }[];
+  team: MetricCounts;
 }
 
 /**
- * Quem editou o quê no mês. Conta um conteúdo quando tem "Editado/Design por" de alguém da equipe e
- * "Editado quando" = o mês; se "Editado quando" estiver vazio, vale a data de postagem no mês com o card
- * Finalizado ou Postado.
+ * O que cada pessoa fez no mês, juntando:
+ * - 📸 Captações (Notion): captações feitas (não canceladas, até hoje) por quem foi;
+ * - Calendário mensal: "Gravado/Briefing por" + "Gravado quando" (vídeos captados), "Editado/Design por" + "Editado quando"
+ *   (editados por formato) e "Postado por" com data no mês e card Finalizado/Postado (postagens);
+ * - aba Produção: tasks com formato marcadas como feitas no mês (Editar…, Postar, Fazer roteiro).
  */
-export async function productionReport(first: string): Promise<ProdReport | string> {
+export async function teamDashboard(first: string, today: string): Promise<TeamDashboard | string> {
   if (!env.planningDb) return 'nao-configurado';
   const last = addDays(addMonths(first, 1), -1);
   const monthName = MONTHS[Number(first.slice(5, 7)) - 1];
-  return memo(`prod:rep:${first}`, 30_000, async () => {
-    let rep_recorded = 0;
-    let shootsDone = 0;
-    const recBy = new Map<Person, number>();
-    const shootBy = new Map<Person, number>();
-    const [byMonth, byDate, recordedPages, shoots] = await Promise.all([
-      queryAll(env.planningDb!, {
-        filter: {
-          and: [
-            { property: P.editMonth, select: { equals: monthName } },
-            { property: P.date, date: { on_or_after: addDays(first, -75) } },
-            { property: P.date, date: { on_or_before: addDays(last, 75) } }
-          ]
-        }
-      }),
+  return memo(`prod:dash:${first}:${today}`, 30_000, async () => {
+    const near = [{ property: P.date, date: { on_or_after: addDays(first, -75) } }, { property: P.date, date: { on_or_before: addDays(last, 75) } }];
+    const [edited, editedNoMonth, recorded, posted, shoots, routines] = await Promise.all([
+      queryAll(env.planningDb!, { filter: { and: [{ property: P.editMonth, select: { equals: monthName } }, ...near] } }),
       queryAll(env.planningDb!, {
         filter: {
           and: [
@@ -470,97 +465,70 @@ export async function productionReport(first: string): Promise<ProdReport | stri
           ]
         }
       }),
-      // quem gravou: "Gravado/Briefing por" com "Gravado quando" = o mês
+      queryAll(env.planningDb!, { filter: { and: [{ property: P.recMonth, select: { equals: monthName } }, ...near] } }),
       queryAll(env.planningDb!, {
         filter: {
           and: [
-            { property: P.recMonth, select: { equals: monthName } },
-            { property: P.date, date: { on_or_after: addDays(first, -75) } },
-            { property: P.date, date: { on_or_before: addDays(last, 75) } }
+            { property: P.postedBy, select: { is_not_empty: true } },
+            { property: P.date, date: { on_or_after: first } },
+            { property: P.date, date: { on_or_before: last } }
           ]
         }
       }),
-      listShoots(first, last).catch(() => [] as Shoot[])
+      listShoots(first, last).catch(() => [] as Shoot[]),
+      listRoutines().catch(() => [] as Routine[])
     ]);
-    // gravações
-    for (const p of recordedPages) {
-      if (!isPage(p) || p.archived) continue;
-      const by = multi(p.properties[P.briefBy]).map(editorToPerson).filter((x): x is Person => !!x);
-      if (!by.length) continue;
-      rep_recorded += 1;
-      for (const who of new Set(by)) recBy.set(who, (recBy.get(who) ?? 0) + 1);
-    }
+    const people = TEAM.map((name) => ({ name, m: zeroM() }));
+    const team = zeroM();
+    const bump = (who: Person, k: Metric) => {
+      people.find((x) => x.name === who)!.m[k]++;
+      team[k]++;
+    };
+    const live = (p: unknown): p is PageObjectResponse => isPage(p) && !p.archived;
+
     for (const sh of shoots) {
-      if (sh.status !== 'Realizada') continue;
-      shootsDone += 1;
-      for (const who of sh.crew) shootBy.set(who, (shootBy.get(who) ?? 0) + 1);
+      if (sh.status === 'Cancelada' || sh.day > today) continue;
+      team.captacoes++;
+      for (const who of new Set(sh.crew)) people.find((x) => x.name === who)!.m.captacoes++;
+    }
+    for (const p of recorded) {
+      if (!live(p)) continue;
+      const f = fmtOf(select(p.properties[P.kind]));
+      if (f === 'post' || f === 'foto') continue; // captou = vídeos
+      for (const who of new Set(multi(p.properties[P.briefBy]).map(editorToPerson))) if (who) bump(who, 'captou');
     }
     const seen = new Set<string>();
-    const fromDate = new Set(byDate.map((p) => p.id));
-    const rep: ProdReport = {
-      month: first,
-      people: TEAM.map((name) => ({ name, counts: zero(), shoots: 0, recorded: 0 })),
-      total: zero(),
-      shoots: 0,
-      recorded: 0,
-      noEditor: 0,
-      weeks: [],
-      clients: []
-    };
-    for (let d = startOfWeekMon(first); d <= last; d = addDays(d, 7)) rep.weeks.push({ start: d, counts: zero() });
-    const clientMap = new Map<string, Counts>();
-    for (const p of [...byMonth, ...byDate]) {
-      if (!isPage(p) || p.archived || seen.has(p.id)) continue;
+    for (const p of [...edited, ...editedNoMonth]) {
+      if (!live(p) || seen.has(p.id)) continue;
       seen.add(p.id);
+      const f = fmtOf(select(p.properties[P.kind]));
+      const who = editorToPerson(select(p.properties[P.designBy]));
+      if (f && who) bump(who, f);
+    }
+    for (const p of posted) {
+      if (!live(p)) continue;
       const pr = p.properties;
-      const f = fmtOf(select(pr[P.kind]));
-      if (!f) continue;
-      const who = editorToPerson(select(pr[P.designBy]));
-      if (!who) {
-        if (fromDate.has(p.id)) rep.noEditor++;
-        continue;
-      }
-      const add = (c: Counts) => { c[f]++; c.total++; };
-      add(rep.people.find((x) => x.name === who)!.counts);
-      add(rep.total);
-      const day = date(pr[P.date])?.slice(0, 10);
-      const wk = day ? rep.weeks.find((w) => day >= w.start && day <= addDays(w.start, 6)) : null;
-      if (wk) add(wk.counts);
-      const cal = select(pr[P.client]) ?? 'Sem cliente';
-      if (!clientMap.has(cal)) clientMap.set(cal, zero());
-      add(clientMap.get(cal)!);
+      const st = pr[P.status];
+      const isPosted = checkbox(pr[P.done]) || (st?.type === 'status' && st.status?.name === 'Postado');
+      const who = editorToPerson(select(pr[P.postedBy]));
+      if (isPosted && who) bump(who, 'postou');
     }
-    // tarefas lançadas na Produção com formato, marcadas como feitas no mês
-    const routines = await listRoutines().catch(() => [] as Routine[]);
+    const map: Partial<Record<TaskFormat, Metric>> = {
+      'Editar reels': 'reels', 'Editar post': 'post', 'Editar story': 'story', 'Editar foto': 'foto', Postar: 'postou', 'Fazer roteiro': 'roteiro'
+    };
     for (const r of routines) {
-      const fm: Partial<Record<TaskFormat, Fmt>> = { 'Editar reels': 'reels', 'Editar post': 'post', 'Editar story': 'story', 'Editar foto': 'foto' };
-      const f = r.format ? fm[r.format] : undefined;
-      if (r.type === 'Tarefa fixa' || !f || !r.date || !isPerson(r.person)) continue;
-      if (!r.doneOn.includes(r.date) || r.date < first || r.date > last) continue;
-      const add = (c: Counts) => { c[f]++; c.total++; };
-      add(rep.people.find((x) => x.name === r.person)!.counts);
-      add(rep.total);
-      const wk = rep.weeks.find((w) => r.date! >= w.start && r.date! <= addDays(w.start, 6));
-      if (wk) add(wk.counts);
-      const cname = r.client || 'Sem cliente';
-      if (!clientMap.has(cname)) clientMap.set(cname, zero());
-      add(clientMap.get(cname)!);
+      const k = r.format ? map[r.format] : undefined;
+      if (r.type === 'Tarefa fixa' || !k || !r.date || !isPerson(r.person)) continue;
+      if (r.date < first || r.date > last || !r.doneOn.includes(r.date)) continue;
+      bump(r.person, k);
     }
-    rep.recorded = rep_recorded;
-    rep.shoots = shootsDone;
-    for (const x of rep.people) {
-      x.recorded = recBy.get(x.name) ?? 0;
-      x.shoots = shootBy.get(x.name) ?? 0;
-    }
-    rep.clients = [...clientMap.entries()].map(([name, counts]) => ({ name, counts })).sort((a, b) => b.counts.total - a.counts.total);
-    return rep;
+    return { month: first, people, team };
   }).catch((e) => {
-    console.error('[producao] relatório', e);
+    console.error('[producao] dashboard', e);
     return 'erro';
   });
 }
 
-const startOfWeekMon = (d: string) => addDays(d, -weekdayMon(d));
 
 /** Para o link da equipe: confere se a tarefa é mesmo daquela pessoa antes de marcar. */
 export async function taskBelongsTo(person: Person, source: string, id: string): Promise<boolean> {

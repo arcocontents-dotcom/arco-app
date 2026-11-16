@@ -188,8 +188,10 @@ export default function ProducaoBoard({
 
   const card = (t: Task, showWho: boolean, showDay: boolean) => {
     const late = t.urgency === 'atrasado' && !t.done;
+    // vence hoje e ainda não foi feita: pisca em neon a cada 1 minuto
+    const due = !t.done && !late && t.day === today && t.type !== 'Tarefa fixa';
     return (
-      <article key={t.key} className={`pt ${fmtClass(t)}${t.done ? ' done' : ''}`}>
+      <article key={t.key} className={`pt ${fmtClass(t)}${t.done ? ' done' : ''}${due ? ' due' : ''}`} title={due ? 'Entrega hoje' : undefined}>
         <button
           type="button"
           className={`pt-check${t.done ? ' on' : ''}`}

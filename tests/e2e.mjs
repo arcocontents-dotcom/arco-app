@@ -922,15 +922,15 @@ try {
     await pd.getByText('Produção do mês').waitFor();
     // relatório: quem gravou
     await pd.goto(`${APP}/admin/producao/relatorio?m=${today.slice(0, 7)}`);
-    await pd.locator('.rp-person', { hasText: 'Yan' }).locator('.rp-num.f-capt').waitFor();
-    await pd.getByText('Efetividade da equipe').waitFor();
+    await pd.locator('.db-person', { hasText: 'Yan' }).locator('li.f-capt').first().waitFor();
   });
 
-  await step('relatório da produção: só com o que está na aba Produção', async () => {
+  await step('dashboard da produção: o que cada um captou, editou e postou', async () => {
     await pd.goto(`${APP}/admin/producao/relatorio`);
-    await pd.getByText('Efetividade da equipe').waitFor();
-    const rafa = pd.locator('.rp-person', { hasText: 'Rafa' });
-    await rafa.getByText(/fixas \d+\/\d+/).waitFor();
+    await pd.getByText('Captações feitas').waitFor();
+    await pd.getByText('Posts feitos').waitFor();
+    const yan = pd.locator('.db-person', { hasText: 'Yan' });
+    await yan.locator('li.f-capt').first().waitFor();
     await pd.waitForTimeout(700);
     await shot(pd, '23-producao-relatorio');
   });
