@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/access';
 import { env } from '@/lib/env';
-import { listAllContentsInRange, listClients } from '@/lib/notion';
+import { listClients } from '@/lib/notion';
 import { MONTHS, addDays, addMonths, monthGrid, parseDay, todayIn, yearNum } from '@/lib/domain';
 import { METRICS, TEAM, productionWeek, teamDashboard, type Metric } from '@/lib/producao';
 import AdminShell from '@/components/AdminShell';
@@ -20,22 +20,13 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
   const last = addDays(addMonths(first, 1), -1);
   const grid = monthGrid(first);
   const clients = (await listClients()).filter((c) => !c.cancelled);
-  const [dash, contents, week] = await Promise.all([
+  const [dash, week] = await Promise.all([
     teamDashboard(first, today),
-    listAllContentsInRange(first, last).catch(() => []),
     productionWeek(grid[0].day, today, clients.map((c) => ({ id: c.id, name: c.name, calName: c.calName })), grid[grid.length - 1].day).catch(() => null)
   ]);
 
-  // Aprovação: conteúdos do mês que o cliente aprovou ou que já foram postados
-  const made = contents.filter((c) => c.status === 'Aprovado' || c.status === 'Postado');
-  const count = (types: string[]) => {
-    const xs = made.filter((c) => types.includes(c.type));
-    return { n: xs.length, posted: xs.filter((c) => c.status === 'Postado').length };
-  };
-  const posts = count(['Post', 'Carrossel']);
-  const videos = count(['Reels']);
-  const stories = count(['Story']);
   const d = typeof dash === 'string' ? null : dash;
+  const ps = d?.posted;
 
   // Efetividade: tarefas lançadas na aba Produção com entrega no mês
   const eff = new Map<string, { done: number; total: number }>();
@@ -51,10 +42,11 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
   const sum = (m: Record<Metric, number>) => METRICS.reduce((a, x) => a + m[x.k], 0);
   const q = (x: string) => `/admin/producao/relatorio?m=${x.slice(0, 7)}`;
   const kpis = [
-    { label: 'Posts feitos', n: posts.n, sub: `${posts.posted} postados · aprovação`, cls: 'f-post' },
-    { label: 'Vídeos feitos', n: videos.n, sub: `${videos.posted} postados · aprovação`, cls: 'f-reels' },
-    { label: 'Stories feitos', n: stories.n, sub: `${stories.posted} postados · aprovação`, cls: 'f-story' },
-    { label: 'Captações feitas', n: d?.team.captacoes ?? 0, sub: 'Notion · 📸 Captações', cls: 'f-capt' }
+    { label: 'Postado no Instagram', n: ps?.total ?? 0, sub: `${ps?.equipe ?? 0} pela equipe · ${ps?.cliente ?? 0} pelo cliente`, cls: 'f-postar main' },
+    { label: 'Reels postados', n: ps?.reels ?? 0, sub: 'vídeos no feed', cls: 'f-reels' },
+    { label: 'Posts estáticos', n: ps?.post ?? 0, sub: 'post, carrossel e fotos', cls: 'f-post' },
+    { label: 'Stories postados', n: ps?.story ?? 0, sub: 'stories', cls: 'f-story' },
+    { label: 'Captações feitas', n: d?.team.captacoes ?? 0, sub: '📸 Captações', cls: 'f-capt' }
   ];
 
   return (
@@ -93,7 +85,8 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
             const rows = METRICS.filter((x) => (m?.[x.k] ?? 0) > 0);
             const zeros = METRICS.filter((x) => !(m?.[x.k] ?? 0));
             return (
-              <article key={name} className="db-person rise" style={{ ['--d' as string]: `${80 + i * 40}ms` }}>
+              <details key={name} className="db-person rise" style={{ ['--d' as string]: `${80 + i * 40}ms` }}>
+                <summary aria-label={`Ver tudo o que ${name} produziu`}>
                 <header>
                   <span className="pav">{name.charAt(0)}</span>
                   <div>
@@ -113,6 +106,14 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
                       <span className="db-l"><i />{x.label}</span>
                       <span className="db-bar" aria-hidden="true"><span style={{ width: `${Math.round((m![x.k] / max(x.k)) * 100)}%` }} /></span>
                       <b>{m![x.k]}</b>
+                      {x.k === 'postou' && p && (
+                        <small className="db-split">
+                          {[['reels', 'reels'], ['post', 'posts estáticos'], ['story', 'stories'], ['outro', 'outros']]
+                            .filter(([k]) => p.posted[k as 'reels'])
+                            .map(([k, l]) => `${p.posted[k as 'reels']} ${l}`)
+                            .join(' · ')}
+                        </small>
+                      )}
                     </li>
                   ))}
                   {!rows.length && <li className="db-empty">Nada registrado neste mês.</li>}
@@ -120,10 +121,42 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
                 {rows.length > 0 && zeros.length > 0 && (
                   <p className="db-zeros">Sem registro: {zeros.map((x) => x.label.toLowerCase()).join(', ')}</p>
                 )}
-              </article>
+                {rows.length > 0 && <span className="db-more">Ver tudo o que {name} produziu <Icon name="right" size={12} /></span>}
+                </summary>
+                {p && p.items.length > 0 && (
+                  <div className="db-items" aria-label={`Tudo o que ${name} produziu`}>
+                    {rows.map((x) => (
+                      <section key={x.k} className={x.cls}>
+                        <h3><i />{x.label} <b>{m![x.k]}</b></h3>
+                        <ul>
+                          {p.items.filter((it) => it.k === x.k).map((it, j) => (
+                            <li key={`${it.url}-${j}`}>
+                              <span className="db-day">{it.day ? `${it.day.slice(8, 10)}/${it.day.slice(5, 7)}` : '—'}</span>
+                              <a href={it.url.replace(/^https:\/\/www\.notion\.so\//, 'notion://www.notion.so/')} className="db-it">{it.title}</a>
+                              {it.client && <span className="db-cl">{it.client}</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+                    ))}
+                  </div>
+                )}
+              </details>
             );
           })}
         </section>
+
+        {ps && (
+          <section className="rp-card rise" aria-label="Postado no Instagram" style={{ ['--d' as string]: '240ms' }}>
+            <h2 className="label">Postado no Instagram · quem postou</h2>
+            <div className="db-team">
+              <div className="db-team-i f-postar"><strong>{ps.equipe}</strong><span><i />Pela equipe</span></div>
+              <div className="db-team-i f-outro"><strong>{ps.cliente}</strong><span><i />Pelo cliente</span></div>
+              <div className="db-team-i f-outro"><strong>{ps.semQuem}</strong><span><i />Sem “Postado por”</span></div>
+              <div className="db-team-i f-postar"><strong>{ps.total}</strong><span><i />Total postado</span></div>
+            </div>
+          </section>
+        )}
 
         <section className="rp-card rise" aria-label="Equipe no mês" style={{ ['--d' as string]: '260ms' }}>
           <h2 className="label">Equipe no mês</h2>
@@ -138,7 +171,7 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
         </section>
 
         <p className="hint rp-note">
-          Posts, vídeos e stories feitos vêm da <b>Aprovação</b> (aprovados ou postados no mês). Captações vêm do <b>📸 Captações</b> no Notion.
+          Postado no Instagram: cards do Calendário mensal com <b>data de postagem no mês</b> e marcados como Finalizado/Postado, separados pelo “Tipo de demanda” e pelo “Postado por” (equipe ou Cliente). Captações vêm do <b>📸 Captações</b> no Notion.
           Por pessoa: <b>captou</b> = “Gravado/Briefing por”, <b>editou</b> = “Editado/Design por”, <b>postou</b> = “Postado por” no Calendário mensal,
           somados às tasks da aba Produção marcadas como feitas (Editar…, Postar, Fazer roteiro).
         </p>

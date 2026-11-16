@@ -42,6 +42,8 @@ export interface AgendaRow {
 const CREW: Crew[] = ['Lemuel', 'Marcos', 'Yan', 'Rafa'];
 const WD = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 const WD_LONG = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
+/** Cor da captação: cliente fixo mensal = azul, freelancer/casamento = verde. */
+const clientClass = (client: string) => (/^(Freelancer|Casamento) · /.test(client) ? 'c-free' : client ? 'c-fixo' : '');
 const typeClass = (t: SType | null) => (t === 'Vídeo' ? 's-video' : t === 'Foto' ? 's-foto' : t === 'Vídeo e foto' ? 's-ambos' : 's-outro');
 
 /** Calendário de captação: semana ou mês. Mesmo dado do Notion Calendar (tabela 📸 Captações). */
@@ -94,7 +96,7 @@ export default function CaptacaoBoard({
     <button
       key={s.id}
       type="button"
-      className={`sh ${typeClass(s.type)} st-${s.status.toLowerCase()}${compact ? ' compact' : ''}`}
+      className={`sh ${clientClass(s.client) || typeClass(s.type)} st-${s.status.toLowerCase()}${compact ? ' compact' : ''}`}
       onClick={() => setEditing(s)}
       aria-label={`${s.title}${s.time ? ` às ${s.time}` : ''}`}
     >
@@ -103,7 +105,7 @@ export default function CaptacaoBoard({
         {s.time ? `${s.time}${s.endTime && !compact ? `–${s.endTime}` : ''}` : 'Dia todo'}
       </span>
       <span className="sh-title">{s.title}</span>
-      {!compact && s.client && <span className="sh-client">{s.client}</span>}
+      {!compact && s.client && <span className="sh-client">{s.client}{s.type ? <em> · {s.type}</em> : null}</span>}
       {!compact && s.products.length > 0 && (
         <span className="sh-prods">{s.products.map((p) => <span key={p.name}><b>{p.qty}</b> {p.name}</span>)}</span>
       )}
@@ -145,7 +147,7 @@ export default function CaptacaoBoard({
           ))}
         </div>
         <div className="sh-legend" aria-hidden="true">
-          <span className="s-video">Vídeo</span><span className="s-foto">Foto</span><span className="s-ambos">Vídeo e foto</span>
+          <span className="c-fixo">Cliente fixo</span><span className="c-free">Freelancer</span>
           {agendaState === 'ok' && <span className="s-ag">Agenda</span>}
         </div>
         {agendaState === 'ok' && (

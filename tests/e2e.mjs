@@ -1018,9 +1018,12 @@ try {
   await step('dashboard da produção: o que cada um captou, editou e postou', async () => {
     await pd.goto(`${APP}/admin/producao/relatorio`);
     await pd.getByText('Captações feitas').waitFor();
-    await pd.getByText('Posts feitos').waitFor();
+    await pd.getByText('Postado no Instagram', { exact: true }).first().waitFor();
+    await pd.getByText('Pelo cliente', { exact: true }).waitFor();
     const yan = pd.locator('.db-person', { hasText: 'Yan' });
     await yan.locator('li.f-capt').first().waitFor();
+    await yan.getByLabel('Ver tudo o que Yan produziu').click();
+    await yan.locator('.db-items').getByText('Gravação na obra').waitFor();
     await pd.waitForTimeout(700);
     await shot(pd, '23-producao-relatorio');
   });

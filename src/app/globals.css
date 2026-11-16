@@ -1284,3 +1284,36 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .team-hint div { flex: 1; min-width: 0; }
 .team-hint strong { font-size: 14px; }
 .team-hint p { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+/* captação em destaque pela cor do cliente: fixo mensal azul, freelancer verde */
+.c-fixo { --sc: #0b6e99; } .c-free { --sc: #0f7b6c; }
+.sh.c-fixo, .sh.c-free { background: var(--sc); border-left-color: rgba(0, 0, 0, 0.18); color: #fff; box-shadow: 0 6px 16px -10px var(--sc); }
+.sh.c-fixo .sh-time, .sh.c-free .sh-time, .sh.c-fixo .sh-time .ic, .sh.c-free .sh-time .ic { color: rgba(255, 255, 255, 0.85) !important; }
+.sh.c-fixo .sh-client, .sh.c-free .sh-client, .sh.c-fixo .sh-place, .sh.c-free .sh-place { color: rgba(255, 255, 255, 0.85); }
+.sh-client em { font-style: normal; opacity: 0.8; }
+.sh.c-fixo .sh-crew .pav, .sh.c-free .sh-crew .pav { --pc: #fff; color: var(--sc); }
+.sh.c-fixo .sh-prods span, .sh.c-free .sh-prods span { background: rgba(255, 255, 255, 0.18); border-color: rgba(255, 255, 255, 0.25); color: #fff; }
+.sh.c-fixo.st-realizada, .sh.c-free.st-realizada { opacity: 0.72; }
+/* dashboard: clicar na pessoa abre a lista do que ela produziu */
+details.db-person > summary { list-style: none; cursor: pointer; display: flex; flex-direction: column; gap: 14px; }
+details.db-person > summary::-webkit-details-marker { display: none; }
+details.db-person:hover { box-shadow: 0 10px 24px -18px rgba(0, 0, 0, 0.5); }
+.db-more { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: var(--ink); }
+details.db-person[open] .db-more .ic { transform: rotate(90deg); }
+details.db-person[open] .db-more { color: var(--muted); }
+.db-items { border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 14px; animation: rise 0.3s var(--ease) both; }
+.db-items h3 { margin: 0 0 6px; display: flex; align-items: center; gap: 7px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+.db-items h3 b { margin-left: auto; font-family: var(--display); font-size: 15px; letter-spacing: 0; }
+.db-items ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.db-items li { display: grid; grid-template-columns: 44px 1fr auto; gap: 10px; align-items: baseline; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.db-items li:last-child { border-bottom: 0; }
+.db-day { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.db-it { color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
+.db-it:hover { text-decoration: underline; }
+.db-cl { color: var(--muted); font-size: 12px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+.db-kpis { grid-template-columns: 1.3fr repeat(4, 1fr); }
+@media (max-width: 900px) { .db-kpis { grid-template-columns: repeat(2, 1fr); } .db-kpi.main { grid-column: span 2; } }
+.db-kpi.main { background: var(--ink); color: #fff; }
+.db-kpi.main small { color: #b9b4ac; }
+.db-person li { grid-template-areas: 'l bar n' 'split split split'; }
+.db-person li .db-l { grid-area: l; } .db-person li .db-bar { grid-area: bar; } .db-person li > b { grid-area: n; }
+.db-split { grid-area: split; font-size: 11.5px; color: var(--muted); margin-top: -4px; }

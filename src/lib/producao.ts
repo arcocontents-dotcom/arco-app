@@ -448,7 +448,7 @@ export const METRICS = [
   { k: 'post', label: 'Posts editados', cls: 'f-post' },
   { k: 'story', label: 'Stories editados', cls: 'f-story' },
   { k: 'foto', label: 'Fotos editadas', cls: 'f-foto' },
-  { k: 'postou', label: 'Postagens feitas', cls: 'f-postar' },
+  { k: 'postou', label: 'Postou no Instagram', cls: 'f-postar' },
   { k: 'roteiro', label: 'Roteiros', cls: 'f-roteiro' }
 ] as const;
 export type Metric = (typeof METRICS)[number]['k'];
@@ -461,10 +461,33 @@ const fmtOf = (k: string | null): Fmt | null => {
   return s.startsWith('reels') || s.startsWith('víd') ? 'reels' : s.startsWith('post') || s.startsWith('carross') ? 'post' : s.startsWith('stor') ? 'story' : s.startsWith('foto') ? 'foto' : null;
 };
 
+/** Um item produzido (para a lista ao clicar na pessoa). */
+export interface DashItem {
+  k: Metric;
+  title: string;
+  client: string | null;
+  day: string | null;
+  url: string;
+}
+
+/** Postado no Instagram no mês (Calendário mensal: data de postagem no mês e Finalizado/Postado). */
+export interface PostedTotals {
+  total: number;
+  reels: number;
+  /** Post estático, carrossel e fotos. */
+  post: number;
+  story: number;
+  outro: number;
+  equipe: number;
+  cliente: number;
+  semQuem: number;
+}
+
 export interface TeamDashboard {
   month: string;
-  people: { name: Person; m: MetricCounts }[];
+  people: { name: Person; m: MetricCounts; items: DashItem[]; posted: { reels: number; post: number; story: number; outro: number } }[];
   team: MetricCounts;
+  posted: PostedTotals;
 }
 
 /**
@@ -496,33 +519,46 @@ export async function teamDashboard(first: string, today: string): Promise<TeamD
       queryAll(env.planningDb!, {
         filter: {
           and: [
-            { property: P.postedBy, select: { is_not_empty: true } },
             { property: P.date, date: { on_or_after: first } },
-            { property: P.date, date: { on_or_before: last } }
+            { property: P.date, date: { on_or_before: last } },
+            { or: [{ property: P.done, checkbox: { equals: true } }, { property: P.status, status: { equals: 'Postado' } }] }
           ]
         }
       }),
       listShoots(first, last).catch(() => [] as Shoot[]),
       listRoutines().catch(() => [] as Routine[])
     ]);
-    const people = TEAM.map((name) => ({ name, m: zeroM() }));
+    const people = TEAM.map((name) => ({ name, m: zeroM(), items: [] as DashItem[], posted: { reels: 0, post: 0, story: 0, outro: 0 } }));
+    const postedT: PostedTotals = { total: 0, reels: 0, post: 0, story: 0, outro: 0, equipe: 0, cliente: 0, semQuem: 0 };
     const team = zeroM();
-    const bump = (who: Person, k: Metric) => {
-      people.find((x) => x.name === who)!.m[k]++;
+    const bump = (who: Person, k: Metric, it: Omit<DashItem, 'k'>) => {
+      const p = people.find((x) => x.name === who)!;
+      p.m[k]++;
+      p.items.push({ k, ...it });
       team[k]++;
     };
+    const card = (p: PageObjectResponse): Omit<DashItem, 'k'> => ({
+      title: text(p.properties[P.title]) || 'Sem título',
+      client: select(p.properties[P.client]),
+      day: date(p.properties[P.date])?.slice(0, 10) ?? null,
+      url: `https://www.notion.so/${normId(p.id)}`
+    });
     const live = (p: unknown): p is PageObjectResponse => isPage(p) && !p.archived;
 
     for (const sh of shoots) {
       if (sh.status === 'Cancelada' || sh.day > today) continue;
       team.captacoes++;
-      for (const who of new Set(sh.crew)) people.find((x) => x.name === who)!.m.captacoes++;
+      for (const who of new Set(sh.crew)) {
+        const p = people.find((x) => x.name === who)!;
+        p.m.captacoes++;
+        p.items.push({ k: 'captacoes', title: sh.title, client: sh.client || null, day: sh.day, url: sh.url });
+      }
     }
     for (const p of recorded) {
       if (!live(p)) continue;
       const f = fmtOf(select(p.properties[P.kind]));
       if (f === 'post' || f === 'foto') continue; // captou = vídeos
-      for (const who of new Set(multi(p.properties[P.briefBy]).map(editorToPerson))) if (who) bump(who, 'captou');
+      for (const who of new Set(multi(p.properties[P.briefBy]).map(editorToPerson))) if (who) bump(who, 'captou', card(p));
     }
     const seen = new Set<string>();
     for (const p of [...edited, ...editedNoMonth]) {
@@ -530,15 +566,24 @@ export async function teamDashboard(first: string, today: string): Promise<TeamD
       seen.add(p.id);
       const f = fmtOf(select(p.properties[P.kind]));
       const who = editorToPerson(select(p.properties[P.designBy]));
-      if (f && who) bump(who, f);
+      if (f && who) bump(who, f, card(p));
     }
     for (const p of posted) {
       if (!live(p)) continue;
       const pr = p.properties;
-      const st = pr[P.status];
-      const isPosted = checkbox(pr[P.done]) || (st?.type === 'status' && st.status?.name === 'Postado');
-      const who = editorToPerson(select(pr[P.postedBy]));
-      if (isPosted && who) bump(who, 'postou');
+      const f = fmtOf(select(pr[P.kind]));
+      const kind = f === 'reels' ? 'reels' : f === 'story' ? 'story' : f === 'post' || f === 'foto' ? 'post' : 'outro';
+      postedT.total++;
+      postedT[kind]++;
+      const by = select(pr[P.postedBy]);
+      const who = editorToPerson(by);
+      if (by === 'Cliente') postedT.cliente++;
+      else if (who) postedT.equipe++;
+      else postedT.semQuem++;
+      if (who) {
+        bump(who, 'postou', card(p));
+        people.find((x) => x.name === who)!.posted[kind]++;
+      }
     }
     const map: Partial<Record<TaskFormat, Metric>> = {
       'Editar reels': 'reels', 'Editar post': 'post', 'Editar story': 'story', 'Editar foto': 'foto', Postar: 'postou', 'Fazer roteiro': 'roteiro'
@@ -549,9 +594,10 @@ export async function teamDashboard(first: string, today: string): Promise<TeamD
       if (r.date < first || r.date > last || !r.doneOn.includes(r.date)) continue;
       // edição ligada a um card: já conta pelo "Editado/Design por" do card
       if (r.contentId && r.format?.startsWith('Editar')) continue;
-      bump(r.person, k);
+      bump(r.person, k, { title: r.title, client: r.client || null, day: r.date, url: `https://www.notion.so/${normId(r.id)}` });
     }
-    return { month: first, people, team };
+    for (const p of people) p.items.sort((a, b) => (b.day ?? '').localeCompare(a.day ?? ''));
+    return { month: first, people, team, posted: postedT };
   }).catch((e) => {
     console.error('[producao] dashboard', e);
     return 'erro';
