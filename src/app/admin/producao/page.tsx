@@ -6,6 +6,7 @@ import { productionWeek, routineConfigured, tvKey } from '@/lib/producao';
 import AdminShell from '@/components/AdminShell';
 import Icon from '@/components/Icon';
 import ProducaoBoard from '@/components/ProducaoBoard';
+import ProdTabs from '@/components/ProdTabs';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +27,7 @@ export default async function Producao({ searchParams }: { searchParams: Promise
           <h1 className="display rise" style={{ fontSize: 'clamp(40px, 6vw, 80px)', ['--d' as string]: '60ms' }}>Produção</h1>
         </div>
       </div>
+      <ProdTabs active="quadro" />
       {week.error && <p className="error">{week.error}</p>}
       {!routineConfigured() && <p className="hint">Falta a variável NOTION_ROUTINE_DB para as tarefas fixas e lembretes.</p>}
       <ProducaoBoard

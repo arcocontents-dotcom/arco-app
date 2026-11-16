@@ -45,7 +45,7 @@ export const PLAN_OPTIONS = {
   [PL.month]: ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'],
   [PL.status]: ['Ideia', 'Realizando', 'Postado'],
   [PL.briefBy]: ['Yan', 'Marcos', 'Cliente'],
-  [PL.designBy]: ['Yan', 'Marcos', 'Cliente'],
+  [PL.designBy]: ['Yan', 'Marcos', 'Lemuel', 'Rafael', 'Cliente'],
   [PL.postedBy]: ['Yan', 'Marcos', 'Cliente']
 };
 PLAN_OPTIONS[PL.recMonth] = PLAN_OPTIONS[PL.month];

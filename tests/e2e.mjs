@@ -785,11 +785,16 @@ try {
     assert.equal(await colOf('Marcos').getByText('Editar vídeo da obra').count(), 0, 'quinta não aparece em "Hoje"');
     await colOf('Lemuel').getByText('Capa atrasada').waitFor();
     await pd.getByRole('tablist', { name: 'Quando' }).getByRole('tab', { name: 'Semana' }).click();
-    // passar o conteúdo para o Yan (etiqueta "Demanda atual está com")
-    await colOf('Marcos').getByLabel('Passar Editar vídeo da obra para').selectOption('Yan');
+    // transferir a demanda para o Yan: Marcos editou (vai para o relatório)
+    await colOf('Marcos').getByRole('button', { name: 'Transferir' }).click();
+    const tx = colOf('Marcos').getByRole('group', { name: 'Transferir Editar vídeo da obra' });
+    await tx.getByText('Marcos editou (conta no relatório)').waitFor();
+    await tx.getByRole('button', { name: /Yan/ }).click();
     await colOf('Yan').getByText('Editar vídeo da obra').waitFor();
-    await pd.waitForTimeout(500);
+    await pd.waitForTimeout(600);
     assert.equal(page(PRODA).properties['Demanda atual está com'].select.name, 'Yan');
+    assert.equal(page(PRODA).properties['Editado/Design por'].select.name, 'Marcos');
+    assert.equal(page(PRODA).properties['Editado quando'].select.name, ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'][Number(today.slice(5, 7)) - 1]);
     // visão por semana e filtro por cliente
     await pd.getByRole('tablist', { name: 'Visualização' }).getByRole('tab', { name: 'Semana' }).click();
     await pd.locator('.pteam.late').getByText('Capa atrasada').waitFor();
@@ -810,6 +815,16 @@ try {
     await tv.waitForTimeout(600);
     await tv.screenshot({ path: `${SHOTS}/22-producao-tv.png` });
     await tvCtx.close();
+  });
+
+  await step('relatório da produção: quem editou quantos vídeos, posts e stories', async () => {
+    await pd.goto(`${APP}/admin/producao/relatorio?m=2026-11`);
+    const kpis = pd.getByRole('region', { name: 'Totais do mês' }).or(pd.locator('section[aria-label="Totais do mês"]')).first();
+    await kpis.getByText('Vídeos (Reels)').waitFor();
+    const marcos = pd.locator('.rp-person', { hasText: 'Marcos' });
+    assert.equal((await marcos.locator('b').textContent())?.trim(), '1', 'Marcos editou 1');
+    await pd.waitForTimeout(700);
+    await shot(pd, '23-producao-relatorio');
   });
 
   await step('administrador entra na hora com senha (sem esperar link)', async () => {

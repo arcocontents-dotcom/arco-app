@@ -91,6 +91,8 @@ export default function ProducaoBoard({
   const [who, setWho] = useState<Person | 'todos'>('todos');
   const [client, setClient] = useState('');
   const [when, setWhen] = useState<'hoje' | 'amanha' | 'semana'>('semana');
+  const [transfer, setTransfer] = useState<string | null>(null);
+  const [edited, setEdited] = useState(true);
   const [editing, setEditing] = useState<RoutineRow | 'novo' | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [, start2] = useTransition();
@@ -140,11 +142,12 @@ export default function ProducaoBoard({
     });
   }
 
-  function pass(t: Task, to: string) {
+  function pass(t: Task, to: string, edited: boolean) {
     const before = tasks;
+    setTransfer(null);
     setTasks((l) => (to === 'Finalizado' ? l.filter((x) => x.key !== t.key) : l.map((x) => (x.key === t.key ? { ...x, person: to as Person } : x))));
     start2(async () => {
-      const r = await passContentAction(t.id, to);
+      const r = await passContentAction(t.id, to, edited && t.person !== 'Equipe' ? t.person : null);
       if (!r.ok) {
         setErr(r.error);
         setTasks(before);
@@ -195,16 +198,27 @@ export default function ProducaoBoard({
           )}
           {!tv && t.source === 'conteudo' && !t.done && (
             <div className="pt-actions">
-              <label className="pt-pass">
-                <select value="" onChange={(e) => e.target.value && pass(t, e.target.value)} aria-label={`Passar ${t.title} para`}>
-                  <option value="">Passar para…</option>
-                  {TEAM.filter((p) => p !== t.person).map((p) => <option key={p} value={p}>{p}</option>)}
-                  <option value="Finalizado">✓ Finalizado</option>
-                </select>
-              </label>
+              <button type="button" className="pt-transfer" aria-expanded={transfer === t.key} onClick={() => { setTransfer(transfer === t.key ? null : t.key); setEdited(true); }}>
+                <Icon name="send" size={12} />Transferir
+              </button>
               {t.clientId && (
                 <Link className="pt-open" href={`/admin/planejamento?c=${t.clientId}&m=${(t.day ?? today).slice(0, 7)}-01`}>Abrir</Link>
               )}
+            </div>
+          )}
+          {!tv && transfer === t.key && (
+            <div className="pt-tx" role="group" aria-label={`Transferir ${t.title}`}>
+              <span className="pt-tx-l">Para quem vai agora?</span>
+              <div className="pt-tx-row">
+                {TEAM.filter((p) => p !== t.person).map((p) => (
+                  <button key={p} type="button" onClick={() => pass(t, p, edited)}><span className="pav sm">{p.charAt(0)}</span>{p}</button>
+                ))}
+                <button type="button" className="fin" onClick={() => pass(t, 'Finalizado', edited)}><Icon name="check" size={12} />Finalizado</button>
+              </div>
+              <label className="pt-tx-ed">
+                <input type="checkbox" checked={edited} onChange={(e) => setEdited(e.target.checked)} />
+                <span>{t.person} editou (conta no relatório)</span>
+              </label>
             </div>
           )}
         </div>

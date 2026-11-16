@@ -4,7 +4,7 @@ import type { PageObjectResponse } from '@notionhq/client/build/src/api-endpoint
 import schema from './schema.json';
 import { env } from './env';
 import { invalidate, memo } from './cache';
-import { addDays, localParts, weekdayMon } from './domain';
+import { MONTHS, addDays, addMonths, localParts, weekdayMon } from './domain';
 import { checkbox, date, isPage, normId, notion, queryAll, select, text, titleProp } from './notion';
 import { matchCalName, multi } from './planning';
 
@@ -329,12 +329,119 @@ export async function setContentDone(id: string, done: boolean) {
   invalidate('plan:');
 }
 
-/** Passa o conteúdo para outra pessoa (ou Finalizado), usando a etiqueta que já existe no Notion. */
-export async function passContent(id: string, to: Person | 'Finalizado') {
+/** Nome da pessoa na coluna "Editado/Design por" do Calendário mensal (lá o Rafa é "Rafael"). */
+export const EDITOR_NAME: Record<Person, string> = { Lemuel: 'Lemuel', Marcos: 'Marcos', Yan: 'Yan', Rafa: 'Rafael' };
+const editorToPerson = (n: string | null): Person | null =>
+  n === 'Rafael' ? 'Rafa' : isPerson(n) ? n : null;
+
+/**
+ * Transferir demanda: muda "Demanda atual está com" e, se a pessoa editou,
+ * registra "Editado/Design por" e "Editado quando" (só opções que já existem no Notion).
+ */
+export async function passContent(id: string, to: Person | 'Finalizado', editedBy?: Person | null, today?: string) {
   const p = await notion().pages.retrieve({ page_id: id });
   if (!isPage(p) || !env.planningDb || normId(p.parent.type === 'database_id' ? p.parent.database_id : '') !== normId(env.planningDb)) {
     throw Object.assign(new Error('Card não encontrado'), { code: 'object_not_found' });
   }
-  await notion().pages.update({ page_id: id, properties: { [P.owner]: { select: { name: to } } } as never });
+  const props: Record<string, unknown> = { [P.owner]: { select: { name: to } } };
+  if (editedBy && today) {
+    props[P.designBy] = { select: { name: EDITOR_NAME[editedBy] } };
+    props[P.editMonth] = { select: { name: MONTHS[Number(today.slice(5, 7)) - 1] } };
+  }
+  await notion().pages.update({ page_id: id, properties: props as never });
   invalidate('plan:');
 }
+
+// ---------- relatório da produção ----------
+
+export type Fmt = 'reels' | 'post' | 'story' | 'foto';
+const fmtOf = (k: string | null): Fmt | null => {
+  const s = (k ?? '').toLowerCase();
+  return s.startsWith('reels') ? 'reels' : s.startsWith('post') ? 'post' : s.startsWith('stor') ? 'story' : s.startsWith('foto') ? 'foto' : null;
+};
+export type Counts = Record<Fmt, number> & { total: number };
+const zero = (): Counts => ({ reels: 0, post: 0, story: 0, foto: 0, total: 0 });
+
+export interface ProdReport {
+  month: string;
+  people: { name: Person; counts: Counts }[];
+  total: Counts;
+  /** Entregues no mês sem "Editado/Design por" marcado. */
+  noEditor: number;
+  weeks: { start: string; counts: Counts }[];
+  clients: { name: string; counts: Counts }[];
+}
+
+/**
+ * Quem editou o quê no mês. Conta um conteúdo quando tem "Editado/Design por" de alguém da equipe e
+ * "Editado quando" = o mês; se "Editado quando" estiver vazio, vale a data de postagem no mês com o card
+ * Finalizado ou Postado.
+ */
+export async function productionReport(first: string): Promise<ProdReport | string> {
+  if (!env.planningDb) return 'nao-configurado';
+  const last = addDays(addMonths(first, 1), -1);
+  const monthName = MONTHS[Number(first.slice(5, 7)) - 1];
+  return memo(`plan:prodrep:${first}`, 30_000, async () => {
+    const [byMonth, byDate] = await Promise.all([
+      queryAll(env.planningDb!, {
+        filter: {
+          and: [
+            { property: P.editMonth, select: { equals: monthName } },
+            { property: P.date, date: { on_or_after: addDays(first, -75) } },
+            { property: P.date, date: { on_or_before: addDays(last, 75) } }
+          ]
+        }
+      }),
+      queryAll(env.planningDb!, {
+        filter: {
+          and: [
+            { property: P.editMonth, select: { is_empty: true } },
+            { property: P.date, date: { on_or_after: first } },
+            { property: P.date, date: { on_or_before: last } },
+            { or: [{ property: P.done, checkbox: { equals: true } }, { property: P.status, status: { equals: 'Postado' } }] }
+          ]
+        }
+      })
+    ]);
+    const seen = new Set<string>();
+    const fromDate = new Set(byDate.map((p) => p.id));
+    const rep: ProdReport = {
+      month: first,
+      people: TEAM.map((name) => ({ name, counts: zero() })),
+      total: zero(),
+      noEditor: 0,
+      weeks: [],
+      clients: []
+    };
+    for (let d = startOfWeekMon(first); d <= last; d = addDays(d, 7)) rep.weeks.push({ start: d, counts: zero() });
+    const clientMap = new Map<string, Counts>();
+    for (const p of [...byMonth, ...byDate]) {
+      if (!isPage(p) || p.archived || seen.has(p.id)) continue;
+      seen.add(p.id);
+      const pr = p.properties;
+      const f = fmtOf(select(pr[P.kind]));
+      if (!f) continue;
+      const who = editorToPerson(select(pr[P.designBy]));
+      if (!who) {
+        if (fromDate.has(p.id)) rep.noEditor++;
+        continue;
+      }
+      const add = (c: Counts) => { c[f]++; c.total++; };
+      add(rep.people.find((x) => x.name === who)!.counts);
+      add(rep.total);
+      const day = date(pr[P.date])?.slice(0, 10);
+      const wk = day ? rep.weeks.find((w) => day >= w.start && day <= addDays(w.start, 6)) : null;
+      if (wk) add(wk.counts);
+      const cal = select(pr[P.client]) ?? 'Sem cliente';
+      if (!clientMap.has(cal)) clientMap.set(cal, zero());
+      add(clientMap.get(cal)!);
+    }
+    rep.clients = [...clientMap.entries()].map(([name, counts]) => ({ name, counts })).sort((a, b) => b.counts.total - a.counts.total);
+    return rep;
+  }).catch((e) => {
+    console.error('[producao] relatório', e);
+    return 'erro';
+  });
+}
+
+const startOfWeekMon = (d: string) => addDays(d, -weekdayMon(d));

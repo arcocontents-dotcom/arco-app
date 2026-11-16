@@ -1,7 +1,8 @@
 'use server';
 
 import { requireAdmin } from '@/lib/access';
-import { parseDay } from '@/lib/domain';
+import { parseDay, todayIn } from '@/lib/domain';
+import { env } from '@/lib/env';
 import {
   ROUTINE_TYPES, TEAM, URGENCY_LABEL, WEEKDAYS, createRoutine, passContent, setContentDone, setRoutineDone, trashRoutine, updateRoutine,
   type RoutineInput
@@ -64,11 +65,12 @@ export async function trashRoutineAction(id: string): Promise<R> {
   }
 }
 
-export async function passContentAction(id: string, to: string): Promise<R> {
+export async function passContentAction(id: string, to: string, editedBy?: string | null): Promise<R> {
   await requireAdmin();
   if (!(TEAM as readonly string[]).includes(to) && to !== 'Finalizado') return { ok: false, error: 'Pessoa inválida.' };
+  const by = editedBy && (TEAM as readonly string[]).includes(editedBy) ? (editedBy as (typeof TEAM)[number]) : null;
   try {
-    await passContent(id, to as (typeof TEAM)[number] | 'Finalizado');
+    await passContent(id, to as (typeof TEAM)[number] | 'Finalizado', by, todayIn(env.timeZone));
     return { ok: true };
   } catch (e) {
     console.error('[producao] passar', e);
