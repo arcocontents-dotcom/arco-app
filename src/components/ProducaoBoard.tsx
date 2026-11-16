@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import Icon from './Icon';
 import { addDays, dayNum, weekdayMon } from '@/lib/domain';
 import { shootStatusAction } from '@/app/admin/producao/captacao/actions';
+import { teamToggleAction } from '@/app/equipe/actions';
 import { passContentAction, saveRoutineAction, toggleContentAction, toggleRoutineAction, trashRoutineAction } from '@/app/admin/producao/actions';
 
 // Tipos copiados de lib/producao (não dá para importar lib server-only aqui).
@@ -84,7 +85,7 @@ const sortTasks = (a: Task, b: Task) =>
   a.title.localeCompare(b.title);
 
 export default function ProducaoBoard({
-  start, end: endProp, today, tasks: initial, routines, clients, tv = false, prevHref, nextHref, todayHref, tvUrl, mode = 'semana', monthLabel, weekHref, monthHref
+  start, end: endProp, today, tasks: initial, routines, clients, tv = false, member, teamLinks, prevHref, nextHref, todayHref, tvUrl, mode = 'semana', monthLabel, weekHref, monthHref
 }: {
   start: string;
   today: string;
@@ -96,6 +97,9 @@ export default function ProducaoBoard({
   nextHref: string;
   todayHref: string;
   tvUrl?: string;
+  /** Link pessoal da equipe: só as tarefas dessa pessoa, pode marcar como feito. */
+  member?: { person: Person; k: string };
+  teamLinks?: { person: Person; url: string }[];
   end?: string;
   mode?: 'semana' | 'mes';
   monthLabel?: string;
@@ -103,19 +107,22 @@ export default function ProducaoBoard({
   monthHref?: string;
 }) {
   const router = useRouter();
+  const admin = !tv && !member;
   const [tasks, setTasks] = useState(initial);
   const [view, setView] = useState<'pessoas' | 'semana'>('pessoas');
-  const [who, setWho] = useState<Person | 'todos'>('todos');
+  const [who, setWho] = useState<Person | 'todos'>(member?.person ?? 'todos');
   const [client, setClient] = useState('');
   const [when, setWhen] = useState<'hoje' | 'amanha' | 'semana'>('semana');
   const [transfer, setTransfer] = useState<string | null>(null);
   const [newWho, setNewWho] = useState<Who | null>(null);
+  const [linksOpen, setLinksOpen] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
   const [edited, setEdited] = useState(true);
   const [editing, setEditing] = useState<RoutineRow | 'novo' | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [, start2] = useTransition();
   const [clock, setClock] = useState('');
-  const [showFilters, setShowFilters] = useState(!tv);
+  const [showFilters, setShowFilters] = useState(!tv && !member);
 
   useEffect(() => setTasks(initial), [initial]);
 
@@ -154,8 +161,9 @@ export default function ProducaoBoard({
     const done = !t.done;
     setTasks((l) => l.map((x) => (x.key === t.key ? { ...x, done } : x)));
     start2(async () => {
-      const r =
-        t.source === 'rotina' ? await toggleRoutineAction(t.id, t.day!, done)
+      const r = member
+        ? await teamToggleAction(member.person, member.k, t.source, t.id, t.day, done)
+        : t.source === 'rotina' ? await toggleRoutineAction(t.id, t.day!, done)
         : t.source === 'captacao' ? await shootStatusAction(t.id, done ? 'Realizada' : 'Agendada')
         : await toggleContentAction(t.id, done);
       if (!r.ok) {
@@ -209,7 +217,7 @@ export default function ProducaoBoard({
             {t.client && <span className="pt-client">{t.client}</span>}
             {showWho && <span className={`pt-who w-${t.person.toLowerCase()}`}>{t.person}</span>}
           </div>
-          {t.source === 'rotina' && !tv ? (
+          {t.source === 'rotina' && admin ? (
             <button type="button" className="pt-title as-link" onClick={() => { const r = routines.find((x) => x.id === t.id); if (r) setEditing(r); }}>
               {t.title}
             </button>
@@ -225,7 +233,7 @@ export default function ProducaoBoard({
               {t.launched && t.type !== 'Tarefa fixa' && <span className="pt-day">Lançada {t.launched.slice(8, 10)}/{t.launched.slice(5, 7)}</span>}
             </div>
           )}
-          {!tv && t.source === 'conteudo' && !t.done && (
+          {admin && t.source === 'conteudo' && !t.done && (
             <div className="pt-actions">
               <button type="button" className="pt-transfer" aria-expanded={transfer === t.key} onClick={() => { setTransfer(transfer === t.key ? null : t.key); setEdited(true); }}>
                 <Icon name="send" size={12} />Transferir
@@ -235,7 +243,7 @@ export default function ProducaoBoard({
               )}
             </div>
           )}
-          {!tv && transfer === t.key && (
+          {admin && transfer === t.key && (
             <div className="pt-tx" role="group" aria-label={`Transferir ${t.title}`}>
               <span className="pt-tx-l">Para quem vai agora?</span>
               <div className="pt-tx-row">
@@ -277,7 +285,7 @@ export default function ProducaoBoard({
           <h3>{p}</h3>
           <b title="Para fazer">{pending(mine)}</b>
         </header>
-        {!tv && (
+        {admin && (
           <button type="button" className="pcol-add" onClick={() => { setNewWho(p); setEditing('novo'); }} aria-label={`Adicionar task para ${p}`}>
             <Icon name="plus" size={14} />Adicionar task
           </button>
@@ -349,14 +357,14 @@ export default function ProducaoBoard({
     <div className={`prod${tv ? ' tv' : ''}`}>
       <div className="prod-top">
         <div className="prod-week">
-          {!tv && <Link className="icon-btn" href={prevHref} aria-label="Semana anterior"><Icon name="left" /></Link>}
+          {admin && <Link className="icon-btn" href={prevHref} aria-label="Semana anterior"><Icon name="left" /></Link>}
           <div>
             <span className="label">{mode === 'mes' ? 'Produção do mês' : 'Produção da semana'}</span>
             <strong>{mode === 'mes' && monthLabel ? monthLabel : weekLabel}</strong>
           </div>
-          {!tv && <Link className="icon-btn" href={nextHref} aria-label={mode === 'mes' ? 'Próximo mês' : 'Próxima semana'}><Icon name="right" /></Link>}
-          {!tv && (today < start || today > end) && <Link className="link-btn" href={todayHref}>Hoje</Link>}
-          {!tv && weekHref && monthHref && (
+          {admin && <Link className="icon-btn" href={nextHref} aria-label={mode === 'mes' ? 'Próximo mês' : 'Próxima semana'}><Icon name="right" /></Link>}
+          {admin && (today < start || today > end) && <Link className="link-btn" href={todayHref}>Hoje</Link>}
+          {admin && weekHref && monthHref && (
             <nav className="plan-views" aria-label="Período" style={{ margin: 0 }}>
               <Link href={weekHref} aria-current={mode === 'semana' ? 'page' : undefined}>Semana</Link>
               <Link href={monthHref} aria-current={mode === 'mes' ? 'page' : undefined}>Mês</Link>
@@ -371,10 +379,35 @@ export default function ProducaoBoard({
             <div className="tv-clock" aria-label="Hora">{clock}</div>
           </div>
         )}
-        {!tv && (
+        {admin && (
           <div className="prod-tools">
             <button type="button" className="btn small" onClick={() => { setNewWho(null); setEditing('novo'); }}><Icon name="plus" size={15} />Lembrete ou tarefa</button>
             {tvUrl && <a className="btn outline small" href={tvUrl} target="_blank" rel="noreferrer"><Icon name="external" size={15} />Abrir na TV</a>}
+            {teamLinks && (
+              <div className="team-links-wrap">
+                <button type="button" className="btn outline small" aria-expanded={linksOpen} onClick={() => setLinksOpen((v) => !v)}><Icon name="users" size={15} />Links da equipe</button>
+                {linksOpen && (
+                  <div className="team-links" role="dialog" aria-label="Links da equipe">
+                    <p className="hint" style={{ margin: 0 }}>Cada um abre o seu no celular (sem login) e marca as próprias tarefas.</p>
+                    {teamLinks.map((l) => (
+                      <div key={l.person} className="team-link">
+                        <span className="pav sm">{l.person.charAt(0)}</span>
+                        <strong>{l.person}</strong>
+                        <button
+                          type="button"
+                          className="link-btn"
+                          onClick={async () => {
+                            try { await navigator.clipboard.writeText(`${location.origin}${l.url}`); setCopied(l.person); setTimeout(() => setCopied(null), 1600); } catch {}
+                          }}
+                        >{copied === l.person ? 'Copiado' : 'Copiar link'}</button>
+                        <a className="link-btn" href={`https://wa.me/?text=${encodeURIComponent(`${l.person}, suas tarefas da Arco: ${typeof location !== 'undefined' ? location.origin : ''}${l.url}`)}`} target="_blank" rel="noreferrer">WhatsApp</a>
+                        <a className="link-btn" href={l.url} target="_blank" rel="noreferrer">Abrir</a>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -441,7 +474,7 @@ export default function ProducaoBoard({
         </>
       )}
 
-      {editing && !tv && (
+      {editing && admin && (
         <RoutineForm
           row={editing === 'novo' ? null : editing}
           clients={clients.map((c) => c.name)}

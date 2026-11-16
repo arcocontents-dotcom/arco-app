@@ -922,16 +922,15 @@ try {
     await pd.getByText('Produção do mês').waitFor();
     // relatório: quem gravou
     await pd.goto(`${APP}/admin/producao/relatorio?m=${today.slice(0, 7)}`);
-    await pd.locator('.rp-person', { hasText: 'Yan' }).getByText('1 captação').waitFor();
-    await pd.locator('.rp-top').getByText('Captações realizadas').waitFor();
+    await pd.locator('.rp-person', { hasText: 'Yan' }).locator('.rp-num.f-capt').waitFor();
+    await pd.getByText('Efetividade da equipe').waitFor();
   });
 
-  await step('relatório da produção: quem editou quantos vídeos, posts e stories', async () => {
-    await pd.goto(`${APP}/admin/producao/relatorio?m=2026-11`);
-    const kpis = pd.getByRole('region', { name: 'Totais do mês' }).or(pd.locator('section[aria-label="Totais do mês"]')).first();
-    await kpis.getByText('Vídeos (Reels)').waitFor();
-    const marcos = pd.locator('.rp-person', { hasText: 'Marcos' });
-    assert.equal((await marcos.locator('b').textContent())?.trim(), '1', 'Marcos editou 1');
+  await step('relatório da produção: só com o que está na aba Produção', async () => {
+    await pd.goto(`${APP}/admin/producao/relatorio`);
+    await pd.getByText('Efetividade da equipe').waitFor();
+    const rafa = pd.locator('.rp-person', { hasText: 'Rafa' });
+    await rafa.getByText(/fixas \d+\/\d+/).waitFor();
     await pd.waitForTimeout(700);
     await shot(pd, '23-producao-relatorio');
   });

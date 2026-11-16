@@ -78,6 +78,16 @@ export const routineConfigured = () => !!env.routineDb;
 export function tvKey(): string {
   return createHmac('sha256', Buffer.from(env.sessionSecret)).update('arco-tv-producao-v1').digest('base64url').slice(0, 28);
 }
+/** Link pessoal de cada pessoa da equipe (vê e marca só as próprias tarefas). */
+export function teamKey(person: Person): string {
+  return createHmac('sha256', Buffer.from(env.sessionSecret)).update(`arco-equipe-v1:${person}`).digest('base64url').slice(0, 24);
+}
+export function validTeamKey(person: string, k: string | undefined | null): person is Person {
+  if (!k || !isPerson(person)) return false;
+  const a = Buffer.from(k);
+  const b = Buffer.from(teamKey(person));
+  return a.length === b.length && a.every((x, i) => x === b[i]);
+}
 export function validTvKey(k: string | undefined | null): boolean {
   if (!k) return false;
   const a = Buffer.from(k);
@@ -85,7 +95,7 @@ export function validTvKey(k: string | undefined | null): boolean {
   return a.length === b.length && a.every((x, i) => x === b[i]);
 }
 
-const isPerson = (s: string | null): s is Person => !!s && (TEAM as readonly string[]).includes(s);
+export const isPerson = (s: string | null): s is Person => !!s && (TEAM as readonly string[]).includes(s);
 
 /** Urgência automática dos conteúdos pela data de postagem. */
 function urgencyByDay(day: string | null, today: string): Urgency {
@@ -551,3 +561,17 @@ export async function productionReport(first: string): Promise<ProdReport | stri
 }
 
 const startOfWeekMon = (d: string) => addDays(d, -weekdayMon(d));
+
+/** Para o link da equipe: confere se a tarefa é mesmo daquela pessoa antes de marcar. */
+export async function taskBelongsTo(person: Person, source: string, id: string): Promise<boolean> {
+  const p = await notion().pages.retrieve({ page_id: id });
+  if (!isPage(p)) return false;
+  const parent = normId(p.parent.type === 'database_id' ? p.parent.database_id : '');
+  if (source === 'rotina' && env.routineDb && parent === normId(env.routineDb)) {
+    const who = select(p.properties[R.person]);
+    return who === person || who === 'Equipe';
+  }
+  if (source === 'conteudo' && env.planningDb && parent === normId(env.planningDb)) return select(p.properties[P.owner]) === person;
+  if (source === 'captacao' && env.shootsDb && parent === normId(env.shootsDb)) return multi(p.properties[schema.shoot.crew]).includes(person);
+  return false;
+}

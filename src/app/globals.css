@@ -1169,3 +1169,21 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .prod.tv .pt.f-outro { --fc: #979a9b; --fbg: #2a2b2c; }
 .prod.tv .pt.f-capt { --fc: #ff7369; --fbg: #3a1f1f; }
 .rf-fmt { flex-wrap: wrap; }
+/* links da equipe + página pessoal */
+.team-links-wrap { position: relative; }
+.team-links { position: absolute; right: 0; top: calc(100% + 8px); z-index: 40; width: min(360px, 90vw); background: #fff; border: 1px solid var(--line); box-shadow: 0 18px 40px -20px rgba(0, 0, 0, 0.4); padding: 14px; display: flex; flex-direction: column; gap: 10px; animation: rise 0.3s var(--ease) both; }
+.team-link { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.team-link .pav { --pc: var(--ink); }
+.team-link strong { flex: 1; }
+.team-shell { min-height: 100vh; background: var(--paper, #eceae6); padding: 20px 16px 40px; max-width: 760px; margin: 0 auto; }
+.team-head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.team-head img { height: 28px; width: auto; }
+.team-head h1 { margin: 2px 0 0; font-size: 26px; }
+.team-shell .pcols.one { grid-template-columns: 1fr; }
+.rp-kpis.four { grid-template-columns: 1.3fr repeat(3, 1fr); }
+@media (max-width: 760px) { .rp-kpis.four { grid-template-columns: repeat(2, 1fr); } }
+.rp-kpi.late strong { color: #c23b3b; }
+.rp-bar { height: 8px; border-radius: 6px; background: #f0eeea; overflow: hidden; }
+.rp-bar span { display: block; height: 100%; background: var(--ink); border-radius: 6px; transition: width 0.8s var(--ease); }
+.rp-num.f-capt { --fc: #e03e3e; }
+.rp-clients li .rp-num { flex: 1; }

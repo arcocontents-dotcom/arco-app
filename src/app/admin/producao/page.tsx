@@ -2,7 +2,7 @@ import { requireAdmin } from '@/lib/access';
 import { env } from '@/lib/env';
 import { listClients } from '@/lib/notion';
 import { MONTHS, addDays, addMonths, monthGrid, parseDay, startOfWeek, todayIn } from '@/lib/domain';
-import { productionWeek, routineConfigured, tvKey } from '@/lib/producao';
+import { TEAM, productionWeek, routineConfigured, teamKey, tvKey } from '@/lib/producao';
 import AdminShell from '@/components/AdminShell';
 import Icon from '@/components/Icon';
 import ProducaoBoard from '@/components/ProducaoBoard';
@@ -50,6 +50,7 @@ export default async function Producao({ searchParams }: { searchParams: Promise
         nextHref={mode === 'mes' ? q(addMonths(first, 1)) : q(addDays(start, 7))}
         todayHref={mode === 'mes' ? '/admin/producao?r=mes' : '/admin/producao'}
         tvUrl={`/tv/producao?k=${tvKey()}`}
+        teamLinks={TEAM.map((p) => ({ person: p, url: `/equipe/${p.toLowerCase()}?k=${teamKey(p)}` }))}
       />
     </AdminShell>
   );
