@@ -29,6 +29,7 @@ export interface Task {
   type: RoutineType | 'Conteúdo';
   done: boolean;
   url: string;
+  launched?: string | null;
 }
 export interface RoutineRow {
   id: string;
@@ -40,6 +41,7 @@ export interface RoutineRow {
   urgency: 'Alta' | 'Média' | 'Baixa';
   client: string;
   active: boolean;
+  created: string;
 }
 
 const TEAM: Person[] = ['Lemuel', 'Marcos', 'Yan', 'Rafa'];
@@ -182,12 +184,13 @@ export default function ProducaoBoard({
           ) : (
             <h4 className="pt-title">{t.title}</h4>
           )}
-          {(t.note || late || showDay || t.urgency === 'alta') && (
+          {(t.note || late || showDay || t.urgency === 'alta' || (t.launched && t.type !== 'Tarefa fixa')) && (
             <div className="pt-foot">
               {t.note && t.note !== 'Finalizado' && <span className="pt-note">{t.note}</span>}
               {late && <span className="pt-late">Atrasado{t.day ? ` · ${dayNum(t.day)}/${t.day.slice(5, 7)}` : ''}</span>}
               {!late && t.urgency === 'alta' && !t.done && <span className="pt-urg">Urgente</span>}
               {showDay && t.day && !late && <span className="pt-day">{WD[weekdayMon(t.day)]} {dayNum(t.day)}{t.time ? ` · ${t.time}` : ''}</span>}
+              {t.launched && t.type !== 'Tarefa fixa' && <span className="pt-day">Lançada {t.launched.slice(8, 10)}/{t.launched.slice(5, 7)}</span>}
             </div>
           )}
           {!tv && t.source === 'conteudo' && !t.done && (
@@ -380,6 +383,7 @@ export default function ProducaoBoard({
           row={editing === 'novo' ? null : editing}
           clients={clients.map((c) => c.name)}
           defaultWho={who === 'todos' ? 'Rafa' : who}
+          today={today}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); router.refresh(); }}
         />
@@ -390,29 +394,38 @@ export default function ProducaoBoard({
 
 const MON = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
+const br = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
+
 function RoutineForm({
-  row, clients, defaultWho, onClose, onSaved
+  row, clients, defaultWho, today, onClose, onSaved
 }: {
   row: RoutineRow | null;
   clients: string[];
   defaultWho: Who;
+  today: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const fixed = row?.type === 'Tarefa fixa';
   const [title, setTitle] = useState(row?.title ?? '');
   const [who, setWho] = useState<Who>(row?.person ?? defaultWho);
-  const [type, setType] = useState<RoutineType>(row?.type ?? 'Lembrete');
-  const [days, setDays] = useState<string[]>(row?.days ?? ['Seg', 'Ter', 'Qua', 'Qui', 'Sex']);
+  const [type, setType] = useState<RoutineType>(row?.type ?? 'Tarefa');
   const [date, setDate] = useState(row?.date ?? '');
   const [urgency, setUrgency] = useState<RoutineRow['urgency']>(row?.urgency ?? 'Média');
   const [client, setClient] = useState(row?.client ?? '');
   const [err, setErr] = useState<string | null>(null);
   const [confirmDel, setConfirmDel] = useState(false);
   const [pending, start] = useTransition();
+  // lançada em: o dia de hoje (ou o dia em que foi criada), fixo
+  const launched = row?.created ?? today;
 
   const save = () =>
     start(async () => {
-      const r = await saveRoutineAction(row?.id ?? null, { title, person: who, type, days, date: date || null, urgency, client });
+      if (!fixed && !date) {
+        setErr('Escolha a data de entrega.');
+        return;
+      }
+      const r = await saveRoutineAction(row?.id ?? null, { title, person: who, type, days: fixed ? row!.days : [], date: fixed ? null : date, urgency, client });
       if (r.ok) onSaved();
       else setErr(r.error);
     });
@@ -431,7 +444,7 @@ function RoutineForm({
           <span className="label">{row ? 'Editar' : 'Novo lembrete ou tarefa'}</span>
           <button type="button" className="icon-btn" aria-label="Fechar" onClick={onClose}><Icon name="x" /></button>
         </div>
-        <input className="drawer-title" placeholder="Ex.: Aguar as plantas" aria-label="Tarefa" value={title} autoFocus onChange={(e) => setTitle(e.target.value)} maxLength={200} />
+        <input className="drawer-title" placeholder="Ex.: Editar vídeo" aria-label="Tarefa" value={title} autoFocus onChange={(e) => setTitle(e.target.value)} maxLength={200} />
 
         <div className="rf-row">
           <span className="rf-l">Quem</span>
@@ -446,30 +459,29 @@ function RoutineForm({
 
         <div className="rf-row">
           <span className="rf-l">Tipo</span>
-          <div className="plan-views" role="radiogroup" aria-label="Tipo">
-            {([['Lembrete', 'Lembrete'], ['Tarefa fixa', 'Tarefa fixa'], ['Tarefa', 'Uma vez']] as [RoutineType, string][]).map(([v, l]) => (
-              <button key={v} type="button" role="radio" aria-checked={type === v} aria-selected={type === v} onClick={() => setType(v)}>{l}</button>
-            ))}
-          </div>
+          {fixed ? (
+            <span className="rf-fixed">Tarefa fixa · {row!.days.join(', ')}</span>
+          ) : (
+            <div className="plan-views" role="radiogroup" aria-label="Tipo">
+              {(['Tarefa', 'Lembrete'] as RoutineType[]).map((v) => (
+                <button key={v} type="button" role="radio" aria-checked={type === v} aria-selected={type === v} onClick={() => setType(v)}>{v}</button>
+              ))}
+            </div>
+          )}
         </div>
 
-        {type === 'Tarefa' ? (
+        <div className="rf-row">
+          <span className="rf-l">Lançada em</span>
+          <span className="rf-locked" aria-label="Lançada em">
+            <Icon name="calendar" size={13} />{br(launched)}<small>fixa</small>
+          </span>
+        </div>
+
+        {!fixed && (
           <label className="rf-row">
-            <span className="rf-l">Dia</span>
-            <input type="date" className="ninput" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Dia" />
+            <span className="rf-l">Entrega</span>
+            <input type="date" className="ninput" required min={launched} value={date} onChange={(e) => setDate(e.target.value)} aria-label="Data de entrega" />
           </label>
-        ) : (
-          <div className="rf-row">
-            <span className="rf-l">Repete</span>
-            <div className="rf-days" role="group" aria-label="Dias da semana">
-              {WD.map((d) => (
-                <button key={d} type="button" aria-pressed={days.includes(d)} onClick={() => setDays((l) => (l.includes(d) ? l.filter((x) => x !== d) : WD.filter((x) => x === d || l.includes(x))))}>
-                  {d}
-                </button>
-              ))}
-              <button type="button" className="link-btn" onClick={() => setDays(['Seg', 'Ter', 'Qua', 'Qui', 'Sex'])}>Seg a Sex</button>
-            </div>
-          </div>
         )}
 
         <div className="rf-row">

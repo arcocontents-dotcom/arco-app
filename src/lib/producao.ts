@@ -43,6 +43,8 @@ export interface ProdTask {
   type: RoutineType | 'Conteúdo';
   done: boolean;
   url: string;
+  /** Dia em que a tarefa foi lançada (só nas tarefas e lembretes da equipe). */
+  launched?: string | null;
 }
 
 export interface Routine {
@@ -56,6 +58,8 @@ export interface Routine {
   client: string;
   doneOn: string[];
   active: boolean;
+  /** Dia em que foi lançada (criada no Notion): fixo, ninguém altera. */
+  created: string;
 }
 
 export const routineConfigured = () => !!env.routineDb;
@@ -98,7 +102,8 @@ function toRoutine(p: PageObjectResponse): Routine {
     urgency: (URGENCY_LABEL as readonly string[]).includes(urg ?? '') ? (urg as Routine['urgency']) : 'Média',
     client: text(pr[R.client]),
     doneOn: text(pr[R.doneOn]).split(/[\s,]+/).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)),
-    active: checkbox(pr[R.active])
+    active: checkbox(pr[R.active]),
+    created: localParts(p.created_time, env.timeZone).day
   };
 }
 
@@ -216,10 +221,11 @@ export async function productionWeek(
       kind: null,
       note: null,
       type: r.type,
-      url: `https://www.notion.so/${normId(r.id)}`
+      url: `https://www.notion.so/${normId(r.id)}`,
+      launched: r.created
     };
-    if (r.type === 'Tarefa') {
-      // tarefa avulsa: no dia dela; se ficou para trás sem fazer, aparece como atrasada
+    if (r.type !== 'Tarefa fixa') {
+      // tarefa e lembrete: no dia da entrega; se ficou para trás sem fazer, aparece como atrasada
       const done = !!r.date && r.doneOn.includes(r.date);
       if (!r.date) {
         if (!done) out.tasks.push({ ...base, key: `r-${r.id}`, day: null, urgency: fromLabel(r.urgency), done: false });
@@ -236,7 +242,7 @@ export async function productionWeek(
       });
       continue;
     }
-    // tarefa fixa e lembrete: repetem nos dias marcados
+    // tarefa fixa: repete nos dias marcados
     for (let i = 0; i < 7; i++) {
       const d = addDays(start, i);
       if (!r.days.includes(WEEKDAYS[weekdayMon(d)])) continue;
@@ -283,8 +289,8 @@ function routineProps(x: RoutineInput) {
     [R.title]: titleProp(x.title),
     [R.person]: { select: { name: x.person } },
     [R.type]: { select: { name: x.type } },
-    [R.days]: { multi_select: x.type === 'Tarefa' ? [] : x.days.map((name) => ({ name })) },
-    [R.date]: { date: x.type === 'Tarefa' && x.date ? { start: x.date } : null },
+    [R.days]: { multi_select: x.type !== 'Tarefa fixa' ? [] : x.days.map((name) => ({ name })) },
+    [R.date]: { date: x.type !== 'Tarefa fixa' && x.date ? { start: x.date } : null },
     [R.urgency]: { select: { name: x.urgency } },
     [R.client]: { rich_text: x.client ? [{ text: { content: x.client } }] : [] }
   };

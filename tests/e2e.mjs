@@ -749,20 +749,28 @@ try {
     await colOf('Rafa').getByRole('button', { name: 'Desmarcar: Alimentar o Notion' }).first().waitFor();
     await pd.waitForTimeout(700);
     assert.match(page(ROUT).properties['Feito em'].rich_text.map((t) => t.plain_text).join(''), new RegExp(today));
-    // lembrete da equipe
+    // lembrete da equipe: data de lançamento fixa (hoje) e data de entrega obrigatória
     await pd.getByRole('button', { name: 'Lembrete ou tarefa' }).click();
     const f = pd.getByRole('dialog', { name: 'Novo lembrete ou tarefa' });
-    await f.getByLabel('Tarefa').fill('Aguar as plantas');
+    assert.equal(await f.getByLabel('Tarefa', { exact: true }).getAttribute('placeholder'), 'Ex.: Editar vídeo');
+    const br = `${today.slice(8, 10)}/${today.slice(5, 7)}/${today.slice(0, 4)}`;
+    await f.getByLabel('Lançada em').getByText(br).waitFor();
+    assert.equal(await f.getByText('Repete').count(), 0, 'sem repetição');
+    await f.getByLabel('Tarefa', { exact: true }).fill('Aguar as plantas');
     await f.getByRole('button', { name: 'Equipe' }).click();
-    await f.getByRole('button', { name: 'Sáb' }).click();
-    await f.getByRole('button', { name: 'Dom' }).click();
+    await f.getByRole('radio', { name: 'Lembrete' }).click();
     await f.getByRole('radio', { name: 'Baixa' }).click();
     await f.getByRole('button', { name: 'Salvar' }).click();
+    await f.getByText('Escolha a data de entrega.').waitFor();
+    await f.getByLabel('Data de entrega').fill(today);
+    await f.getByRole('button', { name: 'Salvar' }).click();
     await pd.locator('.pteam').getByText('Aguar as plantas').waitFor();
+    await pd.locator('.pteam').getByText(`Lançada ${today.slice(8, 10)}/${today.slice(5, 7)}`).waitFor();
     const plant = [...store.values()].find((x) => x.properties.Tarefa?.title?.[0]?.plain_text === 'Aguar as plantas');
     assert.equal(plant.properties.Pessoa.select.name, 'Equipe');
     assert.equal(plant.properties.Tipo.select.name, 'Lembrete');
-    assert.equal(plant.properties.Dias.multi_select.length, 7);
+    assert.equal(plant.properties.Data.date.start, today);
+    assert.equal(plant.properties.Dias.multi_select.length, 0);
     // checklist de entrega: conteúdo marcado vira Finalizado no Notion e desce riscado
     await colOf('Lemuel').getByRole('button', { name: 'Marcar como entregue: Capa atrasada' }).click();
     await colOf('Lemuel').getByText('1 de 1 entregues').waitFor();

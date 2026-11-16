@@ -17,8 +17,9 @@ function clean(x: Partial<RoutineInput>): RoutineInput | string {
   const type = String(x.type ?? '');
   if (!(ROUTINE_TYPES as readonly string[]).includes(type)) return 'Tipo inválido.';
   const days = (Array.isArray(x.days) ? x.days : []).filter((d) => (WEEKDAYS as readonly string[]).includes(d));
-  if (type !== 'Tarefa' && !days.length) return 'Marque pelo menos um dia da semana.';
+  if (type === 'Tarefa fixa' && !days.length) return 'Tarefa fixa sem dias.';
   const date = x.date ? parseDay(String(x.date)) : null;
+  if (type !== 'Tarefa fixa' && !date) return 'Escolha a data de entrega.';
   const urgency = (URGENCY_LABEL as readonly string[]).includes(String(x.urgency)) ? (x.urgency as RoutineInput['urgency']) : 'Média';
   return { title, person: person as RoutineInput['person'], type: type as RoutineInput['type'], days, date, urgency, client: String(x.client ?? '').trim().slice(0, 120) };
 }

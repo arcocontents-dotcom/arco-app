@@ -102,7 +102,7 @@ export function seedBlocks(pageId, texts) {
 }
 
 export function seedPage(db, props, id = randomUUID().replace(/-/g, '')) {
-  const page = { object: 'page', id: fmtId(norm(id)), url: `https://www.notion.so/${norm(id)}`, archived: false, parent: { type: 'database_id', database_id: fmtId(db) }, properties: emptyProps(db) };
+  const page = { object: 'page', id: fmtId(norm(id)), url: `https://www.notion.so/${norm(id)}`, archived: false, created_time: new Date().toISOString(), parent: { type: 'database_id', database_id: fmtId(db) }, properties: emptyProps(db) };
   applyProps(page, db, props);
   store.set(norm(id), page);
   return page.id;
