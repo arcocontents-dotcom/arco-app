@@ -36,7 +36,7 @@ const TYPES = {
     'Captação': 'title', Data: 'date', Cliente: 'rich_text', 'Quem vai': 'multi_select', Tipo: 'select', Status: 'select', Local: 'rich_text', 'Observação': 'rich_text'
   },
   [ROUTINE_DB]: {
-    Tarefa: 'title', Pessoa: 'select', Tipo: 'select', Dias: 'multi_select', Data: 'date', 'Urgência': 'select', Cliente: 'rich_text', 'Feito em': 'rich_text', Ativo: 'checkbox', Formato: 'select', 'Formato (outro)': 'rich_text'
+    Tarefa: 'title', Pessoa: 'select', Tipo: 'select', Dias: 'multi_select', Data: 'date', 'Urgência': 'select', Cliente: 'rich_text', 'Feito em': 'rich_text', Ativo: 'checkbox', Formato: 'select', 'Formato (outro)': 'rich_text', 'Descrição': 'rich_text'
   }
 };
 

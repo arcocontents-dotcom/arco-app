@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -26,6 +26,17 @@ export interface ShootRow {
   url: string;
 }
 
+export interface AgendaRow {
+  id: string;
+  title: string;
+  day: string;
+  time: string | null;
+  endTime: string | null;
+  place: string;
+  note: string;
+  crew: Crew[];
+}
+
 const CREW: Crew[] = ['Lemuel', 'Marcos', 'Yan', 'Rafa'];
 const WD = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 const WD_LONG = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
@@ -33,13 +44,15 @@ const typeClass = (t: SType | null) => (t === 'Vídeo' ? 's-video' : t === 'Foto
 
 /** Calendário de captação: semana ou mês. Mesmo dado do Notion Calendar (tabela 📸 Captações). */
 export default function CaptacaoBoard({
-  view, days, month, today, shoots, clients, label, prevHref, nextHref, todayHref, weekHref, monthHref
+  view, days, month, today, shoots, agenda = [], agendaState = 'off', clients, label, prevHref, nextHref, todayHref, weekHref, monthHref
 }: {
   view: 'semana' | 'mes';
   days: { day: string; inMonth: boolean }[];
   month: string;
   today: string;
   shoots: ShootRow[];
+  agenda?: AgendaRow[];
+  agendaState?: 'off' | 'ok' | 'erro';
   clients: string[];
   label: string;
   prevHref: string;
@@ -53,6 +66,27 @@ export default function CaptacaoBoard({
   const [who, setWho] = useState<Crew | 'todos'>('todos');
   const list = shoots.filter((s) => who === 'todos' || s.crew.includes(who));
   const count = list.filter((s) => s.status !== 'Cancelada').length;
+  const [showAgenda, setShowAgenda] = useState(true);
+  const [open, setOpen] = useState<AgendaRow | null>(null);
+  // agenda do Notion Calendar: some o que já é captação do app (mesmo dia e título)
+  const agendaList = showAgenda
+    ? agenda.filter((a) => (who === 'todos' || a.crew.includes(who)) && !shoots.some((s) => s.day === a.day && s.title.trim().toLowerCase() === a.title.trim().toLowerCase()))
+    : [];
+  const ag = (a: AgendaRow, compact: boolean) => (
+    <button key={a.id} type="button" className={`sh ag${compact ? ' compact' : ''}`} onClick={() => setOpen(a)} aria-label={`Agenda: ${a.title}${a.time ? ` às ${a.time}` : ''}`}>
+      <span className="sh-time"><Icon name="calendar" size={11} />{a.time ? `${a.time}${a.endTime && !compact ? `–${a.endTime}` : ''}` : 'Dia todo'}</span>
+      <span className="sh-title">{a.title}</span>
+      {!compact && a.place && <span className="sh-place">📍 {a.place}</span>}
+      {a.crew.length > 0 && <span className="sh-crew">{a.crew.map((c) => <span key={c} className="pav sm" title={c}>{c.charAt(0)}</span>)}</span>}
+    </button>
+  );
+  const merged = (day: string, compact: boolean) => {
+    const xs: { k: string; el: ReactNode }[] = [
+      ...list.filter((s) => s.day === day).map((s) => ({ k: `${s.time ?? ''}a${s.id}`, el: event(s, compact) })),
+      ...agendaList.filter((a) => a.day === day).map((a) => ({ k: `${a.time ?? ''}b${a.id}`, el: ag(a, compact) }))
+    ];
+    return xs.sort((x, y) => x.k.localeCompare(y.k)).map((x) => x.el);
+  };
 
   const event = (s: ShootRow, compact: boolean) => (
     <button
@@ -107,20 +141,25 @@ export default function CaptacaoBoard({
         </div>
         <div className="sh-legend" aria-hidden="true">
           <span className="s-video">Vídeo</span><span className="s-foto">Foto</span><span className="s-ambos">Vídeo e foto</span>
+          {agendaState === 'ok' && <span className="s-ag">Agenda</span>}
         </div>
+        {agendaState === 'ok' && (
+          <button type="button" className="link-btn" aria-pressed={showAgenda} onClick={() => setShowAgenda(!showAgenda)}>
+            {showAgenda ? 'Ocultar agenda' : 'Mostrar agenda'}
+          </button>
+        )}
       </div>
 
       {view === 'semana' ? (
         <div className="pweek capt-week">
           {days.map(({ day }) => {
-            const items = list.filter((s) => s.day === day);
             return (
               <section key={day} className={`pday${day === today ? ' today' : ''}${day < today ? ' past' : ''}`} aria-label={`${WD_LONG[weekdayMon(day)]} ${dayNum(day)}`}>
                 <header>
                   <span>{WD[weekdayMon(day)]}</span><strong>{dayNum(day)}</strong>
                   <button type="button" className="pcal-add" onClick={() => setEditing({ day })} aria-label={`Nova captação em ${day}`}><Icon name="plus" size={14} /></button>
                 </header>
-                <div className="pcol-list">{items.map((s) => event(s, false))}</div>
+                <div className="pcol-list">{merged(day, false)}</div>
               </section>
             );
           })}
@@ -134,15 +173,46 @@ export default function CaptacaoBoard({
                 <span>{dayNum(day)}</span>
                 <button type="button" className="pcal-add" onClick={() => setEditing({ day })} aria-label={`Nova captação em ${day}`}><Icon name="plus" size={14} /></button>
               </div>
-              {list.filter((s) => s.day === day).map((s) => event(s, true))}
+              {merged(day, true)}
             </div>
           ))}
         </div>
       )}
 
+      {agendaState === 'off' && (
+        <div className="ag-setup" role="note">
+          <strong><Icon name="calendar" size={14} />Ligar a agenda do Notion Calendar</strong>
+          <p>Para os eventos da sua agenda aparecerem aqui (cinza, só leitura):</p>
+          <ol>
+            <li>No <b>Google Agenda</b> (a conta que está no Notion Calendar) → engrenagem → <b>Configurações</b> → clique na agenda da gravação.</li>
+            <li>Em <b>Integrar agenda</b>, copie o <b>Endereço secreto no formato iCal</b>.</li>
+            <li>No <b>Cloudflare</b> → Workers → <b>arco-app</b> → Settings → Variables and Secrets → <b>Add</b> → tipo <b>Secret</b>, nome <code>CAPTACAO_ICS_URL</code>, cole o endereço e salve. Mais de uma agenda: cole os endereços separados por espaço.</li>
+          </ol>
+          <p>Não cole esse endereço em nenhum chat: ele dá acesso de leitura à agenda.</p>
+        </div>
+      )}
+      {agendaState === 'erro' && <p className="error" style={{ margin: 0 }}>Não consegui ler a agenda agora (link iCal). Confira o secret CAPTACAO_ICS_URL no Cloudflare.</p>}
       <p className="hint" style={{ margin: 0 }}>
-        Tudo aqui fica na tabela <b>📸 Captações</b> do Notion. Para ver no <b>Notion Calendar</b>: abra o Notion Calendar → barra lateral → <b>+ Adicionar calendário do Notion</b> → escolha <b>📸 Captações</b>.
+        Captações criadas aqui ficam na tabela <b>📸 Captações</b> do Notion e aparecem no <b>Notion Calendar</b> (barra lateral → <b>+ Adicionar calendário do Notion</b> → <b>📸 Captações</b>).
+        {agendaState === 'ok' && <> Os eventos em cinza vêm da sua agenda e são só leitura.</>}
       </p>
+
+      {open && (
+        <div className="ag-pop-bg" onClick={() => setOpen(null)}>
+          <div className="ag-pop" role="dialog" aria-label={open.title} onClick={(e) => e.stopPropagation()}>
+            <span className="label">Agenda · Notion Calendar</span>
+            <h3>{open.title}</h3>
+            <p>{WD_LONG[weekdayMon(open.day)]}, {dayNum(open.day)}/{open.day.slice(5, 7)} · {open.time ? `${open.time}${open.endTime ? `–${open.endTime}` : ''}` : 'Dia todo'}</p>
+            {open.place && <p>📍 {open.place}</p>}
+            {open.crew.length > 0 && <p>Quem vai: {open.crew.join(', ')}</p>}
+            {open.note && <p className="ag-note">{open.note}</p>}
+            <div className="ag-actions">
+              <a className="btn small" href="cron://">Abrir Notion Calendar</a>
+              <button type="button" className="link-btn" onClick={() => setOpen(null)}>Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editing && (
         <ShootForm

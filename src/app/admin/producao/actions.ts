@@ -20,12 +20,12 @@ function clean(x: Partial<RoutineInput>): RoutineInput | string {
   const days = (Array.isArray(x.days) ? x.days : []).filter((d) => (WEEKDAYS as readonly string[]).includes(d));
   if (type === 'Tarefa fixa' && !days.length) return 'Tarefa fixa sem dias.';
   const date = x.date ? parseDay(String(x.date)) : null;
-  if (type !== 'Tarefa fixa' && !date) return 'Escolha a data de entrega.';
+  if (type === 'Tarefa' && !date) return 'Escolha a data de entrega.';
   const urgency = (URGENCY_LABEL as readonly string[]).includes(String(x.urgency)) ? (x.urgency as RoutineInput['urgency']) : 'Média';
   const format = (FORMATS as readonly string[]).includes(String(x.format ?? '')) ? (x.format as RoutineInput['format']) : null;
   const formatOther = format === 'Outro' ? String(x.formatOther ?? '').trim().slice(0, 120) : '';
   if (format === 'Outro' && !formatOther) return 'Descreva o formato da tarefa.';
-  return { title, person: person as RoutineInput['person'], type: type as RoutineInput['type'], days, date, urgency, client: String(x.client ?? '').trim().slice(0, 120), format, formatOther };
+  return { title, person: person as RoutineInput['person'], type: type as RoutineInput['type'], days, date, urgency, client: String(x.client ?? '').trim().slice(0, 120), format, formatOther, desc: String(x.desc ?? '').trim().slice(0, 1900) };
 }
 
 export async function toggleRoutineAction(id: string, day: string, done: boolean): Promise<R> {

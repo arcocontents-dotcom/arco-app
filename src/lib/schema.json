@@ -75,7 +75,8 @@
     "doneOn": "Feito em",
     "active": "Ativo",
     "format": "Formato",
-    "formatOther": "Formato (outro)"
+    "formatOther": "Formato (outro)",
+    "desc": "Descrição"
   },
   "shoot": {
     "title": "Captação",

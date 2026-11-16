@@ -52,6 +52,8 @@ export interface ProdTask {
   launched?: string | null;
   /** Formato da task interna (para a cor). */
   fmt?: string | null;
+  /** Descrição da task (o que a pessoa precisa fazer), sempre aberta no card. */
+  desc?: string | null;
 }
 
 export interface Routine {
@@ -70,6 +72,8 @@ export interface Routine {
   format: TaskFormat | null;
   /** Descrição quando o formato é "Outro". */
   formatOther: string;
+  /** Descrição da tarefa (opcional). */
+  desc: string;
 }
 
 export const routineConfigured = () => !!env.routineDb;
@@ -128,7 +132,8 @@ function toRoutine(p: PageObjectResponse): Routine {
       const f = select(pr[R.format]) ?? '';
       return (FORMATS as readonly string[]).includes(f) ? (f as TaskFormat) : LEGACY_FORMAT[f] ?? null;
     })(),
-    formatOther: text(pr[R.formatOther])
+    formatOther: text(pr[R.formatOther]),
+    desc: text(pr[R.desc])
   };
 }
 
@@ -273,6 +278,7 @@ export async function productionWeek(
       time: null,
       kind: r.format === 'Outro' ? r.formatOther || 'Outro' : r.format,
       fmt: r.format,
+      desc: r.desc || null,
       note: null,
       type: r.type,
       url: `https://www.notion.so/${normId(r.id)}`,
@@ -280,11 +286,14 @@ export async function productionWeek(
     };
     if (r.type !== 'Tarefa fixa') {
       // tarefa e lembrete: no dia da entrega; se ficou para trás sem fazer, aparece como atrasada
-      const done = !!r.date && r.doneOn.includes(r.date);
       if (!r.date) {
-        if (!done) out.tasks.push({ ...base, key: `r-${r.id}`, day: null, urgency: fromLabel(r.urgency), done: false });
+        // lembrete sem data: fica na lista até ser marcado; depois some na semana seguinte
+        const lastDone = [...r.doneOn].sort().pop() ?? null;
+        if (lastDone && lastDone < start) continue;
+        out.tasks.push({ ...base, key: `r-${r.id}`, day: null, urgency: fromLabel(r.urgency), done: !!lastDone });
         continue;
       }
+      const done = r.doneOn.includes(r.date);
       if (r.date > end) continue;
       if (r.date < start && done) continue;
       out.tasks.push({
@@ -338,6 +347,7 @@ export interface RoutineInput {
   client: string;
   format: TaskFormat | null;
   formatOther: string;
+  desc: string;
 }
 
 function routineProps(x: RoutineInput) {
@@ -350,7 +360,8 @@ function routineProps(x: RoutineInput) {
     [R.urgency]: { select: { name: x.urgency } },
     [R.client]: { rich_text: x.client ? [{ text: { content: x.client } }] : [] },
     [R.format]: { select: x.format ? { name: x.format } : null },
-    [R.formatOther]: { rich_text: x.format === 'Outro' && x.formatOther ? [{ text: { content: x.formatOther.slice(0, 120) } }] : [] }
+    [R.formatOther]: { rich_text: x.format === 'Outro' && x.formatOther ? [{ text: { content: x.formatOther.slice(0, 120) } }] : [] },
+    [R.desc]: { rich_text: x.desc ? [{ text: { content: x.desc.slice(0, 1900) } }] : [] }
   };
 }
 

@@ -1228,3 +1228,28 @@ button, input, textarea, select { font: inherit; color: inherit; }
   2%, 4% { box-shadow: 0 0 0 1px var(--fc, #39ff14), 0 0 6px 0 var(--fc, #39ff14); }
 }
 @media (prefers-reduced-motion: reduce) { .prod .pt.due { animation: none; box-shadow: 0 0 0 2px var(--fc, #39ff14); } }
+/* descrição da task: no formulário começa minimizada; no card fica aberta */
+.rf-desc { align-items: flex-start; }
+.rf-desc textarea { flex: 1; resize: vertical; min-height: 72px; font: 14px/1.45 var(--body); }
+.rf-desc-add { display: inline-flex; align-items: center; gap: 6px; border: 1px dashed var(--line); background: none; padding: 7px 12px; border-radius: 8px; font: 500 13px var(--body); color: var(--muted); cursor: pointer; }
+.rf-desc-add:hover { color: var(--ink); border-color: var(--ink); }
+.pt-desc { margin: 4px 0 0; font-size: 13px; line-height: 1.45; color: #4a4741; white-space: pre-wrap; overflow-wrap: anywhere; }
+.prod.tv .pt-desc { color: #d6d2ca; font-size: 15px; }
+/* título da task: Inter, bold mais legível que a Montserrat grossa */
+.pt-title, .pt-title.as-link { font-family: 'Inter', var(--body); font-weight: 650; letter-spacing: -0.011em; font-size: 14.5px; line-height: 1.32; }
+.prod.tv .pt-title { font-size: 17.5px; }
+/* agenda do Notion Calendar (link iCal), só leitura */
+.sh.ag { --sc: #9b9890; background: #f4f3f0; border-left-color: #9b9890; color: #4a4741; }
+.sh.ag .sh-time { color: #6b6862; }
+.sh-legend .s-ag::before { background: #9b9890; }
+.ag-setup { background: #fff; border: 1px dashed var(--line); padding: 16px 18px; font-size: 13.5px; line-height: 1.5; }
+.ag-setup strong { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+.ag-setup p { margin: 6px 0; color: var(--muted); }
+.ag-setup ol { margin: 6px 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.ag-setup code { font-size: 12px; background: #f0eeea; padding: 1px 5px; border-radius: 4px; }
+.ag-pop-bg { position: fixed; inset: 0; background: rgba(18, 18, 18, 0.45); display: flex; align-items: center; justify-content: center; z-index: 80; padding: 16px; }
+.ag-pop { background: #fff; max-width: 420px; width: 100%; padding: 22px; display: flex; flex-direction: column; gap: 8px; border-radius: 10px; }
+.ag-pop h3 { margin: 0; font-size: 20px; }
+.ag-pop p { margin: 0; font-size: 14px; }
+.ag-note { white-space: pre-wrap; color: #4a4741; max-height: 200px; overflow: auto; }
+.ag-actions { display: flex; gap: 10px; align-items: center; margin-top: 6px; }

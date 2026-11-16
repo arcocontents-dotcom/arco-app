@@ -33,6 +33,7 @@ export interface Task {
   url: string;
   launched?: string | null;
   fmt?: string | null;
+  desc?: string | null;
 }
 export interface RoutineRow {
   id: string;
@@ -47,6 +48,7 @@ export interface RoutineRow {
   created: string;
   format: TaskFormatName | null;
   formatOther: string;
+  desc: string;
 }
 
 const TEAM: Person[] = ['Lemuel', 'Marcos', 'Yan', 'Rafa'];
@@ -157,13 +159,13 @@ export default function ProducaoBoard({
   const pending = (list: Task[]) => list.filter((t) => !t.done).length;
 
   function toggle(t: Task) {
-    if (tv || (t.source === 'rotina' && !t.day)) return;
+    if (tv) return;
     const done = !t.done;
     setTasks((l) => l.map((x) => (x.key === t.key ? { ...x, done } : x)));
     start2(async () => {
       const r = member
-        ? await teamToggleAction(member.person, member.k, t.source, t.id, t.day, done)
-        : t.source === 'rotina' ? await toggleRoutineAction(t.id, t.day!, done)
+        ? await teamToggleAction(member.person, member.k, t.source, t.id, t.day ?? today, done)
+        : t.source === 'rotina' ? await toggleRoutineAction(t.id, t.day ?? today, done)
         : t.source === 'captacao' ? await shootStatusAction(t.id, done ? 'Realizada' : 'Agendada')
         : await toggleContentAction(t.id, done);
       if (!r.ok) {
@@ -226,6 +228,7 @@ export default function ProducaoBoard({
           ) : (
             <h4 className="pt-title">{t.title}</h4>
           )}
+          {t.desc && <p className="pt-desc">{t.desc}</p>}
           {(t.note || late || showDay || t.urgency === 'alta' || (t.launched && t.type !== 'Tarefa fixa')) && (
             <div className="pt-foot">
               {t.note && t.note !== 'Finalizado' && <span className={t.source === 'captacao' ? 'pt-day' : 'pt-note'}>{t.source === 'captacao' ? `📍 ${t.note}` : t.note}</span>}
@@ -512,6 +515,8 @@ function RoutineForm({
   const [urgency, setUrgency] = useState<RoutineRow['urgency']>(row?.urgency ?? 'Média');
   const [format, setFormat] = useState<RoutineRow['format']>(row?.format ?? null);
   const [formatOther, setFormatOther] = useState(row?.formatOther ?? '');
+  const [desc, setDesc] = useState(row?.desc ?? '');
+  const [descOpen, setDescOpen] = useState(!!row?.desc);
   // Cliente: da agência (lista), Freelancer ou Casamento (escreve o nome), ou nenhum
   type Kind = 'agencia' | 'freelancer' | 'casamento' | 'nenhum';
   const PREFIX: Record<'freelancer' | 'casamento', string> = { freelancer: 'Freelancer · ', casamento: 'Casamento · ' };
@@ -528,7 +533,7 @@ function RoutineForm({
 
   const save = () =>
     start(async () => {
-      if (!fixed && !date) {
+      if (type === 'Tarefa' && !date) {
         setErr('Escolha a data de entrega.');
         return;
       }
@@ -546,7 +551,7 @@ function RoutineForm({
       }
       const clientName =
         ckind === 'freelancer' || ckind === 'casamento' ? `${PREFIX[ckind]}${freeName.trim()}` : ckind === 'agencia' ? client : '';
-      const r = await saveRoutineAction(row?.id ?? null, { title, person: who, type, days: fixed ? row!.days : [], date: fixed ? null : date, urgency, client: clientName, format, formatOther });
+      const r = await saveRoutineAction(row?.id ?? null, { title, person: who, type, days: fixed ? row!.days : [], date: fixed ? null : date, urgency, client: clientName, format, formatOther, desc });
       if (r.ok) onSaved();
       else setErr(r.error);
     });
@@ -601,7 +606,8 @@ function RoutineForm({
         {!fixed && (
           <label className="rf-row">
             <span className="rf-l">Entrega</span>
-            <input type="date" className="ninput" required min={launched} value={date} onChange={(e) => setDate(e.target.value)} aria-label="Data de entrega" />
+            <input type="date" className="ninput" required={type === 'Tarefa'} min={launched} value={date} onChange={(e) => setDate(e.target.value)} aria-label="Data de entrega" />
+            {type === 'Lembrete' && <span className="hint rf-opt">opcional</span>}
           </label>
         )}
 
@@ -622,6 +628,26 @@ function RoutineForm({
             <input className="ninput" style={{ flex: 1 }} placeholder="Descreva (ex.: Tratar áudio)" aria-label="Descreva o formato" value={formatOther} autoFocus maxLength={120} onChange={(e) => setFormatOther(e.target.value)} />
           </label>
         )}
+
+        <div className="rf-row rf-desc">
+          <span className="rf-l">Descrição</span>
+          {descOpen ? (
+            <textarea
+              className="ninput"
+              rows={3}
+              maxLength={1900}
+              autoFocus={!row?.desc}
+              placeholder="O que precisa ser feito, detalhes, links…"
+              aria-label="Descrição da tarefa"
+              value={desc}
+              onChange={(e) => setDesc(e.target.value)}
+            />
+          ) : (
+            <button type="button" className="rf-desc-add" onClick={() => setDescOpen(true)} aria-expanded="false">
+              <Icon name="plus" size={13} />Adicionar descrição
+            </button>
+          )}
+        </div>
 
         <div className="rf-row">
           <span className="rf-l">Urgência</span>

@@ -52,6 +52,10 @@ export const env = {
     return read('NOTION_SHOOTS_DB');
   },
   /** Produção — rotina e lembretes (tabela do app). */
+  /** Link iCal secreto da agenda (Google/Notion Calendar), só leitura. */
+  get captacaoIcs() {
+    return read('CAPTACAO_ICS_URL') || null;
+  },
   get routineDb() {
     return read('NOTION_ROUTINE_DB');
   },

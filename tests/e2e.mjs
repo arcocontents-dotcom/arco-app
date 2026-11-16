@@ -772,10 +772,15 @@ try {
     await fy.getByLabel('Tarefa', { exact: true }).fill('Editar vídeo do cliente X');
     await fy.getByLabel('Data de entrega').fill(today);
     await fy.getByRole('radio', { name: 'Editar reels' }).click();
+    assert.equal(await fy.getByLabel('Descrição da tarefa').count(), 0, 'descrição começa minimizada');
+    await fy.getByRole('button', { name: 'Adicionar descrição' }).click();
+    await fy.getByLabel('Descrição da tarefa').fill('Cortar em 30s\nUsar a trilha do briefing');
     await fy.getByRole('button', { name: 'Salvar' }).click();
     await colOf('Yan').getByText('Editar vídeo do cliente X').waitFor();
     const vid = colOf('Yan').locator('article.pt', { hasText: 'Editar vídeo do cliente X' });
     assert.match((await vid.getAttribute('class')) ?? '', /f-reels/, 'cor de vídeo (laranja, igual ao Notion)');
+    assert.match((await vid.getAttribute('class')) ?? '', /\bdue\b/, 'entrega hoje: pisca em neon');
+    await vid.locator('.pt-desc', { hasText: 'Usar a trilha do briefing' }).waitFor();
     await vid.getByText('Editar reels', { exact: true }).waitFor();
     const vt = [...store.values()].find((x) => x.properties.Tarefa?.title?.[0]?.plain_text === 'Editar vídeo do cliente X');
     assert.equal(vt.properties.Formato.select.name, 'Editar reels');
@@ -819,17 +824,25 @@ try {
     await f.getByRole('button', { name: 'Equipe' }).click();
     await f.getByRole('radio', { name: 'Lembrete' }).click();
     await f.getByRole('radio', { name: 'Baixa' }).click();
-    await f.getByRole('button', { name: 'Salvar' }).click();
-    await f.getByText('Escolha a data de entrega.').waitFor();
-    await f.getByLabel('Data de entrega').fill(today);
+    await f.getByText('opcional').waitFor();
     await f.getByRole('button', { name: 'Salvar' }).click();
     await pd.locator('.pteam').getByText('Aguar as plantas').waitFor();
     await pd.locator('.pteam').getByText(`Lançada ${today.slice(8, 10)}/${today.slice(5, 7)}`).waitFor();
     const plant = [...store.values()].find((x) => x.properties.Tarefa?.title?.[0]?.plain_text === 'Aguar as plantas');
     assert.equal(plant.properties.Pessoa.select.name, 'Equipe');
     assert.equal(plant.properties.Tipo.select.name, 'Lembrete');
-    assert.equal(plant.properties.Data.date.start, today);
+    assert.equal(plant.properties.Data.date, null, 'lembrete sem data de entrega');
     assert.equal(plant.properties.Dias.multi_select.length, 0);
+    // link individual do Yan: vê a task com a descrição toda aberta
+    {
+      const { createHmac } = await import('node:crypto');
+      const k = createHmac('sha256', Buffer.from(SECRET)).update('arco-equipe-v1:Yan').digest('base64url').slice(0, 24);
+      const tp = await pd.context().newPage();
+      await tp.goto(`${APP}/equipe/yan?k=${k}`);
+      await tp.locator('article.pt', { hasText: 'Editar vídeo do cliente X' }).locator('.pt-desc', { hasText: 'Cortar em 30s' }).waitFor();
+      await shot(tp, '22b-equipe-yan');
+      await tp.close();
+    }
     // checklist de entrega: conteúdo marcado vira Finalizado no Notion e desce riscado
     await colOf('Lemuel').getByRole('button', { name: 'Marcar como entregue: Capa atrasada' }).click();
     await colOf('Lemuel').getByText('1 de 1 entregues').waitFor();
@@ -882,7 +895,7 @@ try {
 
   await step('captação: calendário da semana e do mês, quem vai, aparece na produção e no relatório', async () => {
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Cuiaba', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-    await pd.goto(`${APP}/admin/producao/captacao`);
+    await pd.goto(`${APP}/admin/captacao`);
     await pd.getByRole('button', { name: 'Nova captação', exact: true }).click();
     const f = pd.getByRole('dialog', { name: 'Nova captação' });
     await f.getByLabel('Captação', { exact: true }).fill('Gravação na obra');
