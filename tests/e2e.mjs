@@ -862,6 +862,10 @@ try {
     await tv.goto(`${APP}/tv/producao?k=${key}`);
     await tv.locator('section.pcol[aria-label="Yan"]').getByText('Editar vídeo da obra').waitFor();
     assert.equal(await tv.getByLabel(/^Passar /).count(), 0, 'TV não deixa editar');
+    assert.equal(await tv.getByRole('tablist', { name: 'Visualização' }).count(), 0, 'TV esconde os filtros');
+    await tv.getByRole('button', { name: 'Filtros' }).click();
+    await tv.getByRole('tablist', { name: 'Visualização' }).waitFor();
+    await tv.getByRole('button', { name: 'Fechar filtros' }).click();
     await tv.waitForTimeout(600);
     await tv.screenshot({ path: `${SHOTS}/22-producao-tv.png` });
     await tvCtx.close();

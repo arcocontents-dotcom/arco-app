@@ -1147,3 +1147,14 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .capt-week { grid-template-columns: repeat(7, minmax(0, 1fr)); }
 @media (max-width: 900px) { .capt-week { grid-template-columns: repeat(7, minmax(150px, 1fr)); } }
 .pcal-cell.today .pcal-n span { background: var(--ink); }
+/* TV: só as demandas; filtros escondidos num botão; nome da pessoa branco com a cor do formato */
+.prod.tv .tv-right { display: flex; align-items: center; gap: 18px; }
+.tv-filters-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #333; background: transparent; color: #8a857d; padding: 6px 12px; border-radius: 999px; font: inherit; font-size: 12px; cursor: pointer; opacity: 0.55; transition: opacity 0.2s ease, color 0.2s ease; }
+.tv-filters-btn:hover, .tv-filters-btn[aria-expanded='true'] { opacity: 1; color: #fff; }
+.tv-filters-btn .ic { color: currentColor !important; }
+.prod.tv .pt-who { color: #fff; background: var(--fc); padding: 1px 7px; border-radius: 3px; font-weight: 700; }
+.prod.tv .pt-who::before { display: none; }
+.prod.tv .pt.f-story .pt-who { color: #121212; }
+.prod .pt-who { background: var(--fc); color: #fff; padding: 1px 6px; border-radius: 3px; }
+.prod .pt-who::before { display: none; }
+.prod .pt.f-story .pt-who { color: #3d2f05; }

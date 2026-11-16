@@ -106,6 +106,7 @@ export default function ProducaoBoard({
   const [err, setErr] = useState<string | null>(null);
   const [, start2] = useTransition();
   const [clock, setClock] = useState('');
+  const [showFilters, setShowFilters] = useState(!tv);
 
   useEffect(() => setTasks(initial), [initial]);
 
@@ -353,7 +354,14 @@ export default function ProducaoBoard({
             </nav>
           )}
         </div>
-        {tv && <div className="tv-clock" aria-label="Hora">{clock}</div>}
+        {tv && (
+          <div className="tv-right">
+            <button type="button" className="tv-filters-btn" aria-expanded={showFilters} onClick={() => setShowFilters((v) => !v)}>
+              <Icon name={showFilters ? 'x' : 'grid'} size={14} />{showFilters ? 'Fechar filtros' : 'Filtros'}
+            </button>
+            <div className="tv-clock" aria-label="Hora">{clock}</div>
+          </div>
+        )}
         {!tv && (
           <div className="prod-tools">
             <button type="button" className="btn small" onClick={() => { setNewWho(null); setEditing('novo'); }}><Icon name="plus" size={15} />Lembrete ou tarefa</button>
@@ -362,7 +370,7 @@ export default function ProducaoBoard({
         )}
       </div>
 
-      <div className="prod-filters">
+      {showFilters && <div className="prod-filters">
         <div className="plan-views" role="tablist" aria-label="Visualização">
           <button type="button" role="tab" aria-selected={view === 'pessoas'} onClick={() => setView('pessoas')}><Icon name="users" size={15} />Pessoas</button>
           <button type="button" role="tab" aria-selected={view === 'semana'} onClick={() => setView('semana')}><Icon name="week" size={15} />{mode === 'mes' ? 'Calendário' : 'Semana'}</button>
@@ -387,7 +395,7 @@ export default function ProducaoBoard({
             {clientNames.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </label>
-      </div>
+      </div>}
 
       {err && <p className="error" role="alert">{err}</p>}
 
