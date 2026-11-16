@@ -1,7 +1,7 @@
 import { requireAdmin } from '@/lib/access';
 import { env } from '@/lib/env';
 import { listClients } from '@/lib/notion';
-import { addDays, parseDay, startOfWeek, todayIn } from '@/lib/domain';
+import { MONTHS, addDays, addMonths, monthGrid, parseDay, startOfWeek, todayIn } from '@/lib/domain';
 import { productionWeek, routineConfigured, tvKey } from '@/lib/producao';
 import AdminShell from '@/components/AdminShell';
 import Icon from '@/components/Icon';
@@ -10,14 +10,19 @@ import ProdTabs from '@/components/ProdTabs';
 
 export const dynamic = 'force-dynamic';
 
-export default async function Producao({ searchParams }: { searchParams: Promise<{ w?: string }> }) {
+export default async function Producao({ searchParams }: { searchParams: Promise<{ w?: string; r?: string }> }) {
   await requireAdmin();
   const sp = await searchParams;
   const today = todayIn(env.timeZone);
-  const start = startOfWeek(parseDay(sp.w) ?? today);
+  const mode = sp.r === 'mes' ? 'mes' : 'semana';
+  const base = parseDay(sp.w) ?? today;
+  const first = `${base.slice(0, 7)}-01`;
+  const grid = monthGrid(first);
+  const start = mode === 'mes' ? grid[0].day : startOfWeek(base);
+  const end = mode === 'mes' ? grid[grid.length - 1].day : addDays(start, 6);
   const clients = (await listClients()).filter((c) => !c.cancelled);
-  const week = await productionWeek(start, today, clients.map((c) => ({ id: c.id, name: c.name, calName: c.calName })));
-  const q = (d: string) => `/admin/producao?w=${d}`;
+  const week = await productionWeek(start, today, clients.map((c) => ({ id: c.id, name: c.name, calName: c.calName })), end);
+  const q = (d: string, r = mode) => `/admin/producao?w=${d}${r === 'mes' ? '&r=mes' : ''}`;
 
   return (
     <AdminShell section="producao">
@@ -36,9 +41,14 @@ export default async function Producao({ searchParams }: { searchParams: Promise
         tasks={week.tasks}
         routines={week.routines}
         clients={clients.map((c) => ({ id: c.id, name: c.name }))}
-        prevHref={q(addDays(start, -7))}
-        nextHref={q(addDays(start, 7))}
-        todayHref="/admin/producao"
+        end={end}
+        mode={mode}
+        monthLabel={`${MONTHS[Number(first.slice(5, 7)) - 1]} ${first.slice(0, 4)}`}
+        weekHref={q(mode === 'mes' ? (today.slice(0, 7) === first.slice(0, 7) ? today : first) : start, 'semana')}
+        monthHref={q(mode === 'mes' ? first : base, 'mes')}
+        prevHref={mode === 'mes' ? q(addMonths(first, -1)) : q(addDays(start, -7))}
+        nextHref={mode === 'mes' ? q(addMonths(first, 1)) : q(addDays(start, 7))}
+        todayHref={mode === 'mes' ? '/admin/producao?r=mes' : '/admin/producao'}
         tvUrl={`/tv/producao?k=${tvKey()}`}
       />
     </AdminShell>

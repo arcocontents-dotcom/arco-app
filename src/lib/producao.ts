@@ -7,6 +7,7 @@ import { invalidate, memo } from './cache';
 import { MONTHS, addDays, addMonths, localParts, weekdayMon } from './domain';
 import { checkbox, date, isPage, normId, notion, queryAll, select, text, titleProp } from './notion';
 import { matchCalName, multi } from './planning';
+import { listShoots, type Shoot } from './captacao';
 
 // Produção da equipe: o que cada pessoa precisa fazer na semana.
 // - Conteúdos vêm do 🗓️ Calendário mensal, pela etiqueta "Demanda atual está com".
@@ -30,7 +31,7 @@ export interface ProdTask {
   /** Chave única na tela (rotina repete: id + dia). */
   key: string;
   id: string;
-  source: 'conteudo' | 'rotina';
+  source: 'conteudo' | 'rotina' | 'captacao';
   person: Who;
   title: string;
   /** Nome do cliente como aparece no app (ou no Calendário mensal). */
@@ -42,7 +43,7 @@ export interface ProdTask {
   /** O que falta (Observação do Calendário mensal). */
   note: string | null;
   urgency: Urgency;
-  type: RoutineType | 'Conteúdo';
+  type: RoutineType | 'Conteúdo' | 'Captação';
   done: boolean;
   url: string;
   /** Dia em que a tarefa foi lançada (só nas tarefas e lembretes da equipe). */
@@ -157,9 +158,9 @@ export interface ProdWeek {
 export async function productionWeek(
   start: string,
   today: string,
-  clients: { id: string; name: string; calName: string }[]
+  clients: { id: string; name: string; calName: string }[],
+  end: string = addDays(start, 6)
 ): Promise<ProdWeek> {
-  const end = addDays(start, 6);
   const out: ProdWeek = { start, end, today, tasks: [], routines: [], error: null };
   const calToClient = (cal: string | null) => {
     if (!cal) return null;
@@ -209,6 +210,34 @@ export async function productionWeek(
       done,
       url: (p as { url?: string }).url ?? `https://www.notion.so/${normId(p.id)}`
     });
+  }
+
+  // captações: aparecem na coluna de cada pessoa que vai
+  const shoots = await listShoots(start, end).catch((e) => {
+    console.error('[producao] captações', e);
+    return [] as Shoot[];
+  });
+  for (const sh of shoots) {
+    if (sh.status === 'Cancelada') continue;
+    for (const person of sh.crew) {
+      out.tasks.push({
+        key: `s-${sh.id}-${person}`,
+        id: sh.id,
+        source: 'captacao',
+        person,
+        title: sh.title,
+        client: sh.client || null,
+        clientId: clients.find((c) => c.name === sh.client)?.id ?? null,
+        day: sh.day,
+        time: sh.time,
+        kind: 'Captação',
+        note: sh.place || null,
+        urgency: sh.status !== 'Realizada' && sh.day < today ? 'atrasado' : urgencyByDay(sh.day < today ? today : sh.day, today),
+        type: 'Captação',
+        done: sh.status === 'Realizada',
+        url: sh.url
+      });
+    }
   }
 
   out.routines = routines;
@@ -372,8 +401,12 @@ const zero = (): Counts => ({ reels: 0, post: 0, story: 0, foto: 0, total: 0 });
 
 export interface ProdReport {
   month: string;
-  people: { name: Person; counts: Counts }[];
+  people: { name: Person; counts: Counts; shoots: number; recorded: number }[];
   total: Counts;
+  /** Captações realizadas no mês. */
+  shoots: number;
+  /** Conteúdos gravados no mês (Gravado/Briefing por + Gravado quando). */
+  recorded: number;
   /** Entregues no mês sem "Editado/Design por" marcado. */
   noEditor: number;
   weeks: { start: string; counts: Counts }[];
@@ -390,7 +423,11 @@ export async function productionReport(first: string): Promise<ProdReport | stri
   const last = addDays(addMonths(first, 1), -1);
   const monthName = MONTHS[Number(first.slice(5, 7)) - 1];
   return memo(`prod:rep:${first}`, 30_000, async () => {
-    const [byMonth, byDate] = await Promise.all([
+    let rep_recorded = 0;
+    let shootsDone = 0;
+    const recBy = new Map<Person, number>();
+    const shootBy = new Map<Person, number>();
+    const [byMonth, byDate, recordedPages, shoots] = await Promise.all([
       queryAll(env.planningDb!, {
         filter: {
           and: [
@@ -409,14 +446,40 @@ export async function productionReport(first: string): Promise<ProdReport | stri
             { or: [{ property: P.done, checkbox: { equals: true } }, { property: P.status, status: { equals: 'Postado' } }] }
           ]
         }
-      })
+      }),
+      // quem gravou: "Gravado/Briefing por" com "Gravado quando" = o mês
+      queryAll(env.planningDb!, {
+        filter: {
+          and: [
+            { property: P.recMonth, select: { equals: monthName } },
+            { property: P.date, date: { on_or_after: addDays(first, -75) } },
+            { property: P.date, date: { on_or_before: addDays(last, 75) } }
+          ]
+        }
+      }),
+      listShoots(first, last).catch(() => [] as Shoot[])
     ]);
+    // gravações
+    for (const p of recordedPages) {
+      if (!isPage(p) || p.archived) continue;
+      const by = multi(p.properties[P.briefBy]).map(editorToPerson).filter((x): x is Person => !!x);
+      if (!by.length) continue;
+      rep_recorded += 1;
+      for (const who of new Set(by)) recBy.set(who, (recBy.get(who) ?? 0) + 1);
+    }
+    for (const sh of shoots) {
+      if (sh.status !== 'Realizada') continue;
+      shootsDone += 1;
+      for (const who of sh.crew) shootBy.set(who, (shootBy.get(who) ?? 0) + 1);
+    }
     const seen = new Set<string>();
     const fromDate = new Set(byDate.map((p) => p.id));
     const rep: ProdReport = {
       month: first,
-      people: TEAM.map((name) => ({ name, counts: zero() })),
+      people: TEAM.map((name) => ({ name, counts: zero(), shoots: 0, recorded: 0 })),
       total: zero(),
+      shoots: 0,
+      recorded: 0,
       noEditor: 0,
       weeks: [],
       clients: []
@@ -458,6 +521,12 @@ export async function productionReport(first: string): Promise<ProdReport | stri
       const cname = r.client || 'Sem cliente';
       if (!clientMap.has(cname)) clientMap.set(cname, zero());
       add(clientMap.get(cname)!);
+    }
+    rep.recorded = rep_recorded;
+    rep.shoots = shootsDone;
+    for (const x of rep.people) {
+      x.recorded = recBy.get(x.name) ?? 0;
+      x.shoots = shootBy.get(x.name) ?? 0;
     }
     rep.clients = [...clientMap.entries()].map(([name, counts]) => ({ name, counts })).sort((a, b) => b.counts.total - a.counts.total);
     return rep;

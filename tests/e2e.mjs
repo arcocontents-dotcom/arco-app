@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
 import { SignJWT } from 'jose';
 import { chromium } from 'playwright';
-import { CLIENTS_DB, CONTENTS_DB, PLANNING_DB, ROUTINE_DB, blocks, seedBlocks, seedPage, startMock, store } from './mock-notion.mjs';
+import { CLIENTS_DB, CONTENTS_DB, PLANNING_DB, ROUTINE_DB, SHOOTS_DB, blocks, seedBlocks, seedPage, startMock, store } from './mock-notion.mjs';
 
 const MOCK_PORT = 4010;
 const APP_PORT = 3100;
@@ -70,6 +70,7 @@ const app = spawn('npx', ['next', 'start', '-p', String(APP_PORT)], {
     NOTION_CONTENTS_DB: CONTENTS_DB,
     NOTION_PLANNING_DB: PLANNING_DB,
     NOTION_ROUTINE_DB: ROUTINE_DB,
+    NOTION_SHOOTS_DB: SHOOTS_DB,
     NOTION_GESTAO_PAGE: GESTAO,
     ADMIN_PASSWORD: 'senha-do-admin-teste',
     NOTION_BASE_URL: `http://127.0.0.1:${MOCK_PORT}`,
@@ -864,6 +865,52 @@ try {
     await tv.waitForTimeout(600);
     await tv.screenshot({ path: `${SHOTS}/22-producao-tv.png` });
     await tvCtx.close();
+  });
+
+  await step('captação: calendário da semana e do mês, quem vai, aparece na produção e no relatório', async () => {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Cuiaba', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    await pd.goto(`${APP}/admin/producao/captacao`);
+    await pd.getByRole('button', { name: 'Nova captação', exact: true }).click();
+    const f = pd.getByRole('dialog', { name: 'Nova captação' });
+    await f.getByLabel('Captação', { exact: true }).fill('Gravação na obra');
+    await f.getByLabel('Dia').fill(today);
+    await f.getByLabel('Início').fill('09:00');
+    await f.getByLabel('Fim').fill('11:30');
+    await f.getByRole('button', { name: 'Salvar' }).click();
+    await f.getByText('Escolha quem vai.').waitFor();
+    await f.getByRole('group', { name: 'Quem vai' }).getByRole('button', { name: /Yan/ }).click();
+    await f.getByRole('group', { name: 'Quem vai' }).getByRole('button', { name: /Rafa/ }).click();
+    await f.getByRole('radio', { name: 'Casamento' }).click();
+    await f.getByLabel('Nome do casal').fill('Ana e Pedro');
+    await f.getByLabel('Local').fill('Fazenda Boa Vista');
+    await f.getByRole('button', { name: 'Salvar' }).click();
+    const ev = pd.getByRole('button', { name: 'Gravação na obra às 09:00' });
+    await ev.waitFor();
+    await ev.getByText('09:00–11:30').waitFor();
+    const sh = [...store.values()].find((x) => x.properties['Captação']?.title?.[0]?.plain_text === 'Gravação na obra');
+    assert.deepEqual(sh.properties['Quem vai'].multi_select.map((o) => o.name), ['Yan', 'Rafa']);
+    assert.match(sh.properties.Data.date.start, new RegExp(`^${today}T09:00:00-04:00$`));
+    assert.equal(sh.properties.Cliente.rich_text.map((t) => t.plain_text).join(''), 'Casamento · Ana e Pedro');
+    await pd.waitForTimeout(500);
+    await shot(pd, '24-captacao-semana');
+    await pd.getByRole('link', { name: 'Mês' }).click();
+    await pd.getByRole('gridcell', { name: today }).getByRole('button', { name: 'Gravação na obra às 09:00' }).waitFor();
+    await shot(pd, '25-captacao-mes');
+    // na produção: aparece para o Yan e para o Rafa; marcar como gravada vira Realizada
+    await pd.goto(`${APP}/admin/producao`);
+    const yan = pd.locator('section.pcol[aria-label="Yan"]');
+    await yan.getByText('Gravação na obra').waitFor();
+    await pd.locator('section.pcol[aria-label="Rafa"]').getByText('Gravação na obra').waitFor();
+    await yan.getByRole('button', { name: 'Marcar como gravada: Gravação na obra' }).click();
+    await pd.waitForTimeout(700);
+    assert.equal(sh.properties.Status.select.name, 'Realizada');
+    // visão do mês na produção
+    await pd.getByRole('navigation', { name: 'Período' }).getByRole('link', { name: 'Mês' }).click();
+    await pd.getByText('Produção do mês').waitFor();
+    // relatório: quem gravou
+    await pd.goto(`${APP}/admin/producao/relatorio?m=${today.slice(0, 7)}`);
+    await pd.locator('.rp-person', { hasText: 'Yan' }).getByText('1 captação').waitFor();
+    await pd.locator('.rp-top').getByText('Captações realizadas').waitFor();
   });
 
   await step('relatório da produção: quem editou quantos vídeos, posts e stories', async () => {

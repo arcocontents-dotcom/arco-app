@@ -41,7 +41,7 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
     <AdminShell section="producao">
       <div className="toolbar">
         <div className="page-title">
-          <p className="label rise ic-inline"><Icon name="chart" size={14} />O que a equipe editou no mês</p>
+          <p className="label rise ic-inline"><Icon name="chart" size={14} />Relatório geral: quem editou e quem gravou no mês</p>
           <h1 className="display rise" style={{ fontSize: 'clamp(40px, 6vw, 80px)', ['--d' as string]: '60ms' }}>Produção</h1>
         </div>
         <div className="actions rise" style={{ ['--d' as string]: '100ms', alignItems: 'center' }}>
@@ -56,6 +56,18 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
         <p className="error">Não foi possível ler o Calendário mensal agora.</p>
       ) : (
         <div className="rp">
+          {(() => {
+            const topEdit = [...rep.people].sort((a, b) => b.counts.total - a.counts.total)[0];
+            const topRec = [...rep.people].sort((a, b) => b.shoots + b.recorded - (a.shoots + a.recorded))[0];
+            return (
+              <section className="rp-top rise" aria-label="Destaques do mês">
+                <div><span className="label">Quem mais editou</span><strong>{topEdit && topEdit.counts.total ? topEdit.name : '—'}</strong><small>{topEdit?.counts.total ?? 0} conteúdos</small></div>
+                <div><span className="label">Quem mais gravou</span><strong>{topRec && topRec.shoots + topRec.recorded ? topRec.name : '—'}</strong><small>{topRec ? `${topRec.shoots} captações · ${topRec.recorded} conteúdos` : ''}</small></div>
+                <div><span className="label">Captações realizadas</span><strong>{rep.shoots}</strong><small>no mês</small></div>
+                <div><span className="label">Conteúdos gravados</span><strong>{rep.recorded}</strong><small>Gravado/Briefing por</small></div>
+              </section>
+            );
+          })()}
           <section className="rp-kpis rise" aria-label="Totais do mês">
             <div className="rp-kpi main"><strong>{rep.total.total}</strong><span>Conteúdos editados</span></div>
             {FMTS.map((f) => (
@@ -64,7 +76,7 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
           </section>
 
           <section className="rp-card rise" aria-label="Por pessoa" style={{ ['--d' as string]: '80ms' }}>
-            <h2 className="label">Por pessoa</h2>
+            <h2 className="label">Por pessoa · editou e gravou</h2>
             <div className="rp-people">
               {rep.people.map((p) => (
                 <div key={p.name} className="rp-person">
@@ -77,7 +89,10 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
                           <span key={f.k} className={`rp-num f-${f.k}`} title={f.plural}><i />{p.counts[f.k]} <small>{f.label}</small></span>
                         ))}
                       </span>
-                      <b>{p.counts.total}</b>
+                      <span className="rp-rec" title="Gravações">
+                        <Icon name="video" size={12} />{p.shoots} captaç{p.shoots === 1 ? 'ão' : 'ões'} · {p.recorded} gravado{p.recorded === 1 ? '' : 's'}
+                      </span>
+                      <b title="Editados">{p.counts.total}</b>
                     </div>
                     <Stack c={p.counts} max={maxPerson} />
                   </div>
@@ -120,7 +135,7 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
           </div>
 
           <p className="hint rp-note">
-            Conta quem está em <b>Editado/Design por</b> no Calendário mensal, no mês de <b>Editado quando</b>. Ao <b>Transferir</b> uma demanda na Produção, isso é preenchido sozinho.
+            Editou: <b>Editado/Design por</b> + <b>Editado quando</b> do Calendário mensal (preenchido ao <b>Transferir</b> na Produção) e tasks com formato marcadas como feitas. Gravou: captações <b>Realizadas</b> em 📸 Captações (quem foi) e <b>Gravado/Briefing por</b> + <b>Gravado quando</b>.
             {rep.noEditor > 0 && <> {rep.noEditor} conteúdo{rep.noEditor > 1 ? 's' : ''} entregue{rep.noEditor > 1 ? 's' : ''} no mês sem editor marcado.</>}
           </p>
         </div>

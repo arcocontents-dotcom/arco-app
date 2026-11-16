@@ -12,6 +12,7 @@ export const CLIENTS_DB = '11111111111111111111111111111111';
 export const CONTENTS_DB = '22222222222222222222222222222222';
 export const PLANNING_DB = '33333333333333333333333333333333';
 export const ROUTINE_DB = '44444444444444444444444444444444';
+export const SHOOTS_DB = '66666666666666666666666666666666';
 
 const TYPES = {
   [CLIENTS_DB]: {
@@ -30,6 +31,9 @@ const TYPES = {
     [PL.note]: 'select', [PL.owner]: 'select', [PL.done]: 'checkbox', [PL.month]: 'select',
     [PL.recMonth]: 'select', [PL.editMonth]: 'select', [PL.designBy]: 'select', [PL.postedBy]: 'select',
     [PL.briefBy]: 'multi_select', [PL.deadline]: 'formula'
+  },
+  [SHOOTS_DB]: {
+    'Captação': 'title', Data: 'date', Cliente: 'rich_text', 'Quem vai': 'multi_select', Tipo: 'select', Status: 'select', Local: 'rich_text', 'Observação': 'rich_text'
   },
   [ROUTINE_DB]: {
     Tarefa: 'title', Pessoa: 'select', Tipo: 'select', Dias: 'multi_select', Data: 'date', 'Urgência': 'select', Cliente: 'rich_text', 'Feito em': 'rich_text', Ativo: 'checkbox', Formato: 'select'
@@ -79,7 +83,7 @@ function toResponse(type, v) {
       if (!v.date) return { type, date: null };
       let start = v.date.start;
       if (v.date.time_zone && /T/.test(start) && !/[+-]\d\d:\d\d$|Z$/.test(start)) start = `${start}.000-04:00`;
-      return { type, date: { start, end: null, time_zone: null } };
+      return { type, date: { start, end: v.date.end ?? null, time_zone: null } };
     }
   }
   throw new Error('tipo desconhecido ' + type);

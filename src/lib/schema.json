@@ -75,5 +75,15 @@
     "doneOn": "Feito em",
     "active": "Ativo",
     "format": "Formato"
+  },
+  "shoot": {
+    "title": "Captação",
+    "date": "Data",
+    "client": "Cliente",
+    "crew": "Quem vai",
+    "type": "Tipo",
+    "status": "Status",
+    "place": "Local",
+    "note": "Observação"
   }
 }

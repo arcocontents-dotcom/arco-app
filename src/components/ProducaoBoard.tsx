@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Icon from './Icon';
 import { addDays, dayNum, weekdayMon } from '@/lib/domain';
+import { shootStatusAction } from '@/app/admin/producao/captacao/actions';
 import { passContentAction, saveRoutineAction, toggleContentAction, toggleRoutineAction, trashRoutineAction } from '@/app/admin/producao/actions';
 
 // Tipos copiados de lib/producao (não dá para importar lib server-only aqui).
@@ -16,7 +17,7 @@ type RoutineType = 'Tarefa fixa' | 'Lembrete' | 'Tarefa';
 export interface Task {
   key: string;
   id: string;
-  source: 'conteudo' | 'rotina';
+  source: 'conteudo' | 'rotina' | 'captacao';
   person: Who;
   title: string;
   client: string | null;
@@ -26,7 +27,7 @@ export interface Task {
   kind: string | null;
   note: string | null;
   urgency: Urgency;
-  type: RoutineType | 'Conteúdo';
+  type: RoutineType | 'Conteúdo' | 'Captação';
   done: boolean;
   url: string;
   launched?: string | null;
@@ -57,6 +58,7 @@ const URG: Record<Urgency, { label: string; rank: number }> = {
 /** Cor do cartão: a mesma do Notion para o formato (ou do tipo, nas tarefas internas). */
 const fmtClass = (t: { source: string; kind: string | null; type: string }) => {
   const s = (t.kind ?? '').toLowerCase();
+  if (t.source === 'captacao') return 'f-capt';
   if (t.source === 'rotina' && !s) return t.type === 'Lembrete' ? 'f-lembrete' : t.type === 'Tarefa fixa' ? 'f-fixa' : 'f-avulsa';
   return s.startsWith('reels') || s.startsWith('víd') || s.startsWith('vid') ? 'f-reels' : s.startsWith('post') ? 'f-post' : s.startsWith('stor') ? 'f-story' : s.startsWith('foto') ? 'f-foto' : 'f-outro';
 };
@@ -73,7 +75,7 @@ const sortTasks = (a: Task, b: Task) =>
   a.title.localeCompare(b.title);
 
 export default function ProducaoBoard({
-  start, today, tasks: initial, routines, clients, tv = false, prevHref, nextHref, todayHref, tvUrl
+  start, end: endProp, today, tasks: initial, routines, clients, tv = false, prevHref, nextHref, todayHref, tvUrl, mode = 'semana', monthLabel, weekHref, monthHref
 }: {
   start: string;
   today: string;
@@ -85,6 +87,11 @@ export default function ProducaoBoard({
   nextHref: string;
   todayHref: string;
   tvUrl?: string;
+  end?: string;
+  mode?: 'semana' | 'mes';
+  monthLabel?: string;
+  weekHref?: string;
+  monthHref?: string;
 }) {
   const router = useRouter();
   const [tasks, setTasks] = useState(initial);
@@ -126,8 +133,9 @@ export default function ProducaoBoard({
         .sort(sortTasks),
     [tasks, who, client, when, today]
   );
-  const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
-  const end = days[6];
+  const end = endProp ?? addDays(start, 6);
+  const days: string[] = [];
+  for (let d = start; d <= end; d = addDays(d, 1)) days.push(d);
   const clientNames = useMemo(() => [...new Set(tasks.map((t) => t.client).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' })), [tasks]);
   const pending = (list: Task[]) => list.filter((t) => !t.done).length;
 
@@ -136,7 +144,10 @@ export default function ProducaoBoard({
     const done = !t.done;
     setTasks((l) => l.map((x) => (x.key === t.key ? { ...x, done } : x)));
     start2(async () => {
-      const r = t.source === 'rotina' ? await toggleRoutineAction(t.id, t.day!, done) : await toggleContentAction(t.id, done);
+      const r =
+        t.source === 'rotina' ? await toggleRoutineAction(t.id, t.day!, done)
+        : t.source === 'captacao' ? await shootStatusAction(t.id, done ? 'Realizada' : 'Agendada')
+        : await toggleContentAction(t.id, done);
       if (!r.ok) {
         setErr(r.error);
         setTasks((l) => l.map((x) => (x.key === t.key ? { ...x, done: !done } : x)));
@@ -166,13 +177,15 @@ export default function ProducaoBoard({
           className={`pt-check${t.done ? ' on' : ''}`}
           onClick={() => toggle(t)}
           disabled={tv}
-          aria-label={`${t.done ? 'Desmarcar' : t.source === 'conteudo' ? 'Marcar como entregue' : 'Marcar como feito'}: ${t.title}`}
+          aria-label={`${t.done ? 'Desmarcar' : t.source === 'conteudo' ? 'Marcar como entregue' : t.source === 'captacao' ? 'Marcar como gravada' : 'Marcar como feito'}: ${t.title}`}
         >
           {t.done && <Icon name="check" size={14} />}
         </button>
         <div className="pt-body">
           <div className="pt-meta">
-            {t.type === 'Conteúdo' ? (
+            {t.type === 'Captação' ? (
+              <span className="pt-kind"><Icon name="video" size={11} />Captação{t.time ? ` · ${t.time}` : ''}</span>
+            ) : t.type === 'Conteúdo' ? (
               t.kind && <span className={`pt-kind ${kindClass(t.kind)}`}>{t.kind}</span>
             ) : (
               t.kind ? (
@@ -195,7 +208,7 @@ export default function ProducaoBoard({
           )}
           {(t.note || late || showDay || t.urgency === 'alta' || (t.launched && t.type !== 'Tarefa fixa')) && (
             <div className="pt-foot">
-              {t.note && t.note !== 'Finalizado' && <span className="pt-note">{t.note}</span>}
+              {t.note && t.note !== 'Finalizado' && <span className={t.source === 'captacao' ? 'pt-day' : 'pt-note'}>{t.source === 'captacao' ? `📍 ${t.note}` : t.note}</span>}
               {late && <span className="pt-late">Atrasado{t.day ? ` · ${dayNum(t.day)}/${t.day.slice(5, 7)}` : ''}</span>}
               {!late && t.urgency === 'alta' && !t.done && <span className="pt-urg">Urgente</span>}
               {showDay && t.day && !late && <span className="pt-day">{WD[weekdayMon(t.day)]} {dayNum(t.day)}{t.time ? ` · ${t.time}` : ''}</span>}
@@ -328,11 +341,17 @@ export default function ProducaoBoard({
         <div className="prod-week">
           {!tv && <Link className="icon-btn" href={prevHref} aria-label="Semana anterior"><Icon name="left" /></Link>}
           <div>
-            <span className="label">Produção da semana</span>
-            <strong>{weekLabel}</strong>
+            <span className="label">{mode === 'mes' ? 'Produção do mês' : 'Produção da semana'}</span>
+            <strong>{mode === 'mes' && monthLabel ? monthLabel : weekLabel}</strong>
           </div>
-          {!tv && <Link className="icon-btn" href={nextHref} aria-label="Próxima semana"><Icon name="right" /></Link>}
+          {!tv && <Link className="icon-btn" href={nextHref} aria-label={mode === 'mes' ? 'Próximo mês' : 'Próxima semana'}><Icon name="right" /></Link>}
           {!tv && (today < start || today > end) && <Link className="link-btn" href={todayHref}>Hoje</Link>}
+          {!tv && weekHref && monthHref && (
+            <nav className="plan-views" aria-label="Período" style={{ margin: 0 }}>
+              <Link href={weekHref} aria-current={mode === 'semana' ? 'page' : undefined}>Semana</Link>
+              <Link href={monthHref} aria-current={mode === 'mes' ? 'page' : undefined}>Mês</Link>
+            </nav>
+          )}
         </div>
         {tv && <div className="tv-clock" aria-label="Hora">{clock}</div>}
         {!tv && (
@@ -346,10 +365,10 @@ export default function ProducaoBoard({
       <div className="prod-filters">
         <div className="plan-views" role="tablist" aria-label="Visualização">
           <button type="button" role="tab" aria-selected={view === 'pessoas'} onClick={() => setView('pessoas')}><Icon name="users" size={15} />Pessoas</button>
-          <button type="button" role="tab" aria-selected={view === 'semana'} onClick={() => setView('semana')}><Icon name="week" size={15} />Semana</button>
+          <button type="button" role="tab" aria-selected={view === 'semana'} onClick={() => setView('semana')}><Icon name="week" size={15} />{mode === 'mes' ? 'Calendário' : 'Semana'}</button>
         </div>
         <div className="plan-views" role="tablist" aria-label="Quando">
-          {([['hoje', 'Hoje'], ['amanha', 'Até amanhã'], ['semana', 'Semana']] as const).map(([v, l]) => (
+          {([['hoje', 'Hoje'], ['amanha', 'Até amanhã'], ['semana', mode === 'mes' ? 'Mês todo' : 'Semana']] as const).map(([v, l]) => (
             <button key={v} type="button" role="tab" aria-selected={when === v} onClick={() => setWhen(v)}>{l}</button>
           ))}
         </div>
@@ -389,8 +408,9 @@ export default function ProducaoBoard({
               {lateAll.map((t) => card(t, true, false))}
             </div>
           )}
-          <div className="pweek">
-            {days.map((d) => {
+          {Array.from({ length: Math.ceil(days.length / 7) }, (_, w) => days.slice(w * 7, w * 7 + 7)).map((wk) => (
+          <div className="pweek" key={wk[0]}>
+            {wk.map((d) => {
               const list = visible.filter((t) => t.day === d && t.person !== 'Equipe');
               return (
                 <section key={d} className={`pday${d === today ? ' today' : ''}${d < today ? ' past' : ''}`} aria-label={`${WD_LONG[weekdayMon(d)]} ${dayNum(d)}`}>
@@ -400,6 +420,7 @@ export default function ProducaoBoard({
               );
             })}
           </div>
+          ))}
         </>
       )}
 

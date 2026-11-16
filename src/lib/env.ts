@@ -47,6 +47,10 @@ export const env = {
   get gestaoPage() {
     return read('NOTION_GESTAO_PAGE');
   },
+  /** 📸 Captações (tabela do app; aparece no Notion Calendar). */
+  get shootsDb() {
+    return read('NOTION_SHOOTS_DB');
+  },
   /** Produção — rotina e lembretes (tabela do app). */
   get routineDb() {
     return read('NOTION_ROUTINE_DB');
