@@ -1054,6 +1054,15 @@ try {
     await shot(pd, '23-producao-relatorio');
   });
 
+  await step('app do administrador no celular: lança tarefa para cada pessoa', async () => {
+    await pd.setViewportSize({ width: 390, height: 844 });
+    await pd.goto(`${APP}/admin/producao`);
+    assert.equal(await pd.locator('link[rel="manifest"]').getAttribute('href'), '/admin.webmanifest');
+    await pd.locator('section.pcol[aria-label="Yan"]').getByRole('button', { name: 'Adicionar task para Yan' }).waitFor();
+    await shot(pd, '30-admin-celular');
+    await pd.setViewportSize({ width: 1440, height: 900 });
+  });
+
   await step('cliente novo na Gestão do Notion entra no app sozinho', async () => {
     gClients.push(gb('child_page', { child_page: { title: 'Imperial Casa & Conforto' } }));
     await pd.goto(`${APP}/admin/gestao`);
