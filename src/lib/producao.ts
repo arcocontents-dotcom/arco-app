@@ -23,6 +23,8 @@ export type Urgency = 'atrasado' | 'alta' | 'media' | 'baixa';
 export const ROUTINE_TYPES = ['Tarefa fixa', 'Lembrete', 'Tarefa'] as const;
 export type RoutineType = (typeof ROUTINE_TYPES)[number];
 export const URGENCY_LABEL = ['Alta', 'Média', 'Baixa'] as const;
+export const FORMATS = ['Vídeo', 'Post', 'Story'] as const;
+export type TaskFormat = (typeof FORMATS)[number];
 
 export interface ProdTask {
   /** Chave única na tela (rotina repete: id + dia). */
@@ -60,6 +62,7 @@ export interface Routine {
   active: boolean;
   /** Dia em que foi lançada (criada no Notion): fixo, ninguém altera. */
   created: string;
+  format: TaskFormat | null;
 }
 
 export const routineConfigured = () => !!env.routineDb;
@@ -103,7 +106,8 @@ function toRoutine(p: PageObjectResponse): Routine {
     client: text(pr[R.client]),
     doneOn: text(pr[R.doneOn]).split(/[\s,]+/).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)),
     active: checkbox(pr[R.active]),
-    created: localParts(p.created_time, env.timeZone).day
+    created: localParts(p.created_time, env.timeZone).day,
+    format: (FORMATS as readonly string[]).includes(select(pr[R.format]) ?? '') ? (select(pr[R.format]) as TaskFormat) : null
   };
 }
 
@@ -218,7 +222,7 @@ export async function productionWeek(
       client: r.client || null,
       clientId: clients.find((c) => c.name === r.client)?.id ?? null,
       time: null,
-      kind: null,
+      kind: r.format,
       note: null,
       type: r.type,
       url: `https://www.notion.so/${normId(r.id)}`,
@@ -282,6 +286,7 @@ export interface RoutineInput {
   date: string | null;
   urgency: (typeof URGENCY_LABEL)[number];
   client: string;
+  format: TaskFormat | null;
 }
 
 function routineProps(x: RoutineInput) {
@@ -292,7 +297,8 @@ function routineProps(x: RoutineInput) {
     [R.days]: { multi_select: x.type !== 'Tarefa fixa' ? [] : x.days.map((name) => ({ name })) },
     [R.date]: { date: x.type !== 'Tarefa fixa' && x.date ? { start: x.date } : null },
     [R.urgency]: { select: { name: x.urgency } },
-    [R.client]: { rich_text: x.client ? [{ text: { content: x.client } }] : [] }
+    [R.client]: { rich_text: x.client ? [{ text: { content: x.client } }] : [] },
+    [R.format]: { select: x.format ? { name: x.format } : null }
   };
 }
 
@@ -327,6 +333,7 @@ export async function setContentDone(id: string, done: boolean) {
   }
   await notion().pages.update({ page_id: id, properties: { [P.done]: { checkbox: done } } as never });
   invalidate('plan:');
+  invalidate('prod:');
 }
 
 /** Nome da pessoa na coluna "Editado/Design por" do Calendário mensal (lá o Rafa é "Rafael"). */
@@ -350,6 +357,7 @@ export async function passContent(id: string, to: Person | 'Finalizado', editedB
   }
   await notion().pages.update({ page_id: id, properties: props as never });
   invalidate('plan:');
+  invalidate('prod:');
 }
 
 // ---------- relatório da produção ----------
@@ -381,7 +389,7 @@ export async function productionReport(first: string): Promise<ProdReport | stri
   if (!env.planningDb) return 'nao-configurado';
   const last = addDays(addMonths(first, 1), -1);
   const monthName = MONTHS[Number(first.slice(5, 7)) - 1];
-  return memo(`plan:prodrep:${first}`, 30_000, async () => {
+  return memo(`prod:rep:${first}`, 30_000, async () => {
     const [byMonth, byDate] = await Promise.all([
       queryAll(env.planningDb!, {
         filter: {
@@ -435,6 +443,21 @@ export async function productionReport(first: string): Promise<ProdReport | stri
       const cal = select(pr[P.client]) ?? 'Sem cliente';
       if (!clientMap.has(cal)) clientMap.set(cal, zero());
       add(clientMap.get(cal)!);
+    }
+    // tarefas lançadas na Produção com formato, marcadas como feitas no mês
+    const routines = await listRoutines().catch(() => [] as Routine[]);
+    for (const r of routines) {
+      if (r.type === 'Tarefa fixa' || !r.format || !r.date || !isPerson(r.person)) continue;
+      if (!r.doneOn.includes(r.date) || r.date < first || r.date > last) continue;
+      const f: Fmt = r.format === 'Vídeo' ? 'reels' : r.format === 'Post' ? 'post' : 'story';
+      const add = (c: Counts) => { c[f]++; c.total++; };
+      add(rep.people.find((x) => x.name === r.person)!.counts);
+      add(rep.total);
+      const wk = rep.weeks.find((w) => r.date! >= w.start && r.date! <= addDays(w.start, 6));
+      if (wk) add(wk.counts);
+      const cname = r.client || 'Sem cliente';
+      if (!clientMap.has(cname)) clientMap.set(cname, zero());
+      add(clientMap.get(cname)!);
     }
     rep.clients = [...clientMap.entries()].map(([name, counts]) => ({ name, counts })).sort((a, b) => b.counts.total - a.counts.total);
     return rep;

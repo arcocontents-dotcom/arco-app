@@ -32,7 +32,7 @@ const TYPES = {
     [PL.briefBy]: 'multi_select', [PL.deadline]: 'formula'
   },
   [ROUTINE_DB]: {
-    Tarefa: 'title', Pessoa: 'select', Tipo: 'select', Dias: 'multi_select', Data: 'date', 'Urgência': 'select', Cliente: 'rich_text', 'Feito em': 'rich_text', Ativo: 'checkbox'
+    Tarefa: 'title', Pessoa: 'select', Tipo: 'select', Dias: 'multi_select', Data: 'date', 'Urgência': 'select', Cliente: 'rich_text', 'Feito em': 'rich_text', Ativo: 'checkbox', Formato: 'select'
   }
 };
 

@@ -73,6 +73,7 @@
     "urgency": "Urgência",
     "client": "Cliente",
     "doneOn": "Feito em",
-    "active": "Ativo"
+    "active": "Ativo",
+    "format": "Formato"
   }
 }

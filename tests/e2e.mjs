@@ -770,8 +770,14 @@ try {
     assert.equal(await fy.getByRole('button', { name: 'Yan' }).getAttribute('aria-pressed'), 'true', 'já vem com o Yan');
     await fy.getByLabel('Tarefa', { exact: true }).fill('Editar vídeo do cliente X');
     await fy.getByLabel('Data de entrega').fill(today);
+    await fy.getByRole('radio', { name: 'Vídeo' }).click();
     await fy.getByRole('button', { name: 'Salvar' }).click();
     await colOf('Yan').getByText('Editar vídeo do cliente X').waitFor();
+    const vid = colOf('Yan').locator('article.pt', { hasText: 'Editar vídeo do cliente X' });
+    assert.match((await vid.getAttribute('class')) ?? '', /f-reels/, 'cor de vídeo (laranja, igual ao Notion)');
+    await vid.getByText('Vídeo', { exact: true }).waitFor();
+    const vt = [...store.values()].find((x) => x.properties.Tarefa?.title?.[0]?.plain_text === 'Editar vídeo do cliente X');
+    assert.equal(vt.properties.Formato.select.name, 'Vídeo');
     // cliente freelancer: escolhe e escreve o nome
     await colOf('Yan').getByRole('button', { name: 'Adicionar task para Yan' }).click();
     const ff = pd.getByRole('dialog', { name: 'Novo lembrete ou tarefa' });

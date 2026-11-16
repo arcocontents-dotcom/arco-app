@@ -4,7 +4,7 @@ import { requireAdmin } from '@/lib/access';
 import { parseDay, todayIn } from '@/lib/domain';
 import { env } from '@/lib/env';
 import {
-  ROUTINE_TYPES, TEAM, URGENCY_LABEL, WEEKDAYS, createRoutine, passContent, setContentDone, setRoutineDone, trashRoutine, updateRoutine,
+  FORMATS, ROUTINE_TYPES, TEAM, URGENCY_LABEL, WEEKDAYS, createRoutine, passContent, setContentDone, setRoutineDone, trashRoutine, updateRoutine,
   type RoutineInput
 } from '@/lib/producao';
 
@@ -22,7 +22,8 @@ function clean(x: Partial<RoutineInput>): RoutineInput | string {
   const date = x.date ? parseDay(String(x.date)) : null;
   if (type !== 'Tarefa fixa' && !date) return 'Escolha a data de entrega.';
   const urgency = (URGENCY_LABEL as readonly string[]).includes(String(x.urgency)) ? (x.urgency as RoutineInput['urgency']) : 'Média';
-  return { title, person: person as RoutineInput['person'], type: type as RoutineInput['type'], days, date, urgency, client: String(x.client ?? '').trim().slice(0, 120) };
+  const format = (FORMATS as readonly string[]).includes(String(x.format ?? '')) ? (x.format as RoutineInput['format']) : null;
+  return { title, person: person as RoutineInput['person'], type: type as RoutineInput['type'], days, date, urgency, client: String(x.client ?? '').trim().slice(0, 120), format };
 }
 
 export async function toggleRoutineAction(id: string, day: string, done: boolean): Promise<R> {

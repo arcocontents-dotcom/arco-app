@@ -1097,3 +1097,8 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .pcol-add { display: flex; align-items: center; gap: 8px; margin: 0 8px 10px; padding: 9px 10px; border: 1px dashed #c9c5be; background: transparent; font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; text-align: left; transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease; }
 .pcol-add:hover { border-color: var(--ink); color: var(--ink); background: #fff; }
 .rf-ckind button[aria-checked='true'] { background: var(--ink); border-color: var(--ink); color: #fff; }
+.rf-fmt button { display: inline-flex; align-items: center; gap: 6px; }
+.rf-fmt button i { width: 9px; height: 9px; border-radius: 2px; background: var(--fc); }
+.rf-fmt button[aria-checked='true'] { background: var(--fc, var(--ink)); border-color: var(--fc, var(--ink)); color: #fff; }
+.rf-fmt button[aria-checked='true'] i { background: #fff; }
+.rf-fmt button.f-story[aria-checked='true'] { color: #3d2f05; }

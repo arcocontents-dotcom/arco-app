@@ -42,6 +42,7 @@ export interface RoutineRow {
   client: string;
   active: boolean;
   created: string;
+  format: 'Vídeo' | 'Post' | 'Story' | null;
 }
 
 const TEAM: Person[] = ['Lemuel', 'Marcos', 'Yan', 'Rafa'];
@@ -55,9 +56,9 @@ const URG: Record<Urgency, { label: string; rank: number }> = {
 };
 /** Cor do cartão: a mesma do Notion para o formato (ou do tipo, nas tarefas internas). */
 const fmtClass = (t: { source: string; kind: string | null; type: string }) => {
-  if (t.source === 'rotina') return t.type === 'Lembrete' ? 'f-lembrete' : t.type === 'Tarefa fixa' ? 'f-fixa' : 'f-avulsa';
   const s = (t.kind ?? '').toLowerCase();
-  return s.startsWith('reels') ? 'f-reels' : s.startsWith('post') ? 'f-post' : s.startsWith('stor') ? 'f-story' : s.startsWith('foto') ? 'f-foto' : 'f-outro';
+  if (t.source === 'rotina' && !s) return t.type === 'Lembrete' ? 'f-lembrete' : t.type === 'Tarefa fixa' ? 'f-fixa' : 'f-avulsa';
+  return s.startsWith('reels') || s.startsWith('víd') || s.startsWith('vid') ? 'f-reels' : s.startsWith('post') ? 'f-post' : s.startsWith('stor') ? 'f-story' : s.startsWith('foto') ? 'f-foto' : 'f-outro';
 };
 const kindClass = (k: string | null) => {
   const s = (k ?? '').toLowerCase();
@@ -174,9 +175,13 @@ export default function ProducaoBoard({
             {t.type === 'Conteúdo' ? (
               t.kind && <span className={`pt-kind ${kindClass(t.kind)}`}>{t.kind}</span>
             ) : (
-              <span className={`pt-kind t-${t.type === 'Lembrete' ? 'lembrete' : t.type === 'Tarefa fixa' ? 'fixa' : 'avulsa'}`}>
-                {t.type === 'Lembrete' && <Icon name="bell" size={11} />}{t.type}
-              </span>
+              t.kind ? (
+                <span className="pt-kind">{t.type === 'Lembrete' && <Icon name="bell" size={11} />}{t.kind}</span>
+              ) : (
+                <span className={`pt-kind t-${t.type === 'Lembrete' ? 'lembrete' : t.type === 'Tarefa fixa' ? 'fixa' : 'avulsa'}`}>
+                  {t.type === 'Lembrete' && <Icon name="bell" size={11} />}{t.type}
+                </span>
+              )
             )}
             {t.client && <span className="pt-client">{t.client}</span>}
             {showWho && <span className={`pt-who w-${t.person.toLowerCase()}`}>{t.person}</span>}
@@ -432,6 +437,7 @@ function RoutineForm({
   const [type, setType] = useState<RoutineType>(row?.type ?? 'Tarefa');
   const [date, setDate] = useState(row?.date ?? '');
   const [urgency, setUrgency] = useState<RoutineRow['urgency']>(row?.urgency ?? 'Média');
+  const [format, setFormat] = useState<RoutineRow['format']>(row?.format ?? null);
   // Cliente: da agência (lista), Freelancer ou Casamento (escreve o nome), ou nenhum
   type Kind = 'agencia' | 'freelancer' | 'casamento' | 'nenhum';
   const PREFIX: Record<'freelancer' | 'casamento', string> = { freelancer: 'Freelancer · ', casamento: 'Casamento · ' };
@@ -462,7 +468,7 @@ function RoutineForm({
       }
       const clientName =
         ckind === 'freelancer' || ckind === 'casamento' ? `${PREFIX[ckind]}${freeName.trim()}` : ckind === 'agencia' ? client : '';
-      const r = await saveRoutineAction(row?.id ?? null, { title, person: who, type, days: fixed ? row!.days : [], date: fixed ? null : date, urgency, client: clientName });
+      const r = await saveRoutineAction(row?.id ?? null, { title, person: who, type, days: fixed ? row!.days : [], date: fixed ? null : date, urgency, client: clientName, format });
       if (r.ok) onSaved();
       else setErr(r.error);
     });
@@ -520,6 +526,18 @@ function RoutineForm({
             <input type="date" className="ninput" required min={launched} value={date} onChange={(e) => setDate(e.target.value)} aria-label="Data de entrega" />
           </label>
         )}
+
+        <div className="rf-row">
+          <span className="rf-l">Formato</span>
+          <div className="rf-urg rf-fmt" role="radiogroup" aria-label="Formato">
+            {([['Vídeo', 'f-reels'], ['Post', 'f-post'], ['Story', 'f-story']] as const).map(([v, c]) => (
+              <button key={v} type="button" role="radio" aria-checked={format === v} className={c} onClick={() => setFormat(format === v ? null : v)}>
+                <i />{v}
+              </button>
+            ))}
+            <button type="button" role="radio" aria-checked={format === null} onClick={() => setFormat(null)}>Nenhum</button>
+          </div>
+        </div>
 
         <div className="rf-row">
           <span className="rf-l">Urgência</span>
