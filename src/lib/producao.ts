@@ -8,6 +8,7 @@ import { MONTHS, addDays, addMonths, localParts, weekdayMon } from './domain';
 import { checkbox, date, isPage, normId, notion, queryAll, select, text, titleProp } from './notion';
 import { matchCalName, multi } from './planning';
 import { listShoots, type Shoot } from './captacao';
+import { produtosToText } from './produtos';
 
 // Produção da equipe: o que cada pessoa precisa fazer na semana.
 // - Conteúdos vêm do 🗓️ Calendário mensal, pela etiqueta "Demanda atual está com".
@@ -54,6 +55,8 @@ export interface ProdTask {
   fmt?: string | null;
   /** Descrição da task (o que a pessoa precisa fazer), sempre aberta no card. */
   desc?: string | null;
+  /** Card do Planejamento ligado (task da Produção). */
+  planId?: string | null;
 }
 
 export interface Routine {
@@ -74,6 +77,8 @@ export interface Routine {
   formatOther: string;
   /** Descrição da tarefa (opcional). */
   desc: string;
+  /** Card do Planejamento (Calendário mensal) ligado. */
+  contentId: string | null;
 }
 
 export const routineConfigured = () => !!env.routineDb;
@@ -133,7 +138,11 @@ function toRoutine(p: PageObjectResponse): Routine {
       return (FORMATS as readonly string[]).includes(f) ? (f as TaskFormat) : LEGACY_FORMAT[f] ?? null;
     })(),
     formatOther: text(pr[R.formatOther]),
-    desc: text(pr[R.desc])
+    desc: text(pr[R.desc]),
+    contentId: (() => {
+      const c = pr[R.content];
+      return c?.type === 'relation' ? c.relation[0]?.id ?? null : null;
+    })()
   };
 }
 
@@ -257,6 +266,7 @@ export async function productionWeek(
         time: sh.time,
         kind: 'Captação',
         note: sh.place || null,
+        desc: [sh.products.length ? `Produtos: ${produtosToText(sh.products)}` : '', sh.note].filter(Boolean).join('\n') || null,
         urgency: sh.status !== 'Realizada' && sh.day < today ? 'atrasado' : urgencyByDay(sh.day < today ? today : sh.day, today),
         type: 'Captação',
         done: sh.status === 'Realizada',
@@ -279,6 +289,7 @@ export async function productionWeek(
       kind: r.format === 'Outro' ? r.formatOther || 'Outro' : r.format,
       fmt: r.format,
       desc: r.desc || null,
+      planId: r.contentId,
       note: null,
       type: r.type,
       url: `https://www.notion.so/${normId(r.id)}`,
@@ -335,6 +346,11 @@ export async function setRoutineDone(id: string, day: string, done: boolean) {
   const keep = [...set].sort().slice(-120);
   await notion().pages.update({ page_id: id, properties: { [R.doneOn]: { rich_text: [{ text: { content: keep.join(' ') } }] } } as never });
   invalidate('prod:');
+  // task ligada ao Planejamento: registra quem editou e o card segue para aprovação
+  if (done && r.contentId && isPerson(r.person)) {
+    const { taskDoneOnPlanning } = await import('./vinculo');
+    await taskDoneOnPlanning(r.contentId, r.format, r.person, day).catch((e) => console.error('[producao] planejamento', e));
+  }
 }
 
 export interface RoutineInput {
@@ -531,6 +547,8 @@ export async function teamDashboard(first: string, today: string): Promise<TeamD
       const k = r.format ? map[r.format] : undefined;
       if (r.type === 'Tarefa fixa' || !k || !r.date || !isPerson(r.person)) continue;
       if (r.date < first || r.date > last || !r.doneOn.includes(r.date)) continue;
+      // edição ligada a um card: já conta pelo "Editado/Design por" do card
+      if (r.contentId && r.format?.startsWith('Editar')) continue;
       bump(r.person, k);
     }
     return { month: first, people, team };

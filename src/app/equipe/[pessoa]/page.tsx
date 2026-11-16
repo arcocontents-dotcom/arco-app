@@ -5,9 +5,20 @@ import { listClients } from '@/lib/notion';
 import { startOfWeek, todayIn } from '@/lib/domain';
 import { TEAM, productionWeek, validTeamKey } from '@/lib/producao';
 import ProducaoBoard from '@/components/ProducaoBoard';
+import TeamAppHint from '@/components/TeamAppHint';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'Minhas tarefas · Arco Contents', robots: { index: false, follow: false } };
+export async function generateMetadata({ params, searchParams }: { params: Promise<{ pessoa: string }>; searchParams: Promise<{ k?: string }> }): Promise<Metadata> {
+  const { pessoa } = await params;
+  const { k } = await searchParams;
+  const slug = encodeURIComponent(decodeURIComponent(pessoa).toLowerCase());
+  return {
+    title: 'Minhas tarefas · Arco Equipe',
+    robots: { index: false, follow: false },
+    manifest: `/equipe/${slug}/app.webmanifest?k=${encodeURIComponent(k ?? '')}`,
+    appleWebApp: { capable: true, title: 'Arco Equipe', statusBarStyle: 'default' }
+  };
+}
 
 /** Link pessoal de cada pessoa da equipe: as próprias tarefas da semana, com caixinha para marcar. */
 export default async function Equipe({ params, searchParams }: { params: Promise<{ pessoa: string }>; searchParams: Promise<{ k?: string }> }) {
@@ -30,6 +41,7 @@ export default async function Equipe({ params, searchParams }: { params: Promise
           <h1>Oi, {person}!</h1>
         </div>
       </header>
+      <TeamAppHint />
       <ProducaoBoard
         member={{ person, k: k! }}
         start={start}

@@ -8,7 +8,7 @@ import Icon from './Icon';
 import { addDays, dayNum, weekdayMon } from '@/lib/domain';
 import { shootStatusAction } from '@/app/admin/producao/captacao/actions';
 import { teamToggleAction } from '@/app/equipe/actions';
-import { passContentAction, saveRoutineAction, toggleContentAction, toggleRoutineAction, trashRoutineAction } from '@/app/admin/producao/actions';
+import { openCardsAction, passContentAction, saveRoutineAction, toggleContentAction, toggleRoutineAction, trashRoutineAction } from '@/app/admin/producao/actions';
 
 // Tipos copiados de lib/producao (não dá para importar lib server-only aqui).
 type Person = 'Lemuel' | 'Marcos' | 'Yan' | 'Rafa';
@@ -34,6 +34,7 @@ export interface Task {
   launched?: string | null;
   fmt?: string | null;
   desc?: string | null;
+  planId?: string | null;
 }
 export interface RoutineRow {
   id: string;
@@ -49,6 +50,7 @@ export interface RoutineRow {
   format: TaskFormatName | null;
   formatOther: string;
   desc: string;
+  contentId: string | null;
 }
 
 const TEAM: Person[] = ['Lemuel', 'Marcos', 'Yan', 'Rafa'];
@@ -236,6 +238,12 @@ export default function ProducaoBoard({
               {!late && t.urgency === 'alta' && !t.done && <span className="pt-urg">Urgente</span>}
               {showDay && t.day && !late && <span className="pt-day">{WD[weekdayMon(t.day)]} {dayNum(t.day)}{t.time ? ` · ${t.time}` : ''}</span>}
               {t.launched && t.type !== 'Tarefa fixa' && <span className="pt-day">Lançada {t.launched.slice(8, 10)}/{t.launched.slice(5, 7)}</span>}
+            </div>
+          )}
+          {admin && t.source === 'rotina' && t.planId && (
+            <div className="pt-actions">
+              <span className="pt-linked"><Icon name="bulb" size={11} />No planejamento</span>
+              {t.clientId && <Link className="pt-open" href={`/admin/planejamento?c=${t.clientId}`}>Abrir</Link>}
             </div>
           )}
           {admin && t.source === 'conteudo' && !t.done && (
@@ -517,6 +525,10 @@ function RoutineForm({
   const [formatOther, setFormatOther] = useState(row?.formatOther ?? '');
   const [desc, setDesc] = useState(row?.desc ?? '');
   const [descOpen, setDescOpen] = useState(!!row?.desc);
+  // Planejamento: task de edição/roteiro/postagem de cliente da agência fica ligada a um card
+  const LINKABLE = ['Editar reels', 'Editar post', 'Editar story', 'Editar foto', 'Fazer roteiro', 'Postar'];
+  const [planLink, setPlanLink] = useState<string>('novo');
+  const [cards, setCards] = useState<{ id: string; title: string; kind: string | null; note: string | null }[] | null>(null);
   // Cliente: da agência (lista), Freelancer ou Casamento (escreve o nome), ou nenhum
   type Kind = 'agencia' | 'freelancer' | 'casamento' | 'nenhum';
   const PREFIX: Record<'freelancer' | 'casamento', string> = { freelancer: 'Freelancer · ', casamento: 'Casamento · ' };
@@ -530,6 +542,15 @@ function RoutineForm({
   const [pending, start] = useTransition();
   // lançada em: o dia de hoje (ou o dia em que foi criada), fixo
   const launched = row?.created ?? today;
+
+  const canLink = ckind === 'agencia' && !!client && !!format && LINKABLE.includes(format) && who !== 'Equipe';
+  useEffect(() => {
+    if (!canLink || row?.contentId) return;
+    let alive = true;
+    setCards(null);
+    openCardsAction(client).then((l) => alive && setCards(l)).catch(() => alive && setCards([]));
+    return () => { alive = false; };
+  }, [canLink, client, row?.contentId]);
 
   const save = () =>
     start(async () => {
@@ -551,7 +572,8 @@ function RoutineForm({
       }
       const clientName =
         ckind === 'freelancer' || ckind === 'casamento' ? `${PREFIX[ckind]}${freeName.trim()}` : ckind === 'agencia' ? client : '';
-      const r = await saveRoutineAction(row?.id ?? null, { title, person: who, type, days: fixed ? row!.days : [], date: fixed ? null : date, urgency, client: clientName, format, formatOther, desc });
+      const link = row?.contentId || !canLink ? null : planLink === 'nao' ? null : planLink;
+      const r = await saveRoutineAction(row?.id ?? null, { title, person: who, type, days: fixed ? row!.days : [], date: fixed ? null : date, urgency, client: clientName, format, formatOther, desc }, link);
       if (r.ok) onSaved();
       else setErr(r.error);
     });
@@ -674,6 +696,27 @@ function RoutineForm({
               {clients.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </label>
+        )}
+        {canLink && (
+          <div className="rf-row rf-plan">
+            <span className="rf-l">Planejamento</span>
+            {row?.contentId ? (
+              <span className="rf-plan-ok">
+                <Icon name="check" size={13} />Ligada ao conteúdo do planejamento
+                <a className="link-btn" href={`notion://www.notion.so/${row.contentId.replace(/-/g, '')}`}>Abrir no Notion</a>
+              </span>
+            ) : (
+              <select className="ninput" style={{ flex: 1 }} value={planLink} onChange={(e) => setPlanLink(e.target.value)} aria-label="Conteúdo do planejamento">
+                <option value="novo">Criar no planejamento (fica pendente para completar)</option>
+                {(cards ?? []).length > 0 && (
+                  <optgroup label="Ligar a um conteúdo que já existe">
+                    {cards!.map((c) => <option key={c.id} value={c.id}>{c.kind ? `${c.kind} · ` : ''}{c.title}{c.note ? ` — ${c.note}` : ''}</option>)}
+                  </optgroup>
+                )}
+                <option value="nao">Não ligar ao planejamento</option>
+              </select>
+            )}
+          </div>
         )}
         {(ckind === 'freelancer' || ckind === 'casamento') && (
           <label className="rf-row">

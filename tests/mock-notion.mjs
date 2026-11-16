@@ -33,10 +33,10 @@ const TYPES = {
     [PL.briefBy]: 'multi_select', [PL.deadline]: 'formula'
   },
   [SHOOTS_DB]: {
-    'Captação': 'title', Data: 'date', Cliente: 'rich_text', 'Quem vai': 'multi_select', Tipo: 'select', Status: 'select', Local: 'rich_text', 'Observação': 'rich_text'
+    'Captação': 'title', Data: 'date', Cliente: 'rich_text', 'Quem vai': 'multi_select', Tipo: 'select', Status: 'select', Local: 'rich_text', 'Observação': 'rich_text', Produtos: 'rich_text', 'Conteúdos': 'relation'
   },
   [ROUTINE_DB]: {
-    Tarefa: 'title', Pessoa: 'select', Tipo: 'select', Dias: 'multi_select', Data: 'date', 'Urgência': 'select', Cliente: 'rich_text', 'Feito em': 'rich_text', Ativo: 'checkbox', Formato: 'select', 'Formato (outro)': 'rich_text', 'Descrição': 'rich_text'
+    Tarefa: 'title', Pessoa: 'select', Tipo: 'select', Dias: 'multi_select', Data: 'date', 'Urgência': 'select', Cliente: 'rich_text', 'Feito em': 'rich_text', Ativo: 'checkbox', Formato: 'select', 'Formato (outro)': 'rich_text', 'Descrição': 'rich_text', 'Conteúdo': 'relation'
   }
 };
 
@@ -44,11 +44,11 @@ const TYPES = {
 export const PLAN_OPTIONS = {
   [PL.client]: ['Studio Alfa', 'Beta Ltda', 'Outro Cliente'],
   [PL.kind]: ['Reels 1', 'Reels 2', 'Post 1', 'Storys 1', 'Fotos'],
-  [PL.note]: ['Falta copy', 'Falta design', 'Falta edição', 'Aprovação post', 'Finalizado', 'Outros'],
+  [PL.note]: ['Falta copy', 'Falta captação', 'Falta design', 'Falta edição', 'Aprovação post', 'Finalizado', 'Outros'],
   [PL.owner]: ['Lemuel', 'Rafa', 'Yan', 'Marcos', 'Finalizado'],
   [PL.month]: ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'],
   [PL.status]: ['Ideia', 'Realizando', 'Postado'],
-  [PL.briefBy]: ['Yan', 'Marcos', 'Cliente'],
+  [PL.briefBy]: ['Yan', 'Marcos', 'Lemuel', 'Rafael', 'Cliente'],
   [PL.designBy]: ['Yan', 'Marcos', 'Lemuel', 'Rafael', 'Cliente'],
   [PL.postedBy]: ['Yan', 'Marcos', 'Cliente']
 };

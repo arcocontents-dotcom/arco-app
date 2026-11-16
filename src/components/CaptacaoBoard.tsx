@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Icon from './Icon';
 import { dayNum, weekdayMon } from '@/lib/domain';
+import { PRODUTOS_PADRAO, type Produto } from '@/lib/produtos';
 import { saveShootAction, shootStatusAction, trashShootAction } from '@/app/admin/producao/captacao/actions';
 
 type Crew = 'Lemuel' | 'Marcos' | 'Yan' | 'Rafa';
@@ -23,6 +24,7 @@ export interface ShootRow {
   status: SStatus;
   place: string;
   note: string;
+  products: Produto[];
   url: string;
 }
 
@@ -102,6 +104,9 @@ export default function CaptacaoBoard({
       </span>
       <span className="sh-title">{s.title}</span>
       {!compact && s.client && <span className="sh-client">{s.client}</span>}
+      {!compact && s.products.length > 0 && (
+        <span className="sh-prods">{s.products.map((p) => <span key={p.name}><b>{p.qty}</b> {p.name}</span>)}</span>
+      )}
       {!compact && s.place && <span className="sh-place">📍 {s.place}</span>}
       <span className="sh-crew">
         {s.crew.map((c) => <span key={c} className="pav sm" title={c}>{c.charAt(0)}</span>)}
@@ -254,6 +259,15 @@ function ShootForm({
   const [status, setStatus] = useState<SStatus>(row?.status ?? 'Agendada');
   const [place, setPlace] = useState(row?.place ?? '');
   const [note, setNote] = useState(row?.note ?? '');
+  const [products, setProducts] = useState<Produto[]>(row?.products ?? []);
+  const [custom, setCustom] = useState('');
+  const addProduct = (name: string) => {
+    const n = name.trim().slice(0, 40);
+    if (!n) return;
+    setProducts((l) => (l.some((p) => p.name.toLowerCase() === n.toLowerCase()) ? l.map((p) => (p.name.toLowerCase() === n.toLowerCase() ? { ...p, qty: Math.min(99, p.qty + 1) } : p)) : [...l, { name: n, qty: 1 }]));
+  };
+  const setQty = (name: string, qty: number) =>
+    setProducts((l) => (qty <= 0 ? l.filter((p) => p.name !== name) : l.map((p) => (p.name === name ? { ...p, qty: Math.min(99, qty) } : p))));
   const [err, setErr] = useState<string | null>(null);
   const [confirmDel, setConfirmDel] = useState(false);
   const [pending, start] = useTransition();
@@ -265,7 +279,7 @@ function ShootForm({
         return;
       }
       const clientName = ckind === 'freelancer' || ckind === 'casamento' ? `${PREFIX[ckind]}${freeName.trim()}` : ckind === 'agencia' ? client : '';
-      const r = await saveShootAction(row?.id ?? null, { title, day, time: time || null, endTime: endTime || null, client: clientName, crew, type, status, place, note });
+      const r = await saveShootAction(row?.id ?? null, { title, day, time: time || null, endTime: endTime || null, client: clientName, crew, type, status, place, note, products });
       if (r.ok) onSaved();
       else setErr(r.error);
     });
@@ -335,6 +349,44 @@ function ShootForm({
           </div>
         </div>
 
+        <div className="rf-row rf-prods-row">
+          <span className="rf-l">Produtos</span>
+          <div className="rf-prods">
+            <div className="rf-prod-add" role="group" aria-label="Adicionar produto">
+              {PRODUTOS_PADRAO.map((n) => (
+                <button key={n} type="button" onClick={() => addProduct(n)} aria-label={`Adicionar ${n}`}><Icon name="plus" size={12} />{n}</button>
+              ))}
+              <span className="rf-prod-custom">
+                <input
+                  className="ninput"
+                  placeholder="Outro (ex.: Vídeo depoimento)"
+                  aria-label="Outro produto"
+                  value={custom}
+                  maxLength={40}
+                  onChange={(e) => setCustom(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addProduct(custom); setCustom(''); } }}
+                />
+                <button type="button" className="icon-btn" aria-label="Adicionar outro produto" disabled={!custom.trim()} onClick={() => { addProduct(custom); setCustom(''); }}><Icon name="plus" size={14} /></button>
+              </span>
+            </div>
+            {products.length > 0 && (
+              <ul className="rf-prod-list" aria-label="Produtos da captação">
+                {products.map((p) => (
+                  <li key={p.name}>
+                    <span>{p.name}</span>
+                    <div className="rf-stepper">
+                      <button type="button" aria-label={`Menos ${p.name}`} onClick={() => setQty(p.name, p.qty - 1)}>−</button>
+                      <b aria-label={`Quantidade de ${p.name}`}>{p.qty}</b>
+                      <button type="button" aria-label={`Mais ${p.name}`} onClick={() => setQty(p.name, p.qty + 1)}>+</button>
+                    </div>
+                    <button type="button" className="rf-prod-x" aria-label={`Tirar ${p.name}`} onClick={() => setQty(p.name, 0)}><Icon name="x" size={13} /></button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+
         <div className="rf-row">
           <span className="rf-l">Cliente</span>
           <div className="rf-urg rf-ckind" role="radiogroup" aria-label="Tipo de cliente">
@@ -364,8 +416,8 @@ function ShootForm({
           <input className="ninput" style={{ flex: 1 }} placeholder="Endereço ou nome do lugar" aria-label="Local" value={place} onChange={(e) => setPlace(e.target.value)} maxLength={300} />
         </label>
         <label className="rf-row" style={{ alignItems: 'flex-start' }}>
-          <span className="rf-l">Observação</span>
-          <textarea className="ninput" style={{ flex: 1, minHeight: 60 }} aria-label="Observação" value={note} onChange={(e) => setNote(e.target.value)} maxLength={1500} />
+          <span className="rf-l">Descrição</span>
+          <textarea className="ninput" style={{ flex: 1, minHeight: 60 }} aria-label="Descrição" placeholder="O que precisa ser feito, roteiro, detalhes…" value={note} onChange={(e) => setNote(e.target.value)} maxLength={1500} />
         </label>
 
         {err && <p className="error" role="alert" style={{ margin: 0 }}>{err}</p>}

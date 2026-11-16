@@ -3,8 +3,9 @@
 import { requireAdmin } from '@/lib/access';
 import { parseDay, todayIn } from '@/lib/domain';
 import { env } from '@/lib/env';
+import { LINKABLE, linkTaskToPlanning, openCards, type OpenCard } from '@/lib/vinculo';
 import {
-  FORMATS, ROUTINE_TYPES, TEAM, URGENCY_LABEL, WEEKDAYS, createRoutine, passContent, setContentDone, setRoutineDone, trashRoutine, updateRoutine,
+  FORMATS, ROUTINE_TYPES, TEAM, URGENCY_LABEL, WEEKDAYS, createRoutine, isPerson, passContent, setContentDone, setRoutineDone, trashRoutine, updateRoutine,
   type RoutineInput
 } from '@/lib/producao';
 
@@ -41,16 +42,27 @@ export async function toggleRoutineAction(id: string, day: string, done: boolean
   }
 }
 
-export async function saveRoutineAction(id: string | null, x: Partial<RoutineInput>): Promise<R<{ id: string }>> {
+export async function saveRoutineAction(
+  id: string | null,
+  x: Partial<RoutineInput>,
+  /** Card do Planejamento: id de um existente, 'novo' para criar pendente, null para não ligar. */
+  link: string | null = 'novo'
+): Promise<R<{ id: string; planId: string | null }>> {
   await requireAdmin();
   const v = clean(x);
   if (typeof v === 'string') return { ok: false, error: v };
   try {
-    if (id) {
-      await updateRoutine(id, v);
-      return { ok: true, id };
+    if (id) await updateRoutine(id, v);
+    const rid = id ?? (await createRoutine(v));
+    let planId: string | null = null;
+    // cliente da agência + edição/roteiro/postagem: fica ligada a um card do Planejamento
+    if (link && v.format && LINKABLE.includes(v.format) && v.client && isPerson(v.person)) {
+      planId = await linkTaskToPlanning(rid, { title: v.title, client: v.client, format: v.format, date: v.date, desc: v.desc, person: v.person }, link).catch((e) => {
+        console.error('[producao] planejamento', e);
+        return null;
+      });
     }
-    return { ok: true, id: await createRoutine(v) };
+    return { ok: true, id: rid, planId };
   } catch (e) {
     console.error('[producao] salvar', e);
     return { ok: false, error: 'Não foi possível salvar no Notion.' };
@@ -90,4 +102,10 @@ export async function toggleContentAction(id: string, done: boolean): Promise<R>
     console.error('[producao] entregue', e);
     return { ok: false, error: 'Não foi possível salvar no Notion.' };
   }
+}
+
+/** Cards abertos do cliente no Planejamento, para ligar a task a um conteúdo que já existe. */
+export async function openCardsAction(client: string): Promise<OpenCard[]> {
+  await requireAdmin();
+  return openCards(String(client).slice(0, 120)).catch(() => []);
 }

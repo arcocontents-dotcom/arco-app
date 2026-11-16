@@ -1235,9 +1235,9 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .rf-desc-add:hover { color: var(--ink); border-color: var(--ink); }
 .pt-desc { margin: 4px 0 0; font-size: 13px; line-height: 1.45; color: #4a4741; white-space: pre-wrap; overflow-wrap: anywhere; }
 .prod.tv .pt-desc { color: #d6d2ca; font-size: 15px; }
-/* título da task: Inter, bold mais legível que a Montserrat grossa */
-.pt-title, .pt-title.as-link { font-family: 'Inter', var(--body); font-weight: 650; letter-spacing: -0.011em; font-size: 14.5px; line-height: 1.32; }
-.prod.tv .pt-title { font-size: 17.5px; }
+/* título ao lançar/abrir uma task ou captação: bold mais legível (Inter) que a Montserrat 700 grossa */
+.drawer-title { font-family: 'Inter', var(--body); font-weight: 650; letter-spacing: -0.022em; font-size: 28px; line-height: 1.15; }
+.drawer-title::placeholder { font-weight: 500; color: #b9b5ad; }
 /* agenda do Notion Calendar (link iCal), só leitura */
 .sh.ag { --sc: #9b9890; background: #f4f3f0; border-left-color: #9b9890; color: #4a4741; }
 .sh.ag .sh-time { color: #6b6862; }
@@ -1253,3 +1253,34 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .ag-pop p { margin: 0; font-size: 14px; }
 .ag-note { white-space: pre-wrap; color: #4a4741; max-height: 200px; overflow: auto; }
 .ag-actions { display: flex; gap: 10px; align-items: center; margin-top: 6px; }
+/* produtos da captação */
+.rf-prods-row { align-items: flex-start; }
+.rf-prods { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.rf-prod-add { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.rf-prod-add > button { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); background: #fff; padding: 6px 10px; border-radius: 999px; font: 500 12.5px var(--body); cursor: pointer; color: var(--ink); }
+.rf-prod-add > button:hover { border-color: var(--ink); }
+.rf-prod-custom { display: inline-flex; align-items: center; gap: 4px; flex: 1 1 200px; }
+.rf-prod-custom .ninput { flex: 1; min-width: 0; }
+.rf-prod-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; }
+.rf-prod-list li { display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 12px; font-size: 14px; }
+.rf-prod-list li + li { border-top: 1px solid var(--line); }
+.rf-prod-list li > span { flex: 1; min-width: 0; font-weight: 500; }
+.rf-stepper { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.rf-stepper button { width: 30px; height: 28px; border: 0; background: #f6f5f2; font-size: 16px; cursor: pointer; color: var(--ink); }
+.rf-stepper button:hover { background: #eceae5; }
+.rf-stepper b { min-width: 30px; text-align: center; font-family: var(--display); font-size: 15px; }
+.rf-prod-x { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 4px; display: inline-flex; }
+.rf-prod-x:hover { color: var(--ink); }
+.sh-prods { display: flex; flex-wrap: wrap; gap: 4px; font-size: 11.5px; }
+.sh-prods span { background: rgba(255, 255, 255, 0.7); border: 1px solid rgba(0, 0, 0, 0.08); border-radius: 4px; padding: 1px 5px; }
+.sh-prods b { font-weight: 700; }
+/* task ligada ao planejamento */
+.rf-plan select { min-width: 0; }
+.rf-plan-ok { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #0f7b6c; flex-wrap: wrap; }
+.pt-linked { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); }
+/* app da equipe no celular */
+.team-hint { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 12px 12px 14px; margin: 0 0 16px; }
+.team-hint img { border-radius: 9px; flex: none; }
+.team-hint div { flex: 1; min-width: 0; }
+.team-hint strong { font-size: 14px; }
+.team-hint p { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.4; }

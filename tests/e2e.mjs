@@ -840,6 +840,11 @@ try {
       const tp = await pd.context().newPage();
       await tp.goto(`${APP}/equipe/yan?k=${k}`);
       await tp.locator('article.pt', { hasText: 'Editar vídeo do cliente X' }).locator('.pt-desc', { hasText: 'Cortar em 30s' }).waitFor();
+      const man = await (await fetch(`${APP}/equipe/yan/app.webmanifest?k=${k}`)).json();
+      assert.equal(man.start_url, `/equipe/yan?k=${k}`, 'app da equipe abre no link da pessoa');
+      assert.equal((await fetch(`${APP}/equipe/yan/app.webmanifest?k=errada`)).status, 404);
+      assert.match(await tp.locator('link[rel="manifest"]').getAttribute('href'), /\/equipe\/yan\/app\.webmanifest/);
+      await tp.getByText('Instale o app no celular').waitFor();
       await shot(tp, '22b-equipe-yan');
       await tp.close();
     }
@@ -909,10 +914,26 @@ try {
     await f.getByRole('radio', { name: 'Casamento' }).click();
     await f.getByLabel('Nome do casal').fill('Ana e Pedro');
     await f.getByLabel('Local').fill('Fazenda Boa Vista');
+    // produtos: o que vai ser feito (fica no Notion e no Notion Calendar)
+    await f.getByRole('button', { name: 'Adicionar Foto de capa' }).click();
+    await f.getByRole('button', { name: 'Mais Foto de capa' }).click();
+    await f.getByRole('button', { name: 'Adicionar Reels' }).click();
+    await f.getByRole('button', { name: 'Adicionar Reels' }).click();
+    await f.getByRole('button', { name: 'Adicionar Story' }).click();
+    await f.getByLabel('Outro produto', { exact: true }).fill('Vídeo depoimento');
+    await f.getByRole('button', { name: 'Adicionar outro produto' }).click();
+    await f.getByRole('button', { name: 'Tirar Vídeo depoimento' }).click();
+    await f.getByLabel('Descrição').fill('Levar o gimbal');
     await f.getByRole('button', { name: 'Salvar' }).click();
     const ev = pd.getByRole('button', { name: 'Gravação na obra às 09:00' });
     await ev.waitFor();
     await ev.getByText('09:00–11:30').waitFor();
+    await ev.locator('.sh-prods').getByText('Foto de capa').waitFor();
+    {
+      const sp = [...store.values()].find((x) => x.properties['Captação']?.title?.[0]?.plain_text === 'Gravação na obra');
+      assert.equal(sp.properties.Produtos.rich_text.map((t) => t.plain_text).join(''), 'Foto de capa ×2 · Reels ×2 · Story ×1');
+      assert.equal(sp.properties['Observação'].rich_text.map((t) => t.plain_text).join(''), 'Levar o gimbal');
+    }
     const sh = [...store.values()].find((x) => x.properties['Captação']?.title?.[0]?.plain_text === 'Gravação na obra');
     assert.deepEqual(sh.properties['Quem vai'].multi_select.map((o) => o.name), ['Yan', 'Rafa']);
     assert.match(sh.properties.Data.date.start, new RegExp(`^${today}T09:00:00-04:00$`));
@@ -936,6 +957,62 @@ try {
     // relatório: quem gravou
     await pd.goto(`${APP}/admin/producao/relatorio?m=${today.slice(0, 7)}`);
     await pd.locator('.db-person', { hasText: 'Yan' }).locator('li.f-capt').first().waitFor();
+  });
+
+  await step('tudo em um: captação e task de cliente viram conteúdo no planejamento', async () => {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Cuiaba', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const txt = (p, n) => (p.properties[n]?.title ?? p.properties[n]?.rich_text ?? []).map((t) => t.plain_text).join('');
+    const plans = () => [...store.values()].filter((x) => !x.archived && x.parent?.database_id && x.properties['Título do assunto']);
+    // captação do Studio Alfa com Reels ×2 → 2 cards no planejamento, ligados à captação
+    await pd.goto(`${APP}/admin/captacao`);
+    await pd.getByRole('button', { name: 'Nova captação', exact: true }).click();
+    const f = pd.getByRole('dialog', { name: 'Nova captação' });
+    await f.getByLabel('Captação', { exact: true }).fill('Gravação loja Alfa');
+    await f.getByLabel('Dia').fill(today);
+    await f.getByRole('group', { name: 'Quem vai' }).getByRole('button', { name: /Marcos/ }).click();
+    await f.getByLabel('Cliente da agência').selectOption('Studio Alfa');
+    await f.getByRole('button', { name: 'Adicionar Reels' }).click();
+    await f.getByRole('button', { name: 'Mais Reels' }).click();
+    await f.getByRole('button', { name: 'Salvar' }).click();
+    await pd.getByRole('button', { name: /Gravação loja Alfa/ }).first().waitFor();
+    await pd.waitForTimeout(500);
+    const made = plans().filter((x) => txt(x, 'Título do assunto').endsWith('· Gravação loja Alfa'));
+    assert.deepEqual(made.map((x) => txt(x, 'Título do assunto')).sort(), ['Reels 1 · Gravação loja Alfa', 'Reels 2 · Gravação loja Alfa']);
+    assert.equal(made[0].properties.Cliente.select.name, 'Studio Alfa');
+    assert.equal(made[0].properties['Observação'].select.name, 'Falta captação');
+    assert.deepEqual(made[0].properties['Gravado/Briefing por'].multi_select.map((o) => o.name), ['Marcos']);
+    const shootPage = [...store.values()].find((x) => txt(x, 'Captação') === 'Gravação loja Alfa');
+    assert.equal(shootPage.properties['Conteúdos'].relation.length, 2);
+    // salvar de novo não duplica
+    await pd.getByRole('button', { name: /Gravação loja Alfa/ }).first().click();
+    const e = pd.getByRole('dialog', { name: 'Editar captação' });
+    await e.getByRole('radio', { name: 'Realizada' }).click();
+    await pd.waitForTimeout(800);
+    assert.equal(plans().filter((x) => txt(x, 'Título do assunto').endsWith('· Gravação loja Alfa')).length, 2, 'não duplica');
+    assert.equal(made[0].properties['Observação'].select.name, 'Falta edição', 'captação feita → falta edição');
+    if (await e.isVisible()) await e.getByRole('button', { name: 'Fechar' }).click();
+    // task de edição do Studio Alfa → card pendente no planejamento; feita → registra quem editou
+    await pd.goto(`${APP}/admin/producao`);
+    const col = pd.locator('section.pcol[aria-label="Yan"]');
+    await col.getByRole('button', { name: 'Adicionar task para Yan' }).click();
+    const t = pd.getByRole('dialog', { name: 'Novo lembrete ou tarefa' });
+    await t.getByLabel('Tarefa', { exact: true }).fill('Editar vídeo institucional Alfa');
+    await t.getByLabel('Data de entrega').fill(today);
+    await t.getByRole('radio', { name: 'Editar reels' }).click();
+    await t.getByRole('radio', { name: 'Cliente', exact: true }).click();
+    await t.getByLabel('Cliente da agência').selectOption('Studio Alfa');
+    await t.getByLabel('Conteúdo do planejamento').waitFor();
+    await t.getByRole('button', { name: 'Salvar' }).click();
+    const card = col.locator('article.pt', { hasText: 'Editar vídeo institucional Alfa' });
+    await card.getByText('No planejamento').waitFor();
+    const plan = plans().find((x) => txt(x, 'Título do assunto') === 'Editar vídeo institucional Alfa');
+    assert.ok(plan, 'card criado no planejamento');
+    assert.equal(plan.properties.Status.status.name, 'Realizando');
+    assert.equal(plan.properties['Observação'].select.name, 'Falta edição');
+    await card.getByRole('button', { name: /Marcar como feito/ }).click();
+    await pd.waitForTimeout(900);
+    assert.equal(plan.properties['Editado/Design por'].select.name, 'Yan');
+    assert.equal(plan.properties['Observação'].select.name, 'Aprovação post');
   });
 
   await step('dashboard da produção: o que cada um captou, editou e postou', async () => {

@@ -2,6 +2,10 @@
 
 import { requireAdmin } from '@/lib/access';
 import { parseDay } from '@/lib/domain';
+import { cleanProdutos } from '@/lib/produtos';
+import { env } from '@/lib/env';
+import { todayIn } from '@/lib/domain';
+import { linkShootToPlanning, shootDoneOnPlanning } from '@/lib/vinculo';
 import { CREW, SHOOT_STATUS, SHOOT_TYPES, createShoot, setShootStatus, trashShoot, updateShoot, type ShootInput } from '@/lib/captacao';
 
 type R<T = object> = ({ ok: true } & T) | { ok: false; error: string };
@@ -22,20 +26,25 @@ function clean(x: Partial<ShootInput>): ShootInput | string {
     title, day, time, endTime, crew, type, status,
     client: String(x.client ?? '').trim().slice(0, 120),
     place: String(x.place ?? '').trim().slice(0, 300),
-    note: String(x.note ?? '').trim().slice(0, 1500)
+    note: String(x.note ?? '').trim().slice(0, 1500),
+    products: cleanProdutos(x.products)
   };
 }
 
-export async function saveShootAction(id: string | null, x: Partial<ShootInput>): Promise<R<{ id: string }>> {
+export async function saveShootAction(id: string | null, x: Partial<ShootInput>): Promise<R<{ id: string; planned: number }>> {
   await requireAdmin();
   const v = clean(x);
   if (typeof v === 'string') return { ok: false, error: v };
   try {
-    if (id) {
-      await updateShoot(id, v);
-      return { ok: true, id };
-    }
-    return { ok: true, id: await createShoot(v) };
+    if (id) await updateShoot(id, v);
+    const sid = id ?? (await createShoot(v));
+    // produtos → cards no Planejamento do cliente (roteiro, bastidor, edição, aprovação)
+    const planned = await linkShootToPlanning(sid, v).catch((e) => {
+      console.error('[captacao] planejamento', e);
+      return 0;
+    });
+    if (v.status === 'Realizada') await shootDoneOnPlanning(sid, todayIn(env.timeZone)).catch(() => undefined);
+    return { ok: true, id: sid, planned };
   } catch (e) {
     console.error('[captacao] salvar', e);
     return { ok: false, error: 'Não foi possível salvar no Notion.' };
@@ -47,6 +56,7 @@ export async function shootStatusAction(id: string, status: string): Promise<R> 
   if (!(SHOOT_STATUS as readonly string[]).includes(status)) return { ok: false, error: 'Status inválido.' };
   try {
     await setShootStatus(id, status as ShootInput['status']);
+    if (status === 'Realizada') await shootDoneOnPlanning(id, todayIn(env.timeZone)).catch((e) => console.error('[captacao] planejamento', e));
     return { ok: true };
   } catch (e) {
     console.error('[captacao] status', e);

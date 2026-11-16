@@ -6,6 +6,7 @@ import { invalidate, memo } from './cache';
 import { localParts } from './domain';
 import { isPage, normId, notion, queryAll, select, text, titleProp } from './notion';
 import { multi } from './planning';
+import { produtosToText, textToProdutos, type Produto } from './produtos';
 
 // 📸 Captações: calendário de gravação da agência.
 // Fica numa tabela do app no Notion (aparece no Notion Calendar) e na aba Captação do site.
@@ -30,6 +31,8 @@ export interface Shoot {
   status: ShootStatus;
   place: string;
   note: string;
+  /** O que vai ser feito: Reels ×2, Story ×2… */
+  products: Produto[];
   url: string;
 }
 
@@ -57,6 +60,7 @@ function toShoot(p: PageObjectResponse): Shoot | null {
     status: (SHOOT_STATUS as readonly string[]).includes(status ?? '') ? (status as ShootStatus) : 'Agendada',
     place: text(pr[S.place]),
     note: text(pr[S.note]),
+    products: textToProdutos(text(pr[S.products])),
     url: `https://www.notion.so/${normId(p.id)}`
   };
 }
@@ -102,6 +106,7 @@ export interface ShootInput {
   status: ShootStatus;
   place: string;
   note: string;
+  products: Produto[];
 }
 
 function shootProps(x: ShootInput) {
@@ -117,7 +122,8 @@ function shootProps(x: ShootInput) {
     [S.type]: { select: x.type ? { name: x.type } : null },
     [S.status]: { select: { name: x.status } },
     [S.place]: rich(x.place),
-    [S.note]: rich(x.note)
+    [S.note]: rich(x.note),
+    [S.products]: rich(produtosToText(x.products))
   };
 }
 

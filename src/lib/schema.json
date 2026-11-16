@@ -76,7 +76,8 @@
     "active": "Ativo",
     "format": "Formato",
     "formatOther": "Formato (outro)",
-    "desc": "Descrição"
+    "desc": "Descrição",
+    "content": "Conteúdo"
   },
   "shoot": {
     "title": "Captação",
@@ -86,6 +87,8 @@
     "type": "Tipo",
     "status": "Status",
     "place": "Local",
-    "note": "Observação"
+    "note": "Observação",
+    "products": "Produtos",
+    "contents": "Conteúdos"
   }
 }
