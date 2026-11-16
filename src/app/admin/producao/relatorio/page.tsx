@@ -46,7 +46,7 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
     { label: 'Reels postados', n: ps?.reels ?? 0, sub: 'vídeos no feed', cls: 'f-reels' },
     { label: 'Posts estáticos', n: ps?.post ?? 0, sub: 'post, carrossel e fotos', cls: 'f-post' },
     { label: 'Stories postados', n: ps?.story ?? 0, sub: 'stories', cls: 'f-story' },
-    { label: 'Captações feitas', n: d?.team.captacoes ?? 0, sub: '📸 Captações', cls: 'f-capt' }
+    { label: 'Captações feitas', n: d?.team.captacoes ?? 0, sub: `${d?.team.captou ?? 0} vídeos captados`, cls: 'f-capt' }
   ];
 
   return (
@@ -132,7 +132,7 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
                           {p.items.filter((it) => it.k === x.k).map((it, j) => (
                             <li key={`${it.url}-${j}`}>
                               <span className="db-day">{it.day ? `${it.day.slice(8, 10)}/${it.day.slice(5, 7)}` : '—'}</span>
-                              <a href={it.url.replace(/^https:\/\/www\.notion\.so\//, 'notion://www.notion.so/')} className="db-it">{it.title}</a>
+                              {it.url ? <a href={it.url.replace(/^https:\/\/www\.notion\.so\//, 'notion://www.notion.so/')} className="db-it">{it.title}</a> : <span className="db-it">{it.title}</span>}
                               {it.client && <span className="db-cl">{it.client}</span>}
                             </li>
                           ))}
@@ -171,7 +171,7 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
         </section>
 
         <p className="hint rp-note">
-          Postado no Instagram: cards do Calendário mensal com <b>data de postagem no mês</b> e marcados como Finalizado/Postado, separados pelo “Tipo de demanda” e pelo “Postado por” (equipe ou Cliente). Captações vêm do <b>📸 Captações</b> no Notion.
+          Postado no Instagram: cards do Calendário mensal com <b>data de postagem no mês</b> e marcados como Finalizado/Postado, separados pelo “Tipo de demanda” e pelo “Postado por” (equipe ou Cliente). <b>Captações</b>: cada cliente gravado no mês conta como uma captação de quem foi (“Gravado/Briefing por” + “Gravado quando” no Calendário mensal), somando as agendadas na aba Captação. <b>Vídeos captados</b>: reels e stories com quem gravou.
           Por pessoa: <b>captou</b> = “Gravado/Briefing por”, <b>editou</b> = “Editado/Design por”, <b>postou</b> = “Postado por” no Calendário mensal,
           somados às tasks da aba Produção marcadas como feitas (Editar…, Postar, Fazer roteiro).
         </p>

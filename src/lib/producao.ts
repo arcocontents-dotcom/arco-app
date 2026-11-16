@@ -503,7 +503,7 @@ export async function teamDashboard(first: string, today: string): Promise<TeamD
   const monthName = MONTHS[Number(first.slice(5, 7)) - 1];
   return memo(`prod:dash:${first}:${today}`, 30_000, async () => {
     const near = [{ property: P.date, date: { on_or_after: addDays(first, -75) } }, { property: P.date, date: { on_or_before: addDays(last, 75) } }];
-    const [edited, editedNoMonth, recorded, posted, shoots, routines] = await Promise.all([
+    const [edited, editedNoMonth, recordedDated, recordedNoDate, posted, shoots, routines] = await Promise.all([
       queryAll(env.planningDb!, { filter: { and: [{ property: P.editMonth, select: { equals: monthName } }, ...near] } }),
       queryAll(env.planningDb!, {
         filter: {
@@ -516,6 +516,8 @@ export async function teamDashboard(first: string, today: string): Promise<TeamD
         }
       }),
       queryAll(env.planningDb!, { filter: { and: [{ property: P.recMonth, select: { equals: monthName } }, ...near] } }),
+      // gravados que ainda não têm data de postagem também contam
+      queryAll(env.planningDb!, { filter: { and: [{ property: P.recMonth, select: { equals: monthName } }, { property: P.date, date: { is_empty: true } }] } }),
       queryAll(env.planningDb!, {
         filter: {
           and: [
@@ -545,20 +547,63 @@ export async function teamDashboard(first: string, today: string): Promise<TeamD
     });
     const live = (p: unknown): p is PageObjectResponse => isPage(p) && !p.archived;
 
-    for (const sh of shoots) {
-      if (sh.status === 'Cancelada' || sh.day > today) continue;
-      team.captacoes++;
-      for (const who of new Set(sh.crew)) {
-        const p = people.find((x) => x.name === who)!;
-        p.m.captacoes++;
-        p.items.push({ k: 'captacoes', title: sh.title, client: sh.client || null, day: sh.day, url: sh.url });
+    // Captações: cada cliente gravado no mês (Calendário mensal: "Gravado/Briefing por" + "Gravado quando")
+    // conta como uma captação de quem foi; somam as captações agendadas na aba Captação (📸) de outros clientes.
+    const norm = (x: string | null) => (x ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/^(freelancer|casamento) · /, '').trim();
+    const sameClient = (a: string | null, b: string | null) => !!norm(a) && !!norm(b) && (norm(a).includes(norm(b)) || norm(b).includes(norm(a)));
+    const capByPerson = new Map<Person, Map<string, { client: string | null; n: number; day: string | null; shoot?: string; url?: string }>>();
+    const teamCaps = new Set<string>();
+    const cutoff = addDays(first, -150);
+    const recorded = [...recordedDated, ...recordedNoDate.filter((p) => isPage(p) && p.created_time.slice(0, 10) >= cutoff)];
+    const seenRec = new Set<string>();
+    const videosRec = new Set<string>();
+    for (const p of recorded) {
+      if (!live(p) || seenRec.has(p.id)) continue;
+      seenRec.add(p.id);
+      const f = fmtOf(select(p.properties[P.kind]));
+      const cal = select(p.properties[P.client]);
+      const crew = [...new Set(multi(p.properties[P.briefBy]).map(editorToPerson))].filter((x): x is Person => !!x);
+      if (!crew.length) continue;
+      if (cal) teamCaps.add(`c:${norm(cal)}`);
+      for (const who of crew) {
+        // captou = vídeos (reels e stories); fotos e posts não entram
+        if (f !== 'post' && f !== 'foto') {
+          bump(who, 'captou', card(p));
+          videosRec.add(p.id);
+        }
+        if (!cal) continue;
+        const m = capByPerson.get(who) ?? new Map();
+        const e = m.get(norm(cal)) ?? { client: cal, n: 0, day: null };
+        e.n++;
+        m.set(norm(cal), e);
+        capByPerson.set(who, m);
       }
     }
-    for (const p of recorded) {
-      if (!live(p)) continue;
-      const f = fmtOf(select(p.properties[P.kind]));
-      if (f === 'post' || f === 'foto') continue; // captou = vídeos
-      for (const who of new Set(multi(p.properties[P.briefBy]).map(editorToPerson))) if (who) bump(who, 'captou', card(p));
+    for (const sh of shoots) {
+      if (sh.status === 'Cancelada' || sh.day > today) continue;
+      const covered = [...teamCaps].some((k) => sameClient(k.slice(2), sh.client));
+      if (!covered) teamCaps.add(`s:${sh.id}`);
+      for (const who of new Set(sh.crew)) {
+        const m = capByPerson.get(who) ?? new Map();
+        const key = [...m.keys()].find((k) => sameClient(k, sh.client)) ?? `s:${sh.id}`;
+        const e = m.get(key) ?? { client: sh.client || sh.title, n: 0, day: null };
+        e.day = sh.day;
+        e.shoot = sh.title;
+        e.url = sh.url;
+        m.set(key, e);
+        capByPerson.set(who, m);
+      }
+    }
+    team.captacoes = teamCaps.size;
+    // no total da equipe, um vídeo gravado por duas pessoas conta uma vez
+    team.captou = videosRec.size;
+    for (const [who, m] of capByPerson) {
+      const p = people.find((x) => x.name === who)!;
+      p.m.captacoes = m.size;
+      for (const e of m.values()) {
+        const rec = e.n ? `${e.n} conteúdo${e.n > 1 ? 's' : ''} gravado${e.n > 1 ? 's' : ''}` : '';
+        p.items.push({ k: 'captacoes', title: [e.shoot, rec].filter(Boolean).join(' · ') || 'Captação', client: e.client, day: e.day, url: e.url ?? '' });
+      }
     }
     const seen = new Set<string>();
     for (const p of [...edited, ...editedNoMonth]) {
