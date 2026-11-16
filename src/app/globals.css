@@ -1094,3 +1094,5 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .rp-clients li > span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rp-clients b { font-size: 16px; margin-left: 0; min-width: 28px; text-align: right; }
 .rp-note { margin: 0; }
+.pcol-add { display: flex; align-items: center; gap: 8px; margin: 0 8px 10px; padding: 9px 10px; border: 1px dashed #c9c5be; background: transparent; font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; text-align: left; transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease; }
+.pcol-add:hover { border-color: var(--ink); color: var(--ink); background: #fff; }

@@ -92,6 +92,7 @@ export default function ProducaoBoard({
   const [client, setClient] = useState('');
   const [when, setWhen] = useState<'hoje' | 'amanha' | 'semana'>('semana');
   const [transfer, setTransfer] = useState<string | null>(null);
+  const [newWho, setNewWho] = useState<Who | null>(null);
   const [edited, setEdited] = useState(true);
   const [editing, setEditing] = useState<RoutineRow | 'novo' | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -248,6 +249,11 @@ export default function ProducaoBoard({
           <h3>{p}</h3>
           <b title="Para fazer">{pending(mine)}</b>
         </header>
+        {!tv && (
+          <button type="button" className="pcol-add" onClick={() => { setNewWho(p); setEditing('novo'); }} aria-label={`Adicionar task para ${p}`}>
+            <Icon name="plus" size={14} />Adicionar task
+          </button>
+        )}
         {mine.length > 0 && (
           <div className="pprog" aria-label={`${mine.length - pending(mine)} de ${mine.length} entregues`}>
             <span style={{ width: `${Math.round(((mine.length - pending(mine)) / mine.length) * 100)}%` }} />
@@ -326,7 +332,7 @@ export default function ProducaoBoard({
         {tv && <div className="tv-clock" aria-label="Hora">{clock}</div>}
         {!tv && (
           <div className="prod-tools">
-            <button type="button" className="btn small" onClick={() => setEditing('novo')}><Icon name="plus" size={15} />Lembrete ou tarefa</button>
+            <button type="button" className="btn small" onClick={() => { setNewWho(null); setEditing('novo'); }}><Icon name="plus" size={15} />Lembrete ou tarefa</button>
             {tvUrl && <a className="btn outline small" href={tvUrl} target="_blank" rel="noreferrer"><Icon name="external" size={15} />Abrir na TV</a>}
           </div>
         )}
@@ -396,10 +402,10 @@ export default function ProducaoBoard({
         <RoutineForm
           row={editing === 'novo' ? null : editing}
           clients={clients.map((c) => c.name)}
-          defaultWho={who === 'todos' ? 'Rafa' : who}
+          defaultWho={newWho ?? (who === 'todos' ? 'Rafa' : who)}
           today={today}
-          onClose={() => setEditing(null)}
-          onSaved={() => { setEditing(null); router.refresh(); }}
+          onClose={() => { setEditing(null); setNewWho(null); }}
+          onSaved={() => { setEditing(null); setNewWho(null); router.refresh(); }}
         />
       )}
     </div>

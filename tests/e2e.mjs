@@ -749,6 +749,14 @@ try {
     await colOf('Rafa').getByRole('button', { name: 'Desmarcar: Alimentar o Notion' }).first().waitFor();
     await pd.waitForTimeout(700);
     assert.match(page(ROUT).properties['Feito em'].rich_text.map((t) => t.plain_text).join(''), new RegExp(today));
+    // adicionar task direto na coluna da pessoa
+    await colOf('Yan').getByRole('button', { name: 'Adicionar task para Yan' }).click();
+    const fy = pd.getByRole('dialog', { name: 'Novo lembrete ou tarefa' });
+    assert.equal(await fy.getByRole('button', { name: 'Yan' }).getAttribute('aria-pressed'), 'true', 'já vem com o Yan');
+    await fy.getByLabel('Tarefa', { exact: true }).fill('Editar vídeo do cliente X');
+    await fy.getByLabel('Data de entrega').fill(today);
+    await fy.getByRole('button', { name: 'Salvar' }).click();
+    await colOf('Yan').getByText('Editar vídeo do cliente X').waitFor();
     // lembrete da equipe: data de lançamento fixa (hoje) e data de entrega obrigatória
     await pd.getByRole('button', { name: 'Lembrete ou tarefa' }).click();
     const f = pd.getByRole('dialog', { name: 'Novo lembrete ou tarefa' });
