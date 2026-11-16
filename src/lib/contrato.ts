@@ -29,11 +29,12 @@ async function clientPageId(c: { name: string; calName: string; notionPage: stri
 async function readCombinado(pageId: string): Promise<Combinado | null> {
   let found: Combinado | null = null;
   const parse = (txt: string, out: Combinado) => {
-    const m = txt.match(/(reels?|v[íi]deos?|posts?|stor(?:y|ies|ys))\s*mensa(?:l|is)?\s*[:=-]?\s*(\d{1,3})/i);
-    if (!m) return;
-    const k = m[1].toLowerCase();
-    const key: Entrega = k.startsWith('post') ? 'post' : k.startsWith('stor') ? 'story' : 'reels';
-    out[key] = Number(m[2]);
+    // várias linhas podem vir no mesmo bloco ("Reels mensal: 4\nPost mensal: 0")
+    for (const m of txt.matchAll(/(reels?|v[íi]deos?|posts?|stor(?:y|ies|ys))\s*mensa(?:l|is)?\s*[:=-]?[ \t]*(\d{1,3})/gi)) {
+      const k = m[1].toLowerCase();
+      const key: Entrega = k.startsWith('post') ? 'post' : k.startsWith('stor') ? 'story' : 'reels';
+      out[key] = Number(m[2]);
+    }
   };
   const walk = async (id: string, depth: number): Promise<void> => {
     if (found || depth > 3) return;
