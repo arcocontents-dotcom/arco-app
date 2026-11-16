@@ -243,7 +243,7 @@ export default function ProducaoBoard({
           {admin && t.source === 'rotina' && t.planId && (
             <div className="pt-actions">
               <span className="pt-linked"><Icon name="bulb" size={11} />No planejamento</span>
-              {t.clientId && <Link className="pt-open" href={`/admin/planejamento?c=${t.clientId}`}>Abrir</Link>}
+              {t.clientId && <Link className="pt-open" href={`/admin/planejamento?c=${t.clientId}&open=${t.planId}`}>Abrir</Link>}
             </div>
           )}
           {admin && t.source === 'conteudo' && !t.done && (
@@ -252,7 +252,7 @@ export default function ProducaoBoard({
                 <Icon name="send" size={12} />Transferir
               </button>
               {t.clientId && (
-                <Link className="pt-open" href={`/admin/planejamento?c=${t.clientId}&m=${(t.day ?? today).slice(0, 7)}-01`}>Abrir</Link>
+                <Link className="pt-open" href={`/admin/planejamento?c=${t.clientId}&m=${(t.day ?? today).slice(0, 7)}-01&open=${t.id}`}>Abrir</Link>
               )}
             </div>
           )}
@@ -491,6 +491,7 @@ export default function ProducaoBoard({
         <RoutineForm
           row={editing === 'novo' ? null : editing}
           clients={clients.map((c) => c.name)}
+          clientIds={Object.fromEntries(clients.map((c) => [c.name, c.id]))}
           defaultWho={newWho ?? (who === 'todos' ? 'Rafa' : who)}
           today={today}
           onClose={() => { setEditing(null); setNewWho(null); }}
@@ -506,16 +507,18 @@ const MON = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out
 const br = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
 
 function RoutineForm({
-  row, clients, defaultWho, today, onClose, onSaved
+  row, clients, clientIds = {}, defaultWho, today, onClose, onSaved
 }: {
   row: RoutineRow | null;
   clients: string[];
+  clientIds?: Record<string, string>;
   defaultWho: Who;
   today: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const fixed = row?.type === 'Tarefa fixa';
+  const clientId = (name: string) => clientIds[name] ?? null;
   const [title, setTitle] = useState(row?.title ?? '');
   const [who, setWho] = useState<Who>(row?.person ?? defaultWho);
   const [type, setType] = useState<RoutineType>(row?.type ?? 'Tarefa');
@@ -527,7 +530,7 @@ function RoutineForm({
   const [descOpen, setDescOpen] = useState(!!row?.desc);
   // Planejamento: task de edição/roteiro/postagem de cliente da agência fica ligada a um card
   const LINKABLE = ['Editar reels', 'Editar post', 'Editar story', 'Editar foto', 'Fazer roteiro', 'Postar'];
-  const [planLink, setPlanLink] = useState<string>('novo');
+  const [planLink, setPlanLink] = useState<string>(row?.contentId ?? 'auto');
   const [cards, setCards] = useState<{ id: string; title: string; kind: string | null; note: string | null }[] | null>(null);
   // Cliente: da agência (lista), Freelancer ou Casamento (escreve o nome), ou nenhum
   type Kind = 'agencia' | 'freelancer' | 'casamento' | 'nenhum';
@@ -543,14 +546,16 @@ function RoutineForm({
   // lançada em: o dia de hoje (ou o dia em que foi criada), fixo
   const launched = row?.created ?? today;
 
-  const canLink = ckind === 'agencia' && !!client && !!format && LINKABLE.includes(format) && who !== 'Equipe';
+  // qualquer task de cliente da agência pode ser ligada a um card do Planejamento (mesmo com outro nome)
+  const canLink = ckind === 'agencia' && !!client;
+  const canCreate = !!format && LINKABLE.includes(format);
   useEffect(() => {
-    if (!canLink || row?.contentId) return;
+    if (!canLink) return;
     let alive = true;
     setCards(null);
     openCardsAction(client).then((l) => alive && setCards(l)).catch(() => alive && setCards([]));
     return () => { alive = false; };
-  }, [canLink, client, row?.contentId]);
+  }, [canLink, client]);
 
   const save = () =>
     start(async () => {
@@ -572,7 +577,13 @@ function RoutineForm({
       }
       const clientName =
         ckind === 'freelancer' || ckind === 'casamento' ? `${PREFIX[ckind]}${freeName.trim()}` : ckind === 'agencia' ? client : '';
-      const link = row?.contentId || !canLink ? null : planLink === 'nao' ? null : planLink;
+      const auto = canCreate ? 'novo' : null;
+      const link = !canLink
+        ? null
+        : planLink === 'auto' ? (row?.contentId ? null : auto)
+        : planLink === 'nao' ? (row?.contentId ? 'desligar' : null)
+        : planLink === row?.contentId ? null
+        : planLink;
       const r = await saveRoutineAction(row?.id ?? null, { title, person: who, type, days: fixed ? row!.days : [], date: fixed ? null : date, urgency, client: clientName, format, formatOther, desc }, link);
       if (r.ok) onSaved();
       else setErr(r.error);
@@ -700,22 +711,25 @@ function RoutineForm({
         {canLink && (
           <div className="rf-row rf-plan">
             <span className="rf-l">Planejamento</span>
-            {row?.contentId ? (
-              <span className="rf-plan-ok">
-                <Icon name="check" size={13} />Ligada ao conteúdo do planejamento
-                <a className="link-btn" href={`notion://www.notion.so/${row.contentId.replace(/-/g, '')}`}>Abrir no Notion</a>
-              </span>
-            ) : (
-              <select className="ninput" style={{ flex: 1 }} value={planLink} onChange={(e) => setPlanLink(e.target.value)} aria-label="Conteúdo do planejamento">
-                <option value="novo">Criar no planejamento (fica pendente para completar)</option>
-                {(cards ?? []).length > 0 && (
-                  <optgroup label="Ligar a um conteúdo que já existe">
-                    {cards!.map((c) => <option key={c.id} value={c.id}>{c.kind ? `${c.kind} · ` : ''}{c.title}{c.note ? ` — ${c.note}` : ''}</option>)}
+            <div className="rf-plan-box">
+              <select className="ninput" value={planLink} onChange={(e) => setPlanLink(e.target.value)} aria-label="Conteúdo do planejamento">
+                {row?.contentId ? (
+                  <option value={row.contentId}>✓ Ligada ao card atual do planejamento</option>
+                ) : (
+                  <option value="auto">{canCreate ? 'Criar no planejamento (fica pendente para completar)' : 'Escolha um card do planejamento…'}</option>
+                )}
+                {(cards ?? []).filter((c) => c.id !== row?.contentId).length > 0 && (
+                  <optgroup label={cards === null ? 'Carregando…' : 'Ligar a um card do planejamento'}>
+                    {cards!.filter((c) => c.id !== row?.contentId).map((c) => <option key={c.id} value={c.id}>{c.kind ? `${c.kind} · ` : ''}{c.title}{c.note ? ` — ${c.note}` : ''}</option>)}
                   </optgroup>
                 )}
-                <option value="nao">Não ligar ao planejamento</option>
+                {row?.contentId && canCreate && <option value="novo">Criar um card novo no planejamento</option>}
+                <option value="nao">{row?.contentId ? 'Desligar do planejamento' : 'Não ligar ao planejamento'}</option>
               </select>
-            )}
+              {row?.contentId && clientId(client) && (
+                <a className="link-btn ic-inline" href={`/admin/planejamento?c=${clientId(client)}&open=${row.contentId}`}><Icon name="bulb" size={13} />Abrir no planejamento</a>
+              )}
+            </div>
           </div>
         )}
         {(ckind === 'freelancer' || ckind === 'casamento') && (

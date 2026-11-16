@@ -4,6 +4,7 @@ import { useMemo, useRef, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import CardTasks from './CardTasks';
 import Icon, { type IconName } from './Icon';
 import TagSelect, { Tag, type Opt } from './TagSelect';
 import { MONTHS, WEEKDAYS_SHORT, dayLabel, dayNum, monthGrid } from '@/lib/domain';
@@ -52,8 +53,10 @@ const PROPS: ({ kind: 'select'; field: SelectField; label: string; icon: IconNam
 ];
 
 export default function PlanBoard({
-  clientId, cal, month, items: initial, links, options
+  clientId, cal, month, items: initial, links, options, openId, today
 }: {
+  openId?: string | null;
+  today?: string;
   clientId: string;
   cal: string;
   month: string;
@@ -63,7 +66,7 @@ export default function PlanBoard({
 }) {
   const router = useRouter();
   const [items, setItems] = useState(initial);
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(openId ?? null);
   const [tab, setTab] = useState('todos');
   const [drag, setDrag] = useState<string | null>(null);
   const [over, setOver] = useState<PlanStatus | null>(null);
@@ -430,6 +433,7 @@ export default function PlanBoard({
                 <p className="hint ic-inline" style={{ margin: 0 }} role="status">
                   {pending ? <><span className="spinner" aria-hidden="true" />Salvando no Notion…</> : 'Digite o título: a task se salva sozinha no Notion, igual lá. Depois aparecem objetivo, legenda, referências e imagens.'}
                 </p>
+                <button type="button" className="btn block" disabled={pending} onClick={closeDrawer}><Icon name="check" size={16} />Salvar</button>
               </div>
             ) : (<>
             <section className="brief" aria-label="Para o cliente">
@@ -505,14 +509,17 @@ export default function PlanBoard({
               )}
               {briefMsg && <span className="hint" role="status">{briefMsg}</span>}
             </section>
+            <CardTasks clientId={clientId} planId={current.id} kind={current.kind} day={current.day} today={today ?? new Date().toISOString().slice(0, 10)} />
             <div className="drawer-actions">
+              {/* Planejamento só salva; o mês vai para o cliente pelo "Planejamento do mês". A aprovação do conteúdo editado fica para quando ele está em Realizando. */}
+              <button type="button" className="btn block" onClick={closeDrawer}><Icon name="check" size={16} />Salvar</button>
               {linkOf(current.id) ? (
-                <Link className="btn block" href={`/admin/conteudo/${linkOf(current.id)!.id}`}><Icon name="eye" size={16} />Abrir na aprovação · {linkOf(current.id)!.status}</Link>
-              ) : (
-                <button type="button" className="btn block" disabled={pending} onClick={() => toApproval(current.id)}>
-                  <Icon name="send" size={16} />{pending ? 'Criando…' : 'Enviar para aprovação'}
+                <Link className="link-btn ic-inline" style={{ alignSelf: 'center' }} href={`/admin/conteudo/${linkOf(current.id)!.id}`}><Icon name="eye" size={14} />Abrir na aprovação · {linkOf(current.id)!.status}</Link>
+              ) : current.status === 'Realizando' ? (
+                <button type="button" className="link-btn ic-inline" style={{ alignSelf: 'center' }} disabled={pending} onClick={() => toApproval(current.id)}>
+                  <Icon name="send" size={14} />{pending ? 'Criando…' : 'Conteúdo editado: enviar para aprovação'}
                 </button>
-              )}
+              ) : null}
               {current.url && (
                 <a className="link-btn ic-inline" href={notionApp(current.url)} style={{ alignSelf: 'center' }}>
                   <Icon name="external" size={14} />Abrir no Notion

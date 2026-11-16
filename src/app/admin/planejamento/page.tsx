@@ -3,7 +3,7 @@ import { requireAdmin } from '@/lib/access';
 import { env } from '@/lib/env';
 import { listClients, sameId, updateClient } from '@/lib/notion';
 import { MONTHS, addDays, addMonths, monthIdx, parseDay, todayIn, yearNum } from '@/lib/domain';
-import { linkedContents, listPlanning, matchCalName, planOptions, pullPostedFromPlan } from '@/lib/planning';
+import { getPlanItem, linkedContents, listPlanning, matchCalName, planOptions, pullPostedFromPlan } from '@/lib/planning';
 import AdminShell from '@/components/AdminShell';
 import Icon from '@/components/Icon';
 import PlanBoard from '@/components/PlanBoard';
@@ -12,7 +12,7 @@ import PlanReport from '@/components/PlanReport';
 
 export const dynamic = 'force-dynamic';
 
-export default async function Planejamento({ searchParams }: { searchParams: Promise<{ c?: string; m?: string }> }) {
+export default async function Planejamento({ searchParams }: { searchParams: Promise<{ c?: string; m?: string; open?: string }> }) {
   await requireAdmin();
   const sp = await searchParams;
   const today = todayIn(env.timeZone);
@@ -98,6 +98,14 @@ export default async function Planejamento({ searchParams }: { searchParams: Pro
     return <AdminShell section="planejamento" current={client.id}>{head}<p className="error">Não foi possível ler o Calendário mensal agora.</p></AdminShell>;
   }
   await pullPostedFromPlan(items, linked);
+  // ?open=<card>: abre o card direto (vindo de uma tarefa da Produção), mesmo se for de outro mês
+  let openId: string | null = null;
+  if (sp.open && /^[0-9a-f-]{32,36}$/i.test(sp.open)) {
+    const have = items.find((i) => sameId(i.id, sp.open));
+    const extra = have ? null : await getPlanItem(sp.open);
+    if (extra && extra.cal === cal) items.push(extra);
+    openId = have?.id ?? (extra && extra.cal === cal ? extra.id : null);
+  }
   const links = Object.fromEntries(
     linked.filter((c) => c.planningId).map((c) => [c.planningId!.replace(/-/g, ''), { id: c.id, status: c.status }])
   );
@@ -110,13 +118,15 @@ export default async function Planejamento({ searchParams }: { searchParams: Pro
         <PlanReport clientId={client.id} clientName={client.name} month={first} appUrl={env.appUrl} />
       </div>
       <PlanBoard
-        key={`${client.id}-${first}`}
+        key={`${client.id}-${first}-${openId ?? ''}`}
         clientId={client.id}
         cal={cal}
         month={first}
         items={items}
         links={links}
         options={options}
+        openId={openId}
+        today={today}
       />
     </AdminShell>
   );

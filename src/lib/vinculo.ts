@@ -213,27 +213,31 @@ export const LINKABLE = ['Editar reels', 'Editar post', 'Editar story', 'Editar 
  * ("Falta edição"/"Falta copy") para completar depois no Planejamento.
  */
 export async function linkTaskToPlanning(routineId: string, x: { title: string; client: string; format: string | null; date: string | null; desc: string; person: string }, chosen: string | null | 'novo'): Promise<string | null> {
-  if (!env.planningDb || !x.format || !LINKABLE.includes(x.format)) return null;
-  const cal = await calNameOf(x.client);
+  if (!env.planningDb) return null;
+  // card que já existe: liga qualquer task; card novo: só edição, roteiro ou postagem
+  if (chosen === 'novo' && (!x.format || !LINKABLE.includes(x.format))) return null;
+  const cal = chosen === 'novo' ? await calNameOf(x.client) : 'existente';
   if (!cal) return null;
   let cardId: string | null = null;
   if (chosen && chosen !== 'novo') {
     const p = await notion().pages.retrieve({ page_id: chosen }).catch(() => null);
     if (p && isPage(p) && normId(p.parent.type === 'database_id' ? p.parent.database_id : '') === normId(env.planningDb)) cardId = p.id;
   }
-  if (!cardId) {
+  if (!cardId && chosen !== 'novo') return null;
+  if (!cardId && x.format) {
     const day = x.date ?? new Date().toISOString().slice(0, 10);
     const month = monthOf(day);
     cardId = await createCard({
       cal,
       title: x.title,
       status: x.format.startsWith('Editar') ? 'Realizando' : 'Ideia',
-      kind: await nextKind(cal, month, TASK_KIND[x.format] ?? null, new Map()),
+      kind: await nextKind(cal!, month, TASK_KIND[x.format] ?? null, new Map()),
       month,
       note: TASK_NOTE[x.format] ?? 'Falta edição',
       body: [`🛠 Criado pela task da Produção (${x.format} · ${x.person}). Complete as informações do conteúdo aqui.`, x.desc]
     });
   }
+  if (!cardId) return null;
   await notion().pages.update({ page_id: routineId, properties: { [schema.routine.content]: { relation: [{ id: cardId }] } } as never });
   invalidate('plan:');
   invalidate('prod:');
@@ -259,4 +263,52 @@ export async function taskDoneOnPlanning(cardId: string, format: string | null, 
     await notion().pages.update({ page_id: cardId, properties: props as never });
     invalidate('plan:');
   }
+}
+
+export interface CardTask {
+  id: string;
+  title: string;
+  person: string;
+  format: string | null;
+  date: string | null;
+  done: boolean;
+}
+
+/** Tasks da Produção ligadas a um card do Planejamento. */
+export async function tasksOfCard(cardId: string): Promise<CardTask[]> {
+  if (!env.routineDb) return [];
+  const R = schema.routine;
+  const pages = await queryAll(env.routineDb, { filter: { property: R.content, relation: { contains: cardId } } });
+  return pages
+    .filter((p) => !p.archived)
+    .map((p) => {
+      const pr = p.properties;
+      const d = pr[R.date];
+      const date = d?.type === 'date' ? d.date?.start?.slice(0, 10) ?? null : null;
+      const doneOn = text(pr[R.doneOn]).split(/[\s,]+/);
+      return {
+        id: p.id,
+        title: text(pr[R.title]),
+        person: select(pr[R.person]) ?? '',
+        format: select(pr[R.format]),
+        date,
+        done: date ? doneOn.includes(date) : doneOn.some((x) => /^\d{4}-\d{2}-\d{2}$/.test(x))
+      };
+    });
+}
+
+/** Troca (ou tira) o card do Planejamento ligado a uma task. */
+export async function setTaskCard(routineId: string, cardId: string | null) {
+  await notion().pages.update({ page_id: routineId, properties: { [schema.routine.content]: { relation: cardId ? [{ id: cardId }] : [] } } as never });
+  invalidate('prod:');
+}
+
+/** "Reels 2" → "Editar reels" (formato da task a partir do tipo de demanda do card). */
+export function formatFromKind(kind: string | null): string | null {
+  const k = (kind ?? '').toLowerCase();
+  if (k.startsWith('reels')) return 'Editar reels';
+  if (k.startsWith('stor')) return 'Editar story';
+  if (k.startsWith('foto')) return 'Editar foto';
+  if (k.startsWith('post')) return 'Editar post';
+  return null;
 }

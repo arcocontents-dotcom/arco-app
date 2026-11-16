@@ -13,6 +13,9 @@ import {
   type PlanPatch, type PlanStatus
 } from '@/lib/planning';
 
+import { FORMATS, createRoutine, isPerson, type TaskFormat } from '@/lib/producao';
+import { setTaskCard, tasksOfCard, type CardTask } from '@/lib/vinculo';
+
 type R<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
 async function clientCal(clientId: string) {
@@ -198,5 +201,42 @@ export async function trashPlanAction(clientId: string, planId: string, restore 
   } catch (e) {
     console.error('[planejamento] lixeira', e);
     return { ok: false, error: restore ? 'Não foi possível restaurar.' : 'Não foi possível apagar no Notion.' };
+  }
+}
+
+/** Tarefas da Produção ligadas a este card. */
+export async function cardTasksAction(planId: string): Promise<R<{ tasks: CardTask[] }>> {
+  await requireAdmin();
+  try {
+    return { ok: true, tasks: await tasksOfCard(planId) };
+  } catch (e) {
+    console.error('[planejamento] tarefas', e);
+    return { ok: false, error: 'Não foi possível ler as tarefas agora.' };
+  }
+}
+
+/** Cria a tarefa na Produção a partir do card, já preenchida e ligada (sem lançar duas vezes). */
+export async function createTaskFromCardAction(
+  clientId: string,
+  planId: string,
+  x: { person: string; format: string | null; date: string | null; desc?: string }
+): Promise<R<{ id: string }>> {
+  await requireAdmin();
+  const c = await clientCal(clientId);
+  const item = await getPlanItem(planId);
+  if (!c || !item) return { ok: false, error: 'Card não encontrado.' };
+  if (!isPerson(x.person)) return { ok: false, error: 'Escolha quem faz.' };
+  const format = x.format && (FORMATS as readonly string[]).includes(x.format) ? (x.format as TaskFormat) : null;
+  const date = parseDay(String(x.date ?? '')) ?? item.day ?? todayIn(env.timeZone);
+  try {
+    const id = await createRoutine({
+      title: item.title || 'Sem título', person: x.person, type: 'Tarefa', days: [], date, urgency: 'Média',
+      client: c.name, format, formatOther: '', desc: String(x.desc ?? '').trim().slice(0, 1900)
+    });
+    await setTaskCard(id, planId);
+    return { ok: true, id };
+  } catch (e) {
+    console.error('[planejamento] criar tarefa', e);
+    return { ok: false, error: 'Não foi possível criar a tarefa no Notion.' };
   }
 }

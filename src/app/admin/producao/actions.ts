@@ -3,9 +3,9 @@
 import { requireAdmin } from '@/lib/access';
 import { parseDay, todayIn } from '@/lib/domain';
 import { env } from '@/lib/env';
-import { LINKABLE, linkTaskToPlanning, openCards, type OpenCard } from '@/lib/vinculo';
+import { linkTaskToPlanning, openCards, setTaskCard, type OpenCard } from '@/lib/vinculo';
 import {
-  FORMATS, ROUTINE_TYPES, TEAM, URGENCY_LABEL, WEEKDAYS, createRoutine, isPerson, passContent, setContentDone, setRoutineDone, trashRoutine, updateRoutine,
+  FORMATS, ROUTINE_TYPES, TEAM, URGENCY_LABEL, WEEKDAYS, createRoutine, passContent, setContentDone, setRoutineDone, trashRoutine, updateRoutine,
   type RoutineInput
 } from '@/lib/producao';
 
@@ -45,7 +45,7 @@ export async function toggleRoutineAction(id: string, day: string, done: boolean
 export async function saveRoutineAction(
   id: string | null,
   x: Partial<RoutineInput>,
-  /** Card do Planejamento: id de um existente, 'novo' para criar pendente, null para não ligar. */
+  /** Card do Planejamento: id de um existente, 'novo' para criar pendente, 'desligar' para tirar, null para não mexer. */
   link: string | null = 'novo'
 ): Promise<R<{ id: string; planId: string | null }>> {
   await requireAdmin();
@@ -55,8 +55,10 @@ export async function saveRoutineAction(
     if (id) await updateRoutine(id, v);
     const rid = id ?? (await createRoutine(v));
     let planId: string | null = null;
-    // cliente da agência + edição/roteiro/postagem: fica ligada a um card do Planejamento
-    if (link && v.format && LINKABLE.includes(v.format) && v.client && isPerson(v.person)) {
+    if (link === 'desligar') {
+      if (id) await setTaskCard(rid, null);
+    } else if (link && v.client) {
+      // card novo (edição/roteiro/postagem de cliente da agência) ou um card que já existe no Planejamento
       planId = await linkTaskToPlanning(rid, { title: v.title, client: v.client, format: v.format, date: v.date, desc: v.desc, person: v.person }, link).catch((e) => {
         console.error('[producao] planejamento', e);
         return null;

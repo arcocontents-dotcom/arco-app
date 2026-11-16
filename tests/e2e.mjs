@@ -580,7 +580,7 @@ try {
     await rep.getByRole('button', { name: 'Fechar' }).click();
     // enviar para aprovação cria o conteúdo ligado
     await col('Realizando').getByRole('button', { name: /Reels do lançamento/ }).click();
-    await pd.getByRole('button', { name: 'Enviar para aprovação' }).click();
+    await pd.getByRole('button', { name: 'Conteúdo editado: enviar para aprovação' }).click();
     await pd.waitForURL(/\/admin\/conteudo\//, { waitUntil: 'commit' });
     const cid = pd.url().split('/admin/conteudo/')[1].split(/[?#]/)[0];
     const content = page(cid);
@@ -1013,6 +1013,22 @@ try {
     await pd.waitForTimeout(900);
     assert.equal(plan.properties['Editado/Design por'].select.name, 'Yan');
     assert.equal(plan.properties['Observação'].select.name, 'Aprovação post');
+    // do card no planejamento: abre pelo link da tarefa e cria outra tarefa já preenchida
+    const href = await card.getByRole('link', { name: 'Abrir' }).getAttribute('href');
+    assert.match(href, /open=/);
+    await pd.goto(`${APP}${href}`);
+    const dr = pd.getByRole('dialog', { name: 'Editar vídeo institucional Alfa' });
+    await dr.waitFor();
+    await dr.getByText('Editar reels · Yan').waitFor();
+    await dr.getByRole('button', { name: 'Criar tarefa' }).click();
+    const nt = dr.getByRole('group', { name: 'Nova tarefa a partir do card' });
+    await nt.getByRole('button', { name: /Marcos/ }).click();
+    await nt.getByRole('radio', { name: 'Postar' }).click();
+    await nt.getByRole('button', { name: 'Criar tarefa' }).click();
+    await dr.getByText('Postar · Marcos').waitFor();
+    const post = [...store.values()].find((x) => txt(x, 'Tarefa') === 'Editar vídeo institucional Alfa' && x.properties.Pessoa?.select?.name === 'Marcos');
+    assert.equal(post.properties['Conteúdo'].relation.length, 1, 'tarefa criada do card já vem ligada');
+    assert.equal(post.properties.Cliente.rich_text.map((t) => t.plain_text).join(''), 'Studio Alfa');
   });
 
   await step('dashboard da produção: o que cada um captou, editou e postou', async () => {
