@@ -3,7 +3,7 @@
 import { requireAdmin } from '@/lib/access';
 import { parseDay } from '@/lib/domain';
 import {
-  ROUTINE_TYPES, TEAM, URGENCY_LABEL, WEEKDAYS, createRoutine, passContent, setRoutineDone, trashRoutine, updateRoutine,
+  ROUTINE_TYPES, TEAM, URGENCY_LABEL, WEEKDAYS, createRoutine, passContent, setContentDone, setRoutineDone, trashRoutine, updateRoutine,
   type RoutineInput
 } from '@/lib/producao';
 
@@ -72,5 +72,16 @@ export async function passContentAction(id: string, to: string): Promise<R> {
   } catch (e) {
     console.error('[producao] passar', e);
     return { ok: false, error: 'Não foi possível atualizar no Notion.' };
+  }
+}
+
+export async function toggleContentAction(id: string, done: boolean): Promise<R> {
+  await requireAdmin();
+  try {
+    await setContentDone(id, done);
+    return { ok: true };
+  } catch (e) {
+    console.error('[producao] entregue', e);
+    return { ok: false, error: 'Não foi possível salvar no Notion.' };
   }
 }

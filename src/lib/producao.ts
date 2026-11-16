@@ -116,13 +116,12 @@ function listContentTasks(fromDay: string, toDay: string) {
   return memo(`plan:prod:${fromDay}:${toDay}`, 15_000, async () => {
     // Máximo de 2 níveis de filtro no Notion: duas buscas.
     const owners = { or: TEAM.map((n) => ({ property: P.owner, select: { equals: n } })) };
-    const open = [
-      { property: P.done, checkbox: { equals: false } },
-      { property: P.status, status: { does_not_equal: 'Postado' } }
-    ];
+    const notPosted = { property: P.status, status: { does_not_equal: 'Postado' } };
+    const open = [{ property: P.done, checkbox: { equals: false } }, notPosted];
     const [dated, undated] = await Promise.all([
       queryAll(env.planningDb!, {
-        filter: { and: [owners, ...open, { property: P.date, date: { on_or_after: fromDay } }, { property: P.date, date: { on_or_before: toDay } }] },
+        // inclui os já entregues (Finalizado marcado) para aparecerem riscados no checklist
+        filter: { and: [owners, notPosted, { property: P.date, date: { on_or_after: fromDay } }, { property: P.date, date: { on_or_before: toDay } }] },
         sorts: [{ property: P.date, direction: 'ascending' }]
       }),
       queryAll(env.planningDb!, {
@@ -179,7 +178,9 @@ export async function productionWeek(
     const iso = date(pr[P.date]);
     const parts = iso ? localParts(iso, env.timeZone) : null;
     const day = parts?.day ?? null;
-    // atrasados só se ainda não passou desta semana; os de semanas anteriores contam como atrasados
+    const done = checkbox(pr[P.done]);
+    // entregues de semanas anteriores não aparecem mais
+    if (done && (!day || day < start)) continue;
     const cal = select(pr[P.client]);
     const c = calToClient(cal);
     out.tasks.push({
@@ -194,9 +195,9 @@ export async function productionWeek(
       time: parts?.time ?? null,
       kind: select(pr[P.kind]),
       note: select(pr[P.note]),
-      urgency: urgencyByDay(day, today),
+      urgency: done ? urgencyByDay(day && day < today ? today : day, today) : urgencyByDay(day, today),
       type: 'Conteúdo',
-      done: false,
+      done,
       url: (p as { url?: string }).url ?? `https://www.notion.so/${normId(p.id)}`
     });
   }
@@ -310,6 +311,16 @@ export async function trashRoutine(id: string) {
   await routinePage(id);
   await notion().pages.update({ page_id: id, archived: true });
   invalidate('prod:');
+}
+
+/** Checklist de entrega: marca/desmarca "Finalizado" no card do Calendário mensal. */
+export async function setContentDone(id: string, done: boolean) {
+  const p = await notion().pages.retrieve({ page_id: id });
+  if (!isPage(p) || !env.planningDb || normId(p.parent.type === 'database_id' ? p.parent.database_id : '') !== normId(env.planningDb)) {
+    throw Object.assign(new Error('Card não encontrado'), { code: 'object_not_found' });
+  }
+  await notion().pages.update({ page_id: id, properties: { [P.done]: { checkbox: done } } as never });
+  invalidate('plan:');
 }
 
 /** Passa o conteúdo para outra pessoa (ou Finalizado), usando a etiqueta que já existe no Notion. */

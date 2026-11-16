@@ -972,3 +972,50 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .prod.tv .pday header strong { color: #fff; }
 .prod.tv .pempty { color: #8a857d; }
 .prod.tv .pt.done { opacity: 0.35; }
+.pprog { position: relative; margin: 0 12px 10px; height: 18px; display: flex; align-items: center; }
+.pprog::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 4px; border-radius: 4px; background: rgba(0, 0, 0, 0.08); }
+.pprog span { position: absolute; left: 0; top: 0; height: 4px; border-radius: 4px; background: var(--pc); transition: width 0.6s var(--ease); }
+.pprog small { margin-top: 12px; font-size: 11px; color: var(--muted); }
+.prod.tv .pprog::before { background: rgba(255, 255, 255, 0.12); }
+.prod.tv .pprog small { color: #9c978f; font-size: 13px; }
+
+/* Produção: interface em preto e branco (marca); cor só nas tarefas, com as cores do Notion */
+.prod .w-lemuel, .prod .w-marcos, .prod .w-yan, .prod .w-rafa, .prod .w-equipe,
+.rform .w-lemuel, .rform .w-marcos, .rform .w-yan, .rform .w-rafa, .rform .w-equipe { --pc: var(--ink); }
+.prod .pcol { border-top-color: var(--ink); }
+.prod .pt-who, .prod .pt-who::before { color: var(--ink); }
+.prod .pt-who::before { background: var(--ink); }
+.prod .pt { --fc: #9b9a97; --fbg: #fff; --ftx: #37352f; border-left: 4px solid var(--fc); background: var(--fbg); }
+.prod .pt.f-reels { --fc: #d9730d; --fbg: #fdf4ec; --ftx: #8a4a15; }
+.prod .pt.f-post { --fc: #0b6e99; --fbg: #eef5f8; --ftx: #0b4f6e; }
+.prod .pt.f-story { --fc: #dfab01; --fbg: #fdf8e8; --ftx: #6b5310; }
+.prod .pt.f-foto { --fc: #6940a5; --fbg: #f4f0f9; --ftx: #4a2d75; }
+.prod .pt.f-fixa { --fc: #9b9a97; --fbg: #f4f4f3; --ftx: #4a4741; }
+.prod .pt.f-lembrete { --fc: #64473a; --fbg: #f3efed; --ftx: #64473a; }
+.prod .pt.f-avulsa, .prod .pt.f-outro { --fc: #37352f; --fbg: #fff; --ftx: #37352f; }
+.prod .pt-kind { background: var(--fc) !important; color: #fff !important; }
+.prod .pt.f-story .pt-kind { color: #3d2f05 !important; }
+.prod .pt-check.on { background: var(--ink); border-color: var(--ink); }
+.prod .pteam { background: #fff; border: 1px solid var(--line); }
+.prod .pteam.late { background: #fff; border-color: var(--ink); }
+.prod .pgroup.late { color: var(--ink); }
+.prod .pday.today { box-shadow: inset 0 3px 0 var(--ink); }
+/* TV (escuro): mesma lógica, cores do Notion no modo escuro */
+.prod.tv .w-lemuel, .prod.tv .w-marcos, .prod.tv .w-yan, .prod.tv .w-rafa, .prod.tv .w-equipe { --pc: #f2f0ec; }
+.prod.tv .pav { color: #121212; }
+.prod.tv .pcol { border-top-color: #f2f0ec; }
+.prod.tv .pcol header b { color: #121212; }
+.prod.tv .pt { --fbg: #262626; }
+.prod.tv .pt.f-reels { --fc: #ffa344; --fbg: #3a2a1d; }
+.prod.tv .pt.f-post { --fc: #529cca; --fbg: #1b2d38; }
+.prod.tv .pt.f-story { --fc: #ffdc49; --fbg: #38321b; }
+.prod.tv .pt.f-foto { --fc: #9a6dd7; --fbg: #2c2438; }
+.prod.tv .pt.f-fixa { --fc: #979a9b; --fbg: #2a2b2c; }
+.prod.tv .pt.f-lembrete { --fc: #937264; --fbg: #2f2926; }
+.prod.tv .pt.f-avulsa, .prod.tv .pt.f-outro { --fc: #d8d4cd; --fbg: #262626; }
+.prod.tv .pt-kind { color: #121212 !important; }
+.prod.tv .pt-check.on { background: #f2f0ec; border-color: #f2f0ec; }
+.prod.tv .pt-check.on .ic { color: #121212 !important; }
+.prod.tv .pteam, .prod.tv .pteam.late { background: #1c1c1c; border-color: #333; }
+.prod.tv .pgroup.late { color: #fff; }
+.prod.tv .pprog span { background: #f2f0ec; }

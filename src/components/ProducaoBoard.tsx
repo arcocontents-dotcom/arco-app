@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Icon from './Icon';
 import { addDays, dayNum, weekdayMon } from '@/lib/domain';
-import { passContentAction, saveRoutineAction, toggleRoutineAction, trashRoutineAction } from '@/app/admin/producao/actions';
+import { passContentAction, saveRoutineAction, toggleContentAction, toggleRoutineAction, trashRoutineAction } from '@/app/admin/producao/actions';
 
 // Tipos copiados de lib/producao (não dá para importar lib server-only aqui).
 type Person = 'Lemuel' | 'Marcos' | 'Yan' | 'Rafa';
@@ -51,14 +51,22 @@ const URG: Record<Urgency, { label: string; rank: number }> = {
   media: { label: 'Esta semana', rank: 2 },
   baixa: { label: 'Sem pressa', rank: 3 }
 };
+/** Cor do cartão: a mesma do Notion para o formato (ou do tipo, nas tarefas internas). */
+const fmtClass = (t: { source: string; kind: string | null; type: string }) => {
+  if (t.source === 'rotina') return t.type === 'Lembrete' ? 'f-lembrete' : t.type === 'Tarefa fixa' ? 'f-fixa' : 'f-avulsa';
+  const s = (t.kind ?? '').toLowerCase();
+  return s.startsWith('reels') ? 'f-reels' : s.startsWith('post') ? 'f-post' : s.startsWith('stor') ? 'f-story' : s.startsWith('foto') ? 'f-foto' : 'f-outro';
+};
 const kindClass = (k: string | null) => {
   const s = (k ?? '').toLowerCase();
   return s.startsWith('reels') ? 'k-reels' : s.startsWith('post') ? 'k-post' : s.startsWith('stor') ? 'k-story' : s.startsWith('foto') ? 'k-foto' : '';
 };
+/** Checklist: o que vence antes fica em cima; o que já foi entregue desce para o fim. */
 const sortTasks = (a: Task, b: Task) =>
   Number(a.done) - Number(b.done) ||
-  URG[a.urgency].rank - URG[b.urgency].rank ||
   (a.day ?? '9999').localeCompare(b.day ?? '9999') ||
+  (a.time ?? '99').localeCompare(b.time ?? '99') ||
+  URG[a.urgency].rank - URG[b.urgency].rank ||
   a.title.localeCompare(b.title);
 
 export default function ProducaoBoard({
@@ -80,6 +88,7 @@ export default function ProducaoBoard({
   const [view, setView] = useState<'pessoas' | 'semana'>('pessoas');
   const [who, setWho] = useState<Person | 'todos'>('todos');
   const [client, setClient] = useState('');
+  const [when, setWhen] = useState<'hoje' | 'amanha' | 'semana'>('semana');
   const [editing, setEditing] = useState<RoutineRow | 'novo' | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [, start2] = useTransition();
@@ -102,8 +111,14 @@ export default function ProducaoBoard({
       tasks
         .filter((t) => who === 'todos' || t.person === who || t.person === 'Equipe')
         .filter((t) => !client || t.client === client)
+        .filter((t) => {
+          if (when === 'semana') return true;
+          const limit = when === 'hoje' ? today : addDays(today, 1);
+          // atrasados e sem data entram sempre: são o que mais precisa ser feito
+          return !t.day || (t.urgency === 'atrasado' && !t.done) || (t.day >= today && t.day <= limit) || (when === 'amanha' && t.day === today);
+        })
         .sort(sortTasks),
-    [tasks, who, client]
+    [tasks, who, client, when, today]
   );
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const end = days[6];
@@ -111,11 +126,11 @@ export default function ProducaoBoard({
   const pending = (list: Task[]) => list.filter((t) => !t.done).length;
 
   function toggle(t: Task) {
-    if (tv || t.source !== 'rotina' || !t.day) return;
+    if (tv || (t.source === 'rotina' && !t.day)) return;
     const done = !t.done;
     setTasks((l) => l.map((x) => (x.key === t.key ? { ...x, done } : x)));
     start2(async () => {
-      const r = await toggleRoutineAction(t.id, t.day!, done);
+      const r = t.source === 'rotina' ? await toggleRoutineAction(t.id, t.day!, done) : await toggleContentAction(t.id, done);
       if (!r.ok) {
         setErr(r.error);
         setTasks((l) => l.map((x) => (x.key === t.key ? { ...x, done: !done } : x)));
@@ -138,20 +153,16 @@ export default function ProducaoBoard({
   const card = (t: Task, showWho: boolean, showDay: boolean) => {
     const late = t.urgency === 'atrasado' && !t.done;
     return (
-      <article key={t.key} className={`pt u-${t.urgency}${t.done ? ' done' : ''}`}>
-        {t.source === 'rotina' ? (
-          <button
-            type="button"
-            className={`pt-check${t.done ? ' on' : ''}`}
-            onClick={() => toggle(t)}
-            disabled={tv}
-            aria-label={`${t.done ? 'Desmarcar' : 'Marcar como feito'}: ${t.title}`}
-          >
-            {t.done && <Icon name="check" size={14} />}
-          </button>
-        ) : (
-          <span className={`pt-dot ${kindClass(t.kind)}`} aria-hidden="true" />
-        )}
+      <article key={t.key} className={`pt ${fmtClass(t)}${t.done ? ' done' : ''}`}>
+        <button
+          type="button"
+          className={`pt-check${t.done ? ' on' : ''}`}
+          onClick={() => toggle(t)}
+          disabled={tv}
+          aria-label={`${t.done ? 'Desmarcar' : t.source === 'conteudo' ? 'Marcar como entregue' : 'Marcar como feito'}: ${t.title}`}
+        >
+          {t.done && <Icon name="check" size={14} />}
+        </button>
         <div className="pt-body">
           <div className="pt-meta">
             {t.type === 'Conteúdo' ? (
@@ -179,7 +190,7 @@ export default function ProducaoBoard({
               {showDay && t.day && !late && <span className="pt-day">{WD[weekdayMon(t.day)]} {dayNum(t.day)}{t.time ? ` · ${t.time}` : ''}</span>}
             </div>
           )}
-          {!tv && t.source === 'conteudo' && (
+          {!tv && t.source === 'conteudo' && !t.done && (
             <div className="pt-actions">
               <label className="pt-pass">
                 <select value="" onChange={(e) => e.target.value && pass(t, e.target.value)} aria-label={`Passar ${t.title} para`}>
@@ -203,19 +214,26 @@ export default function ProducaoBoard({
     // tarefas fixas e lembretes repetem: na visão por pessoa, só o de hoje (a semana mostra todos)
     const repeats = (t: Task) => t.source === 'rotina' && t.type !== 'Tarefa';
     const mine = visible.filter((t) => t.person === p && (!repeats(t) || t.day === today));
-    const late = mine.filter((t) => t.urgency === 'atrasado' && !t.done);
+    const late = mine.filter((t) => t.urgency === 'atrasado' && !t.done && (!t.day || t.day < today));
+    // entregues de antes desta semana (marcados agora) descem para "Entregues", no fim
+    const older = mine.filter((t) => t.done && t.day && t.day < start);
     const groups = days
-      .filter((d) => d >= today || mine.some((t) => t.day === d && !t.done && t.urgency !== 'atrasado'))
       .map((d) => ({ d, list: mine.filter((t) => t.day === d && !late.includes(t)) }))
-      .filter((g) => g.list.length);
+      .filter((g) => g.list.length && (g.d >= today || g.list.some((t) => t.done)));
     const undated = mine.filter((t) => !t.day && !late.includes(t));
     return (
       <section key={p} className={`pcol w-${p.toLowerCase()}`} aria-label={p}>
         <header>
           <span className="pav">{p.charAt(0)}</span>
           <h3>{p}</h3>
-          <b>{pending(mine)}</b>
+          <b title="Para fazer">{pending(mine)}</b>
         </header>
+        {mine.length > 0 && (
+          <div className="pprog" aria-label={`${mine.length - pending(mine)} de ${mine.length} entregues`}>
+            <span style={{ width: `${Math.round(((mine.length - pending(mine)) / mine.length) * 100)}%` }} />
+            <small>{mine.length - pending(mine)} de {mine.length} entregues</small>
+          </div>
+        )}
         <div className="pcol-list">
           {late.length > 0 && (
             <>
@@ -233,6 +251,12 @@ export default function ProducaoBoard({
             <>
               <span className="pgroup">Sem data</span>
               {undated.map((t) => card(t, false, false))}
+            </>
+          )}
+          {older.length > 0 && (
+            <>
+              <span className="pgroup">Entregues</span>
+              {older.map((t) => card(t, false, true))}
             </>
           )}
           {!mine.length && <p className="pempty">Nada por aqui 🎉</p>}
@@ -272,6 +296,11 @@ export default function ProducaoBoard({
           <button type="button" role="tab" aria-selected={view === 'pessoas'} onClick={() => setView('pessoas')}><Icon name="users" size={15} />Pessoas</button>
           <button type="button" role="tab" aria-selected={view === 'semana'} onClick={() => setView('semana')}><Icon name="week" size={15} />Semana</button>
         </div>
+        <div className="plan-views" role="tablist" aria-label="Quando">
+          {([['hoje', 'Hoje'], ['amanha', 'Até amanhã'], ['semana', 'Semana']] as const).map(([v, l]) => (
+            <button key={v} type="button" role="tab" aria-selected={when === v} onClick={() => setWhen(v)}>{l}</button>
+          ))}
+        </div>
         <div className="pchips" role="group" aria-label="Pessoa">
           <button type="button" aria-pressed={who === 'todos'} onClick={() => setWho('todos')}>Todos</button>
           {TEAM.map((p) => (
@@ -287,9 +316,6 @@ export default function ProducaoBoard({
             {clientNames.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </label>
-        <div className="purg-legend" aria-hidden="true">
-          <span className="u-atrasado">Atrasado</span><span className="u-alta">Urgente</span><span className="u-media">Semana</span><span className="u-baixa">Sem pressa</span>
-        </div>
       </div>
 
       {err && <p className="error" role="alert">{err}</p>}

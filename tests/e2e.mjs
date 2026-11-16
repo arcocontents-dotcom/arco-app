@@ -763,13 +763,27 @@ try {
     assert.equal(plant.properties.Pessoa.select.name, 'Equipe');
     assert.equal(plant.properties.Tipo.select.name, 'Lembrete');
     assert.equal(plant.properties.Dias.multi_select.length, 7);
+    // checklist de entrega: conteúdo marcado vira Finalizado no Notion e desce riscado
+    await colOf('Lemuel').getByRole('button', { name: 'Marcar como entregue: Capa atrasada' }).click();
+    await colOf('Lemuel').getByText('1 de 1 entregues').waitFor();
+    await pd.waitForTimeout(600);
+    const capa = [...store.values()].find((x) => x.properties['Título do assunto']?.title?.[0]?.plain_text === 'Capa atrasada');
+    assert.equal(capa.properties['Finalizado'].checkbox, true);
+    await colOf('Lemuel').getByRole('button', { name: 'Desmarcar: Capa atrasada' }).click();
+    await pd.waitForTimeout(600);
+    assert.equal(capa.properties['Finalizado'].checkbox, false);
+    // filtro de data: só hoje
+    await pd.getByRole('tablist', { name: 'Quando' }).getByRole('tab', { name: 'Hoje' }).click();
+    assert.equal(await colOf('Marcos').getByText('Editar vídeo da obra').count(), 0, 'quinta não aparece em "Hoje"');
+    await colOf('Lemuel').getByText('Capa atrasada').waitFor();
+    await pd.getByRole('tablist', { name: 'Quando' }).getByRole('tab', { name: 'Semana' }).click();
     // passar o conteúdo para o Yan (etiqueta "Demanda atual está com")
     await colOf('Marcos').getByLabel('Passar Editar vídeo da obra para').selectOption('Yan');
     await colOf('Yan').getByText('Editar vídeo da obra').waitFor();
     await pd.waitForTimeout(500);
     assert.equal(page(PRODA).properties['Demanda atual está com'].select.name, 'Yan');
     // visão por semana e filtro por cliente
-    await pd.getByRole('tab', { name: 'Semana' }).click();
+    await pd.getByRole('tablist', { name: 'Visualização' }).getByRole('tab', { name: 'Semana' }).click();
     await pd.locator('.pteam.late').getByText('Capa atrasada').waitFor();
     await pd.getByRole('region', { name: /^Quinta 19$/ }).or(pd.locator('section.pday[aria-label="Quinta 19"]')).first().getByText('Editar vídeo da obra').waitFor();
     await shot(pd, '21-producao-semana');
