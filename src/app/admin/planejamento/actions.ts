@@ -17,6 +17,23 @@ import { FORMATS, createRoutine, isPerson, type TaskFormat } from '@/lib/produca
 import { setTaskCard, tasksOfCard, type CardTask } from '@/lib/vinculo';
 import { logHistory } from '@/lib/historico';
 
+import { logActivity } from '@/lib/registro';
+
+const FIELD: Record<string, string> = {
+  title: 'título', day: 'data', time: 'horário', status: 'status', kind: 'tipo', note: 'observação', owner: 'com quem está', done: 'finalizado',
+  month: 'mês', briefBy: 'gravado por', designBy: 'editado por', postedBy: 'postado por', recMonth: 'gravado quando', editMonth: 'editado quando',
+  objetivo: 'objetivo', legenda: 'legenda', referencia: 'referência', imagens: 'imagens', roteiro: 'roteiro'
+};
+// edição salva sozinha a cada tecla: no registro entra no máximo 1 linha por card e pessoa a cada 10 min
+const lastLog = new Map<string, number>();
+async function logPlanEdit(who: string, planId: string, title: string, fields: string[]) {
+  const k = `${who}|${planId}`;
+  const now = Date.now();
+  if ((lastLog.get(k) ?? 0) > now - 600_000) return;
+  lastLog.set(k, now);
+  await logActivity({ area: 'Planejamento', who, action: `${who} editou o card`, item: title, itemId: planId, detail: fields.map((f) => FIELD[f] ?? f).join(', ') });
+}
+
 type R<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
 async function clientCal(clientId: string) {
@@ -73,7 +90,7 @@ export async function createIdeaAction(
   clientId: string,
   x: PlanPatch & { title: string }
 ): Promise<R<{ id: string }>> {
-  await requireAdmin();
+  const who = await requireAdmin();
   const c = await clientCal(clientId);
   if (!c) return { ok: false, error: 'Ligue este cliente ao Calendário mensal primeiro.' };
   const strip = Object.fromEntries(Object.entries(x).filter(([, v]) => v !== null && v !== undefined && !(Array.isArray(v) && !v.length)));
@@ -81,6 +98,7 @@ export async function createIdeaAction(
   if (typeof p === 'string') return { ok: false, error: p };
   try {
     const id = await createPlanItem(c.calName, { ...p, title: p.title! });
+    await logActivity({ area: 'Planejamento', who: who.name, action: `${who.name} criou o card`, item: p.title!, itemId: id, detail: c.calName });
     return { ok: true, id };
   } catch (e) {
     console.error('[planejamento] criar', e);
@@ -89,7 +107,7 @@ export async function createIdeaAction(
 }
 
 export async function updatePlanAction(clientId: string, planId: string, x: PlanPatch): Promise<R> {
-  await requireAdmin();
+  const who = await requireAdmin();
   const c = await clientCal(clientId);
   const item = await getPlanItem(planId);
   if (!c || !item || item.cal !== c.calName) return { ok: false, error: 'Card não encontrado.' };
@@ -97,6 +115,7 @@ export async function updatePlanAction(clientId: string, planId: string, x: Plan
   if (typeof p === 'string') return { ok: false, error: p };
   try {
     await updatePlanItem(planId, p);
+    await logPlanEdit(who.name, planId, p.title ?? item.title, Object.keys(p));
     return { ok: true };
   } catch (e) {
     console.error('[planejamento] editar', e);
@@ -106,7 +125,7 @@ export async function updatePlanAction(clientId: string, planId: string, x: Plan
 
 /** Leva o card do planejamento para a aprovação: cria o conteúdo (rascunho) já ligado. */
 export async function sendToApprovalAction(clientId: string, planId: string): Promise<R<{ contentId: string }>> {
-  await requireAdmin();
+  const who = await requireAdmin();
   const c = await clientCal(clientId);
   const item = await getPlanItem(planId);
   if (!c || !item || item.cal !== c.calName) return { ok: false, error: 'Card não encontrado.' };
@@ -127,6 +146,8 @@ export async function sendToApprovalAction(clientId: string, planId: string): Pr
       planningId: item.id
     });
     if (item.status === 'Ideia') await updatePlanItem(item.id, { status: 'Realizando' });
+    await logActivity({ area: 'Planejamento', who: who.name, action: `${who.name} enviou para aprovação`, item: item.title, itemId: item.id });
+    await logActivity({ area: 'Aprovação', who: who.name, action: `${who.name} criou o conteúdo para aprovar`, item: item.title, itemId: contentId });
     return { ok: true, contentId };
   } catch (e) {
     console.error('[planejamento] aprovar', e);
@@ -178,12 +199,14 @@ async function normalizeBrief(field: BriefField, value: string): Promise<string>
 }
 
 export async function saveBriefAction(clientId: string, planId: string, field: BriefField, value: string): Promise<R<{ value: string }>> {
-  await requireAdmin();
+  const who = await requireAdmin();
   if (!(BRIEF_FIELDS as readonly string[]).includes(field)) return { ok: false, error: 'Campo inválido.' };
-  if (!(await ownCard(clientId, planId))) return { ok: false, error: 'Card não encontrado.' };
+  const card = await ownCard(clientId, planId);
+  if (!card) return { ok: false, error: 'Card não encontrado.' };
   try {
     const clean = await normalizeBrief(field, value);
     await setPlanBrief(planId, field, clean);
+    await logPlanEdit(who.name, planId, card.title, [field]);
     return { ok: true, value: clean };
   } catch (e) {
     if ((e as { code?: string }).code === 'locked') return { ok: false, error: (e as Error).message };
@@ -194,10 +217,12 @@ export async function saveBriefAction(clientId: string, planId: string, field: B
 
 /** Apagar task: vai para a lixeira do Notion. Com restore = true, volta de lá (botão Desfazer). */
 export async function trashPlanAction(clientId: string, planId: string, restore = false): Promise<R> {
-  await requireAdmin();
-  if (!(await ownCard(clientId, planId, restore))) return { ok: false, error: 'Card não encontrado.' };
+  const who = await requireAdmin();
+  const card = await ownCard(clientId, planId, restore);
+  if (!card) return { ok: false, error: 'Card não encontrado.' };
   try {
     await trashPlanItem(planId, !restore);
+    await logActivity({ area: 'Planejamento', who: who.name, action: `${who.name} ${restore ? 'restaurou' : 'apagou'} o card`, item: card.title, itemId: planId });
     return { ok: true };
   } catch (e) {
     console.error('[planejamento] lixeira', e);
@@ -240,5 +265,16 @@ export async function createTaskFromCardAction(
   } catch (e) {
     console.error('[planejamento] criar tarefa', e);
     return { ok: false, error: 'Não foi possível criar a tarefa no Notion.' };
+  }
+}
+
+/** Histórico do card (Registro do app). */
+export async function planHistoryAction(planId: string): Promise<R<{ history: string }>> {
+  await requireAdmin();
+  try {
+    const { listActivity, asHistoryLines } = await import('@/lib/registro');
+    return { ok: true, history: asHistoryLines(await listActivity({ itemId: planId, limit: 50 }), env.timeZone) };
+  } catch {
+    return { ok: true, history: '' };
   }
 }

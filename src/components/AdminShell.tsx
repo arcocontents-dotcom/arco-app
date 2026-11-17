@@ -7,7 +7,7 @@ import { currentViewer } from '@/lib/access';
 import Icon from './Icon';
 import CommandPalette from './CommandPalette';
 
-type Section = 'calendario' | 'captacao' | 'financeiro' | 'gestao' | 'pendencias' | 'planejamento' | 'producao';
+type Section = 'calendario' | 'captacao' | 'financeiro' | 'registro' | 'gestao' | 'pendencias' | 'planejamento' | 'producao';
 
 /** Conteúdos que pedem ação: atrasados (data passou e não postou) e ajustes/reprovados. */
 export async function alerts() {
@@ -65,6 +65,9 @@ export default async function AdminShell({
           )}
           <Link href="/admin/gestao" aria-current={section === 'gestao' ? 'page' : undefined}>
             <Icon name="grid" /> <span>Gestão</span>
+          </Link>
+          <Link href="/admin/registro" aria-current={section === 'registro' ? 'page' : undefined}>
+            <Icon name="clock" /> <span>Registro</span>
           </Link>
           <Link href="/admin/pendencias" aria-current={section === 'pendencias' ? 'page' : undefined}>
             <Icon name="bell" className={pending ? 'ic-play' : ''} /> <span>Pendências</span>

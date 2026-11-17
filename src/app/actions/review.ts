@@ -4,6 +4,7 @@ import { currentViewer } from '@/lib/access';
 import { getClientFresh, getContentFresh, saveDecisions, setPosted } from '@/lib/notion';
 import { type Decision, type GeneralStatus, validateDecisions } from '@/lib/domain';
 import { syncPlanFromContent } from '@/lib/planning';
+import { logActivity } from '@/lib/registro';
 
 export type ReviewResult = { ok: true; status: GeneralStatus } | { ok: false; error: string };
 
@@ -39,6 +40,15 @@ export async function submitReview(contentId: string, decisions: Record<string, 
   }
   const fresh = await getContentFresh(contentId);
   if (fresh?.planningId) await syncPlanFromContent(fresh);
+  const who = viewer.role === 'admin' ? viewer.name : viewer.email;
+  const verdict = Object.values(clean).map((d) => d.status);
+  const adj = verdict.filter((x) => x !== 'Aprovado').length;
+  await logActivity({
+    area: 'Aprovação', who,
+    action: `${who} ${adj ? 'pediu ajuste' : 'aprovou'}${viewer.role === 'admin' ? '' : ' (cliente)'}`,
+    item: content.title, itemId: contentId,
+    detail: Object.entries(clean).filter(([, d]) => d.note).map(([k, d]) => `${k}: ${d.note}`).join(' · ').slice(0, 900)
+  });
   return { ok: true, status: fresh?.status ?? 'Aguardando' };
 }
 
@@ -51,6 +61,7 @@ export async function togglePosted(contentId: string, posted: boolean): Promise<
     await setPosted(content, posted);
     const fresh = await getContentFresh(contentId);
     if (fresh?.planningId) await syncPlanFromContent(fresh, { unposted: !posted });
+    await logActivity({ area: 'Aprovação', who: viewer.name, action: `${viewer.name} ${posted ? 'marcou como postado' : 'desmarcou postado'}`, item: content.title, itemId: contentId });
   } catch (e) {
     console.error('[posted]', e);
     return { ok: false, error: 'Não foi possível salvar agora.' };

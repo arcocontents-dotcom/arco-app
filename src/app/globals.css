@@ -1499,3 +1499,17 @@ details.db-person[open] .db-more { color: var(--muted); }
 .fin-colors { display: flex; gap: 8px; flex-wrap: wrap; }
 .fin-colors button { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line); cursor: pointer; }
 .fin-colors button[aria-checked='true'] { box-shadow: 0 0 0 2px var(--ink); }
+/* registro do app */
+.reg { display: flex; flex-direction: column; gap: 18px; }
+.reg-day { background: #fff; border-radius: 12px; padding: 16px 18px; }
+.reg-day h2 { margin: 0 0 10px; }
+.reg-day ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.reg-day li { display: grid; grid-template-columns: 48px 100px 1fr; gap: 12px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid #f0eeea; }
+.reg-day li:last-child { border-bottom: 0; }
+.reg-day time { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.reg-day strong { font-size: 14px; font-weight: 600; display: block; }
+.reg-day small { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.reg-area { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #f0eeea; justify-self: start; }
+.reg-area.a-planejamento { background: #fdf3d7; } .reg-area.a-aprovacao { background: #e3eef6; } .reg-area.a-producao { background: #fbe9da; }
+.reg-area.a-captacao { background: #fbe4e0; } .reg-area.a-financeiro { background: #e3f2ee; } .reg-area.a-clientes { background: #ece6f5; }
+@media (max-width: 640px) { .reg-day li { grid-template-columns: 44px 1fr; } .reg-area { display: none; } }

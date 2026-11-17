@@ -4,6 +4,7 @@ import { requireFinance } from '@/lib/access';
 import { parseDay, todayIn } from '@/lib/domain';
 import { env } from '@/lib/env';
 import { diffLine, logHistory } from '@/lib/historico';
+import { logActivity } from '@/lib/registro';
 import {
   CATEGORIAS, CORES, createLanc, dayIn, ensureOccurrence, getLanc, lastDay, payFatura, saveConta, shiftMonth, trashRow, updateLanc,
   type Categoria, type ContaInput, type LancInput
@@ -151,9 +152,11 @@ export async function situacaoAction(templateId: string, situacao: 'Ativo' | 'Su
 
 /** Apagar vai para a lixeira do Notion (dá para restaurar por 30 dias). */
 export async function deleteLancAction(id: string): Promise<R> {
-  await requireFinance();
+  const who = await requireFinance();
   try {
+    const l = await getLanc(id).catch(() => null);
     await trashRow(id, env.finDb!);
+    await logActivity({ area: 'Financeiro', who: who.name, action: `${who.name} apagou o lançamento`, item: l?.desc ?? '', itemId: id, detail: l ? money(l.valor) : '' });
     return { ok: true };
   } catch (e) {
     return fail(e, 'apagar');
@@ -187,9 +190,10 @@ export async function saveContaAction(id: string | null, x: Partial<ContaInput>)
 }
 
 export async function deleteContaAction(id: string): Promise<R> {
-  await requireFinance();
+  const who = await requireFinance();
   try {
     await trashRow(id, env.finAccountsDb!);
+    await logActivity({ area: 'Financeiro', who: who.name, action: `${who.name} apagou um banco/cartão`, itemId: id });
     return { ok: true };
   } catch (e) {
     return fail(e, 'apagar conta');

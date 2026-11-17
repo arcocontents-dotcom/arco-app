@@ -16,6 +16,7 @@ export const SHOOTS_DB = '66666666666666666666666666666666';
 export const ACCESS_DB = '77777777777777777777777777777777';
 export const FIN_DB = '88888888888888888888888888888888';
 export const FINACC_DB = '99999999999999999999999999999999';
+export const LOG_DB = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 const TYPES = {
   [CLIENTS_DB]: {
@@ -38,6 +39,7 @@ const TYPES = {
   [SHOOTS_DB]: {
     'Captação': 'title', Data: 'date', Cliente: 'rich_text', 'Quem vai': 'multi_select', Tipo: 'select', Status: 'select', Local: 'rich_text', 'Observação': 'rich_text', Produtos: 'rich_text', 'Conteúdos': 'relation', 'Histórico': 'rich_text'
   },
+  [LOG_DB]: { 'Ação': 'title', Quem: 'rich_text', 'Área': 'select', Item: 'rich_text', 'Item ID': 'rich_text', Quando: 'date', Detalhe: 'rich_text' },
   [ACCESS_DB]: { Nome: 'title', 'E-mail': 'email', Ativo: 'checkbox', Financeiro: 'checkbox' },
   [FIN_DB]: {
     'Descrição': 'title', Tipo: 'select', Categoria: 'select', Grupo: 'rich_text', Valor: 'number', Vencimento: 'date', 'Pago em': 'date',
@@ -164,6 +166,7 @@ function match(page, f) {
   }
   if (f.status) return 'does_not_equal' in f.status ? (p.status?.name ?? null) !== f.status.does_not_equal : (p.status?.name ?? null) === f.status.equals;
   if (f.checkbox) return p.checkbox === f.checkbox.equals;
+  if (f.rich_text) return 'equals' in f.rich_text ? plain(p) === f.rich_text.equals : 'contains' in f.rich_text ? plain(p).includes(f.rich_text.contains) : true;
   if (f.date) {
     if (f.date.is_empty) return !p.date?.start;
     if (f.date.is_not_empty) return !!p.date?.start;

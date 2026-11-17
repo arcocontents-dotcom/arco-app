@@ -4,9 +4,10 @@ import { requireAdmin } from '@/lib/access';
 import { parseDay, todayIn } from '@/lib/domain';
 import { env } from '@/lib/env';
 import { diffLine, logHistory } from '@/lib/historico';
+import { logActivity } from '@/lib/registro';
 import { linkTaskToPlanning, openCards, setTaskCard, type OpenCard } from '@/lib/vinculo';
 import {
-  FORMATS, ROUTINE_TYPES, TEAM, URGENCY_LABEL, WEEKDAYS, createRoutine, passContent, setContentDone, setRoutineDone, trashRoutine, updateRoutine,
+  FORMATS, ROUTINE_TYPES, TEAM, URGENCY_LABEL, WEEKDAYS, createRoutine, getRoutine, passContent, setContentDone, setRoutineDone, trashRoutine, updateRoutine,
   type RoutineInput
 } from '@/lib/producao';
 
@@ -91,9 +92,11 @@ export async function saveRoutineAction(
 }
 
 export async function trashRoutineAction(id: string): Promise<R> {
-  await requireAdmin();
+  const who = await requireAdmin();
   try {
+    const r = await getRoutine(id).catch(() => null);
     await trashRoutine(id);
+    await logActivity({ area: 'Produção', who: who.name, action: `${who.name} apagou a tarefa`, item: r?.title ?? '', itemId: id, detail: r ? `era de ${r.person}` : '' });
     return { ok: true };
   } catch (e) {
     console.error('[producao] apagar', e);
@@ -102,11 +105,12 @@ export async function trashRoutineAction(id: string): Promise<R> {
 }
 
 export async function passContentAction(id: string, to: string, editedBy?: string | null): Promise<R> {
-  await requireAdmin();
+  const who = await requireAdmin();
   if (!(TEAM as readonly string[]).includes(to) && to !== 'Finalizado') return { ok: false, error: 'Pessoa inválida.' };
   const by = editedBy && (TEAM as readonly string[]).includes(editedBy) ? (editedBy as (typeof TEAM)[number]) : null;
   try {
     await passContent(id, to as (typeof TEAM)[number] | 'Finalizado', by, todayIn(env.timeZone));
+    await logActivity({ area: 'Produção', who: who.name, action: `${who.name} transferiu a demanda para ${to}`, itemId: id, detail: by ? `${by} editou` : '' });
     return { ok: true };
   } catch (e) {
     console.error('[producao] passar', e);
@@ -115,9 +119,10 @@ export async function passContentAction(id: string, to: string, editedBy?: strin
 }
 
 export async function toggleContentAction(id: string, done: boolean): Promise<R> {
-  await requireAdmin();
+  const who = await requireAdmin();
   try {
     await setContentDone(id, done);
+    await logActivity({ area: 'Produção', who: who.name, action: `${who.name} ${done ? 'marcou como entregue' : 'desmarcou entregue'}`, itemId: id });
     return { ok: true };
   } catch (e) {
     console.error('[producao] entregue', e);

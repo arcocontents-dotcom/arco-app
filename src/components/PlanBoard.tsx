@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import CardTasks from './CardTasks';
+import CardHistory from './CardHistory';
 import Icon, { type IconName } from './Icon';
 import TagSelect, { Tag, type Opt } from './TagSelect';
 import { MONTHS, WEEKDAYS_SHORT, dayLabel, dayNum, monthGrid } from '@/lib/domain';
@@ -513,6 +514,7 @@ export default function PlanBoard({
               {briefMsg && <span className="hint" role="status">{briefMsg}</span>}
             </section>
             <CardTasks clientId={clientId} planId={current.id} kind={current.kind} day={current.day} today={today ?? new Date().toISOString().slice(0, 10)} />
+            <CardHistory planId={current.id} />
             <div className="drawer-actions">
               {/* Planejamento só salva; o mês vai para o cliente pelo "Planejamento do mês". A aprovação do conteúdo editado fica para quando ele está em Realizando. */}
               <button type="button" className="btn block" onClick={closeDrawer}><Icon name="check" size={16} />Salvar</button>

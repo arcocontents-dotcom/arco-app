@@ -83,9 +83,11 @@ export async function shootStatusAction(id: string, status: string): Promise<R> 
 }
 
 export async function trashShootAction(id: string): Promise<R> {
-  await requireAdmin();
+  const who = await requireAdmin();
   try {
     await trashShoot(id);
+    const { logActivity } = await import('@/lib/registro');
+    await logActivity({ area: 'Captação', who: who.name, action: `${who.name} apagou a captação`, itemId: id });
     return { ok: true };
   } catch (e) {
     console.error('[captacao] apagar', e);

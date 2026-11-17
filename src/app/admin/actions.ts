@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { requireAdmin } from '@/lib/access';
+import { logActivity } from '@/lib/registro';
 import { syncPlanFromContent } from '@/lib/planning';
 import { pushConfigured, sendPush } from '@/lib/push';
 import { allow } from '@/lib/ratelimit';
@@ -42,7 +43,7 @@ export async function createClientFullAction(input: {
   role: 'approver' | 'viewer';
   logoUrl: string | null;
 }): Promise<CreateClientResult> {
-  await requireAdmin();
+  const who = await requireAdmin();
   const name = String(input.name ?? '').trim().slice(0, 120);
   const instagram = String(input.instagram ?? '').trim().replace(/^@/, '').slice(0, 60);
   const email = normalizeEmail(String(input.email ?? ''));
@@ -63,6 +64,7 @@ export async function createClientFullAction(input: {
       });
     }
     const link = email ? await buildLink(email, id) : null;
+    await logActivity({ area: 'Clientes', who: who.name, action: `${who.name} cadastrou o cliente`, item: name, itemId: id, detail: email ? `acesso: ${email}` : '' });
     return { ok: true, id, link };
   } catch (e) {
     console.error('[cliente]', e);
@@ -80,36 +82,39 @@ async function buildLink(email: string, clientId: string) {
 }
 
 export async function setClientCancelledAction(id: string, cancelled: boolean): Promise<SaveResult> {
-  await requireAdmin();
+  const who = await requireAdmin();
   const c = await getClientFresh(id);
   if (!c) return { ok: false, error: 'Cliente não encontrado.' };
   await updateClient(id, { cancelled });
+  await logActivity({ area: 'Clientes', who: who.name, action: `${who.name} ${cancelled ? 'removeu' : 'reativou'} o cliente`, item: c.name, itemId: id });
   return { ok: true, id };
 }
 
 /** Gera um link de acesso (vale 24h) para mandar ao cliente por WhatsApp. */
 export async function accessLinkAction(clientId: string, email: string): Promise<LinkResult> {
-  await requireAdmin();
+  const who = await requireAdmin();
   const e = normalizeEmail(email);
   const c = await getClientFresh(clientId);
   if (!c || !(c.approvers.includes(e) || c.viewers.includes(e))) return { ok: false, error: 'Esse e-mail não está liberado neste cliente.' };
   if (c.cancelled) return { ok: false, error: 'Este cliente está removido. Reative antes.' };
+  await logActivity({ area: 'Acessos', who: who.name, action: `${who.name} gerou link de acesso`, item: c.name, itemId: c.id, detail: e });
   return { ok: true, link: await buildLink(e, c.id) };
 }
 
 export async function updateClientAction(form: FormData) {
-  await requireAdmin();
+  const who = await requireAdmin();
   const id = String(form.get('id') ?? '');
   const name = String(form.get('name') ?? '').trim().slice(0, 120);
   const instagram = String(form.get('instagram') ?? '').trim().replace(/^@/, '').slice(0, 60);
   if (!id || !name) redirect(`/admin/clientes/${id}?e=nome`);
   await updateClient(id, { name, instagram });
+  await logActivity({ area: 'Clientes', who: who.name, action: `${who.name} editou o cliente`, item: name, itemId: id, detail: instagram ? `@${instagram}` : '' });
   revalidatePath('/admin', 'layout');
   redirect(`/admin/clientes/${id}?ok=salvo`);
 }
 
 export async function addAccessAction(form: FormData) {
-  await requireAdmin();
+  const who = await requireAdmin();
   const id = String(form.get('id') ?? '');
   const email = normalizeEmail(String(form.get('email') ?? ''));
   const role = form.get('role') === 'viewer' ? 'viewer' : 'approver';
@@ -124,26 +129,29 @@ export async function addAccessAction(form: FormData) {
   const viewers = c.viewers.filter((e) => e !== email);
   (role === 'approver' ? approvers : viewers).push(email);
   await updateClient(id, { approvers, viewers });
+  await logActivity({ area: 'Acessos', who: who.name, action: `${who.name} liberou acesso`, item: c.name, itemId: id, detail: `${email} (${role === 'approver' ? 'aprova' : 'só vê'})` });
   redirect(`/admin/clientes/${id}?ok=liberado`);
 }
 
 export async function removeAccessAction(form: FormData) {
-  await requireAdmin();
+  const who = await requireAdmin();
   const id = String(form.get('id') ?? '');
   const email = normalizeEmail(String(form.get('email') ?? ''));
   const c = await getClientFresh(id);
   if (!c) redirect('/admin');
   await updateClient(id, { approvers: c.approvers.filter((e) => e !== email), viewers: c.viewers.filter((e) => e !== email) });
+  await logActivity({ area: 'Acessos', who: who.name, action: `${who.name} tirou acesso`, item: c.name, itemId: id, detail: email });
   redirect(`/admin/clientes/${id}?ok=removido`);
 }
 
 export async function setClientPhoneAction(form: FormData) {
-  await requireAdmin();
+  const who = await requireAdmin();
   const id = String(form.get('id') ?? '');
   const phone = normalizePhone(String(form.get('phone') ?? ''));
   if (!(await getClientFresh(id))) redirect('/admin');
   if (phone === null) redirect(`/admin/clientes/${id}?e=telefone`);
   await setClientPhone(id, phone);
+  await logActivity({ area: 'Clientes', who: who.name, action: `${who.name} mudou o celular do cliente`, itemId: id, detail: phone });
   redirect(`/admin/clientes/${id}?ok=telefone`);
 }
 
@@ -168,7 +176,7 @@ export interface ContentPayload {
 }
 
 export async function saveContentAction(p: ContentPayload): Promise<SaveResult> {
-  await requireAdmin();
+  const who = await requireAdmin();
   const title = String(p.title ?? '').trim().slice(0, 200);
   if (!title) return { ok: false, error: 'Dê um título ao conteúdo.' };
   const day = parseDay(p.day);
@@ -207,9 +215,11 @@ export async function saveContentAction(p: ContentPayload): Promise<SaveResult> 
       if (p.resetApprovals && p.publish) status = 'Aguardando';
       await updateContent(p.id, { ...input, status }, prev.clientId);
       if (prev.planningId) await syncPlanFor(p.id);
+      await logActivity({ area: 'Aprovação', who: who.name, action: `${who.name} editou o conteúdo${status !== prev.status ? ` (${prev.status} → ${status})` : ''}`, item: title, itemId: p.id, detail: p.resetApprovals ? 'nova versão para aprovar' : '' });
       return { ok: true, id: p.id };
     }
     const id = await createContent({ ...input, status: p.publish ? 'Aguardando' : 'Rascunho', resetApprovals: true });
+    await logActivity({ area: 'Aprovação', who: who.name, action: `${who.name} criou o conteúdo`, item: title, itemId: id });
     return { ok: true, id };
   } catch (e) {
     console.error('[content]', e);
@@ -218,30 +228,33 @@ export async function saveContentAction(p: ContentPayload): Promise<SaveResult> 
 }
 
 export async function deleteContentAction(id: string): Promise<SaveResult> {
-  await requireAdmin();
+  const who = await requireAdmin();
   const c = await getContentFresh(id);
   if (!c) return { ok: false, error: 'Conteúdo não encontrado.' };
   await archiveContent(id, c.clientId);
+  await logActivity({ area: 'Aprovação', who: who.name, action: `${who.name} apagou o conteúdo`, item: c.title, itemId: id });
   return { ok: true, id };
 }
 
 export async function setClientLogoAction(id: string, logoUrl: string | null): Promise<SaveResult> {
-  await requireAdmin();
+  const who = await requireAdmin();
   if (logoUrl && !isOwnMediaUrl(logoUrl)) return { ok: false, error: 'Imagem inválida.' };
   const c = await getClientFresh(id);
   if (!c) return { ok: false, error: 'Cliente não encontrado.' };
   await updateClient(id, { logoUrl });
+  await logActivity({ area: 'Clientes', who: who.name, action: `${who.name} ${logoUrl ? 'trocou' : 'tirou'} a logo`, item: c.name, itemId: id });
   return { ok: true, id };
 }
 
 
 /** Ação rápida das Pendências: marca como postado sem abrir o conteúdo. */
 export async function markPostedAction(form: FormData) {
-  await requireAdmin();
+  const who = await requireAdmin();
   const id = String(form.get('id') ?? '');
   const content = await getContentFresh(id);
   if (content) {
     await setPosted(content, true);
+    await logActivity({ area: 'Aprovação', who: who.name, action: `${who.name} marcou como postado`, item: content.title, itemId: id });
     await syncPlanFor(id);
   }
   revalidatePath('/admin/pendencias');
@@ -285,7 +298,7 @@ export async function notifyInfoAction(contentId: string): Promise<NotifyInfo> {
 
 /** Aviso no celular (app) de UM conteúdo, com o nome do post, abrindo direto nele. */
 export async function notifyContentAction(contentId: string): Promise<{ ok: boolean; sent: number; error?: string }> {
-  await requireAdmin();
+  const who = await requireAdmin();
   const x = await notifyContext(contentId);
   if ('error' in x) return { ok: false, sent: 0, error: x.error };
   const { c, client, first, path } = x;
@@ -305,6 +318,7 @@ export async function notifyContentAction(contentId: string): Promise<{ ok: bool
   if (keep.length !== subs.length) await setClientPushSubs(client.id, keep);
   const sent = results.filter((r) => r === 'ok').length;
   if (!sent) return { ok: false, sent: 0, error: 'Não foi possível entregar no celular agora.' };
+  await logActivity({ area: 'Aprovação', who: who.name, action: `${who.name} avisou o cliente no celular`, item: c.title, itemId: c.id, detail: `${sent} aparelho(s)` });
   return { ok: true, sent };
 }
 
@@ -325,5 +339,6 @@ export async function teamLoginLinkAction(email: string): Promise<{ ok: true; ur
   const a = (await listTeamAdmins()).find((x) => x.email === String(email).toLowerCase());
   if (!a) return { ok: false, error: 'Essa pessoa não está ativa nos Acessos.' };
   const t = await signLoginToken(a.email, '24h');
+  await logActivity({ area: 'Acessos', who: v.name, action: `${v.name} gerou link de entrada de administrador`, item: a.name, detail: a.email });
   return { ok: true, url: `${env.appUrl}/entrar/confirmar?t=${encodeURIComponent(t)}` };
 }

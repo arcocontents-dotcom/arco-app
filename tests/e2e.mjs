@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
 import { SignJWT } from 'jose';
 import { chromium } from 'playwright';
-import { ACCESS_DB, CLIENTS_DB, CONTENTS_DB, FINACC_DB, FIN_DB, PLANNING_DB, ROUTINE_DB, SHOOTS_DB, blocks, seedBlocks, seedPage, startMock, store } from './mock-notion.mjs';
+import { ACCESS_DB, CLIENTS_DB, CONTENTS_DB, FINACC_DB, FIN_DB, LOG_DB, PLANNING_DB, ROUTINE_DB, SHOOTS_DB, blocks, seedBlocks, seedPage, startMock, store } from './mock-notion.mjs';
 
 const MOCK_PORT = 4010;
 const APP_PORT = 3100;
@@ -82,6 +82,7 @@ const app = spawn('npx', ['next', 'start', '-p', String(APP_PORT)], {
     NOTION_ACCESS_DB: ACCESS_DB,
     NOTION_FIN_DB: FIN_DB,
     NOTION_FIN_ACCOUNTS_DB: FINACC_DB,
+    NOTION_LOG_DB: LOG_DB,
     ADMIN_PASSWORD: 'senha-do-admin-teste',
     NOTION_BASE_URL: `http://127.0.0.1:${MOCK_PORT}`,
     R2_PUBLIC_URL: 'https://midia.test',
@@ -1186,6 +1187,19 @@ try {
     await pd.goto(`${APP}/admin/financeiro?m=${m}`);
     await pd.waitForTimeout(600);
     await shot(pd, '32-financeiro');
+  });
+
+  await step('registro: tudo o que foi feito, por quem e quando', async () => {
+    const logs2 = [...store.values()].filter((x) => x.parent?.database_id?.replace(/-/g, '') === LOG_DB);
+    const acts = logs2.map((x) => x.properties['Ação'].title.map((t) => t.plain_text).join(''));
+    assert.ok(acts.some((a) => /Lemuel lançou para Marcos/.test(a)), 'tarefa no registro');
+    assert.ok(acts.some((a) => /criou o card/.test(a)), 'planejamento no registro');
+    assert.ok(acts.some((a) => /marcou como recebido/.test(a)), 'financeiro no registro');
+    await pd.goto(`${APP}/admin/registro`);
+    await pd.getByText(/Lemuel lançou para Marcos/).first().waitFor();
+    await pd.goto(`${APP}/admin/registro?a=Financeiro`);
+    await pd.getByText(/marcou como recebido/).first().waitFor();
+    await shot(pd, '33-registro');
   });
 
   await step('cliente novo na Gestão do Notion entra no app sozinho', async () => {

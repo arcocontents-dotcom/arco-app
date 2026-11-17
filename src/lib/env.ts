@@ -19,6 +19,10 @@ export const env = {
   get accessDb() {
     return read('NOTION_ACCESS_DB') ?? null;
   },
+  /** "📜 Registro do app": tudo o que é feito no app. */
+  get logDb() {
+    return read('NOTION_LOG_DB') ?? null;
+  },
   get finDb() {
     return read('NOTION_FIN_DB') ?? null;
   },
