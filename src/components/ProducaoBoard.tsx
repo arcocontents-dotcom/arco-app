@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import HistoryList from './HistoryList';
+import CardHistory from './CardHistory';
 import Icon from './Icon';
 import { addDays, dayNum, weekdayMon } from '@/lib/domain';
 import { shootStatusAction } from '@/app/admin/producao/captacao/actions';
@@ -122,6 +123,7 @@ export default function ProducaoBoard({
   const [client, setClient] = useState('');
   const [when, setWhen] = useState<'hoje' | 'amanha' | 'semana'>('semana');
   const [transfer, setTransfer] = useState<string | null>(null);
+  const [hist, setHist] = useState<string | null>(null);
   const [newWho, setNewWho] = useState<Who | null>(null);
   const [linksOpen, setLinksOpen] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
@@ -258,8 +260,17 @@ export default function ProducaoBoard({
               {t.clientId && (
                 <Link className="pt-open" href={`/admin/planejamento?c=${t.clientId}&m=${(t.day ?? today).slice(0, 7)}-01&open=${t.id}`}>Abrir</Link>
               )}
+              <button type="button" className="pt-open pt-hist-btn" aria-expanded={hist === t.key} onClick={() => setHist(hist === t.key ? null : t.key)}>
+                <Icon name="clock" size={11} />Histórico
+              </button>
             </div>
           )}
+          {admin && t.source !== 'conteudo' && t.source !== 'captacao' && (
+            <button type="button" className="pt-open pt-hist-btn solo" aria-expanded={hist === t.key} onClick={() => setHist(hist === t.key ? null : t.key)}>
+              <Icon name="clock" size={11} />Histórico
+            </button>
+          )}
+          {admin && hist === t.key && <div className="pt-hist"><CardHistory planId={t.id} empty="Ainda não há registros desta tarefa." /></div>}
           {admin && transfer === t.key && (
             <div className="pt-tx" role="group" aria-label={`Transferir ${t.title}`}>
               <span className="pt-tx-l">Para quem vai agora?</span>
@@ -712,8 +723,25 @@ function RoutineForm({
             </select>
           </label>
         )}
-        {canLink && (
-          <div className="rf-row rf-plan">
+        {(ckind === 'freelancer' || ckind === 'casamento') && (
+          <label className="rf-row">
+            <span className="rf-l" />
+            <input
+              key={ckind}
+              className="ninput"
+              style={{ flex: 1 }}
+              placeholder={ckind === 'casamento' ? 'Nome do casal (ex.: Ana e Pedro)' : 'Nome do cliente freelancer'}
+              aria-label={ckind === 'casamento' ? 'Nome do casal' : 'Nome do cliente freelancer'}
+              value={freeName}
+              autoFocus
+              maxLength={80}
+              onChange={(e) => setFreeName(e.target.value)}
+            />
+          </label>
+        )}
+
+        {canLink ? (
+          <div className="rf-row rf-plan rf-plan-final">
             <span className="rf-l">Planejamento</span>
             <div className="rf-plan-box">
               <select className="ninput" value={planLink} onChange={(e) => setPlanLink(e.target.value)} aria-label="Conteúdo do planejamento">
@@ -735,22 +763,11 @@ function RoutineForm({
               )}
             </div>
           </div>
-        )}
-        {(ckind === 'freelancer' || ckind === 'casamento') && (
-          <label className="rf-row">
-            <span className="rf-l" />
-            <input
-              key={ckind}
-              className="ninput"
-              style={{ flex: 1 }}
-              placeholder={ckind === 'casamento' ? 'Nome do casal (ex.: Ana e Pedro)' : 'Nome do cliente freelancer'}
-              aria-label={ckind === 'casamento' ? 'Nome do casal' : 'Nome do cliente freelancer'}
-              value={freeName}
-              autoFocus
-              maxLength={80}
-              onChange={(e) => setFreeName(e.target.value)}
-            />
-          </label>
+        ) : (
+          <div className="rf-row rf-plan rf-plan-final">
+            <span className="rf-l">Planejamento</span>
+            <p className="hint" style={{ margin: 0 }}>Para criar no planejamento ou ligar a um card que já existe, escolha acima um <b>cliente da agência</b>.</p>
+          </div>
         )}
 
         {row?.history && <HistoryList history={row.history} />}

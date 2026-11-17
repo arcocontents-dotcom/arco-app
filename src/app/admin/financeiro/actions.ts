@@ -199,3 +199,33 @@ export async function deleteContaAction(id: string): Promise<R> {
     return fail(e, 'apagar conta');
   }
 }
+
+export type UnlockState = { error?: string };
+
+/** Senha do Financeiro: destrava neste aparelho por 12 horas. */
+export async function unlockFinanceAction(_prev: UnlockState, form: FormData): Promise<UnlockState> {
+  const { requireFinanceAccess, unlockFinanceCookie } = await import('@/lib/access');
+  const { allow } = await import('@/lib/ratelimit');
+  const { createHash, timingSafeEqual } = await import('node:crypto');
+  const { redirect } = await import('next/navigation');
+  const v = await requireFinanceAccess();
+  if (!allow(`fin-pw:${v.email}`, 6, 15 * 60_000)) return { error: 'Muitas tentativas. Espere alguns minutos.' };
+  const real = env.financePassword;
+  const typed = String(form.get('senha') ?? '');
+  const h = (s: string) => createHash('sha256').update(s).digest();
+  if (!real || !timingSafeEqual(h(typed), h(real))) {
+    await logActivity({ area: 'Financeiro', who: v.name, action: `${v.name} errou a senha do Financeiro` });
+    return { error: 'Senha incorreta.' };
+  }
+  await unlockFinanceCookie(v.email);
+  await logActivity({ area: 'Financeiro', who: v.name, action: `${v.name} abriu o Financeiro` });
+  redirect('/admin/financeiro');
+  return {};
+}
+
+export async function lockFinanceAction() {
+  const { lockFinanceCookie } = await import('@/lib/access');
+  const { redirect } = await import('next/navigation');
+  await lockFinanceCookie();
+  redirect('/admin/financeiro');
+}

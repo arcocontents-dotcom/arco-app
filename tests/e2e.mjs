@@ -83,6 +83,7 @@ const app = spawn('npx', ['next', 'start', '-p', String(APP_PORT)], {
     NOTION_FIN_DB: FIN_DB,
     NOTION_FIN_ACCOUNTS_DB: FINACC_DB,
     NOTION_LOG_DB: LOG_DB,
+    FINANCE_PASSWORD: 'senha-fin-teste',
     ADMIN_PASSWORD: 'senha-do-admin-teste',
     NOTION_BASE_URL: `http://127.0.0.1:${MOCK_PORT}`,
     R2_PUBLIC_URL: 'https://midia.test',
@@ -1109,6 +1110,14 @@ try {
     const m = today.slice(0, 7);
     const fin = () => [...store.values()].filter((x) => !x.archived && x.parent?.database_id?.replace(/-/g, '') === FIN_DB);
     const txt = (x, n) => (x.properties[n]?.title ?? x.properties[n]?.rich_text ?? []).map((t) => t.plain_text).join('');
+    // senha do Financeiro
+    await pd.goto(`${APP}/admin/financeiro?v=contas`);
+    await pd.getByLabel('Senha do Financeiro').fill('errada');
+    await pd.getByRole('button', { name: 'Abrir' }).click();
+    await pd.getByText('Senha incorreta.').waitFor();
+    await pd.getByLabel('Senha do Financeiro').fill('senha-fin-teste');
+    await pd.getByRole('button', { name: 'Abrir' }).click();
+    await pd.getByText('Saldo disponível').waitFor();
     await pd.goto(`${APP}/admin/financeiro?v=contas`);
     // banco
     await pd.getByRole('button', { name: 'Banco ou cartão' }).click();
@@ -1195,11 +1204,18 @@ try {
     assert.ok(acts.some((a) => /Lemuel lançou para Marcos/.test(a)), 'tarefa no registro');
     assert.ok(acts.some((a) => /criou o card/.test(a)), 'planejamento no registro');
     assert.ok(acts.some((a) => /marcou como recebido/.test(a)), 'financeiro no registro');
+    assert.ok(acts.some((a) => /transferiu a demanda/.test(a)), 'transferência no registro');
     await pd.goto(`${APP}/admin/registro`);
     await pd.getByText(/Lemuel lançou para Marcos/).first().waitFor();
     await pd.goto(`${APP}/admin/registro?a=Financeiro`);
     await pd.getByText(/marcou como recebido/).first().waitFor();
     await shot(pd, '33-registro');
+    // dentro da própria tarefa
+    await pd.goto(`${APP}/admin/producao`);
+    const card = pd.locator('article.pt', { hasText: 'Revisar legenda Beta' }).first();
+    await card.getByRole('button', { name: 'Histórico' }).click();
+    await card.locator('.pt-hist').getByText(/Lemuel lançou para Marcos/).waitFor();
+    await card.locator('.pt-hist').getByText(/Lemuel editou: urgência/).waitFor();
   });
 
   await step('cliente novo na Gestão do Notion entra no app sozinho', async () => {

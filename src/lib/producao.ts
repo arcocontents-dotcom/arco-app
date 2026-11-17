@@ -439,11 +439,12 @@ const editorToPerson = (n: string | null): Person | null =>
  * Transferir demanda: muda "Demanda atual está com" e, se a pessoa editou,
  * registra "Editado/Design por" e "Editado quando" (só opções que já existem no Notion).
  */
-export async function passContent(id: string, to: Person | 'Finalizado', editedBy?: Person | null, today?: string) {
+export async function passContent(id: string, to: Person | 'Finalizado', editedBy?: Person | null, today?: string): Promise<{ title: string; from: string | null; client: string | null }> {
   const p = await notion().pages.retrieve({ page_id: id });
   if (!isPage(p) || !env.planningDb || normId(p.parent.type === 'database_id' ? p.parent.database_id : '') !== normId(env.planningDb)) {
     throw Object.assign(new Error('Card não encontrado'), { code: 'object_not_found' });
   }
+  const before = { title: text(p.properties[P.title]), from: select(p.properties[P.owner]), client: select(p.properties[P.client]) };
   const props: Record<string, unknown> = { [P.owner]: { select: { name: to } } };
   if (editedBy && today) {
     props[P.designBy] = { select: { name: EDITOR_NAME[editedBy] } };
@@ -452,6 +453,7 @@ export async function passContent(id: string, to: Person | 'Finalizado', editedB
   await notion().pages.update({ page_id: id, properties: props as never });
   invalidate('plan:');
   invalidate('prod:');
+  return before;
 }
 
 // ---------- dashboard da produção (equipe) ----------

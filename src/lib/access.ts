@@ -52,9 +52,43 @@ export async function requireAdmin(): Promise<Viewer & { role: 'admin' }> {
 }
 
 /** Financeiro: só o administrador principal e quem tem "Financeiro" marcado nos Acessos. Link direto também não abre. */
-export async function requireFinance(): Promise<Viewer & { role: 'admin' }> {
+/** Pode ver o Financeiro (antes da senha). */
+export async function requireFinanceAccess(): Promise<Viewer & { role: 'admin' }> {
   const v = await requireAdmin();
   if (!v.finance) notFound();
+  return v;
+}
+
+const FIN_COOKIE = 'arco_fin';
+
+/** Financeiro destravado pela senha neste aparelho (vale 12h). Sem senha configurada, sempre aberto. */
+export async function financeUnlocked(email: string): Promise<boolean> {
+  if (!env.financePassword) return true;
+  const { cookies } = await import('next/headers');
+  const t = (await cookies()).get(FIN_COOKIE)?.value;
+  if (!t) return false;
+  const { verifyState } = await import('./session');
+  const d = await verifyState(t);
+  return !!d && d.fin === normalizeEmail(email);
+}
+
+export async function unlockFinanceCookie(email: string) {
+  const { cookies } = await import('next/headers');
+  const { signState } = await import('./session');
+  (await cookies()).set(FIN_COOKIE, await signState({ fin: normalizeEmail(email) }, '12h'), {
+    httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 12 * 3600
+  });
+}
+
+export async function lockFinanceCookie() {
+  const { cookies } = await import('next/headers');
+  (await cookies()).delete(FIN_COOKIE);
+}
+
+/** Financeiro liberado e destravado (para gravar). Link direto ou chamada sem a senha não passa. */
+export async function requireFinance(): Promise<Viewer & { role: 'admin' }> {
+  const v = await requireFinanceAccess();
+  if (!(await financeUnlocked(v.email))) notFound();
   return v;
 }
 

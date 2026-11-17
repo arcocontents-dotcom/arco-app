@@ -23,6 +23,10 @@ export const env = {
   get logDb() {
     return read('NOTION_LOG_DB') ?? null;
   },
+  /** Senha extra para abrir o Financeiro (secret FINANCE_PASSWORD no Cloudflare). Sem ela, não pede senha. */
+  get financePassword() {
+    return read('FINANCE_PASSWORD') ?? null;
+  },
   get finDb() {
     return read('NOTION_FIN_DB') ?? null;
   },

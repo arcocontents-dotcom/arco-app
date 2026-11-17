@@ -109,8 +109,12 @@ export async function passContentAction(id: string, to: string, editedBy?: strin
   if (!(TEAM as readonly string[]).includes(to) && to !== 'Finalizado') return { ok: false, error: 'Pessoa inválida.' };
   const by = editedBy && (TEAM as readonly string[]).includes(editedBy) ? (editedBy as (typeof TEAM)[number]) : null;
   try {
-    await passContent(id, to as (typeof TEAM)[number] | 'Finalizado', by, todayIn(env.timeZone));
-    await logActivity({ area: 'Produção', who: who.name, action: `${who.name} transferiu a demanda para ${to}`, itemId: id, detail: by ? `${by} editou` : '' });
+    const b = await passContent(id, to as (typeof TEAM)[number] | 'Finalizado', by, todayIn(env.timeZone));
+    await logActivity({
+      area: 'Produção', who: who.name,
+      action: to === 'Finalizado' ? `${who.name} finalizou a demanda` : `${who.name} transferiu a demanda${b.from ? ` de ${b.from}` : ''} para ${to}`,
+      item: b.title, itemId: id, detail: [b.client, by ? `${by} editou` : ''].filter(Boolean).join(' · ')
+    });
     return { ok: true };
   } catch (e) {
     console.error('[producao] passar', e);

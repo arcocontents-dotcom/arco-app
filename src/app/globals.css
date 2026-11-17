@@ -1513,3 +1513,16 @@ details.db-person[open] .db-more { color: var(--muted); }
 .reg-area.a-planejamento { background: #fdf3d7; } .reg-area.a-aprovacao { background: #e3eef6; } .reg-area.a-producao { background: #fbe9da; }
 .reg-area.a-captacao { background: #fbe4e0; } .reg-area.a-financeiro { background: #e3f2ee; } .reg-area.a-clientes { background: #ece6f5; }
 @media (max-width: 640px) { .reg-day li { grid-template-columns: 44px 1fr; } .reg-area { display: none; } }
+.rf-plan-final { background: #faf9f7; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.pt-hist-btn { display: inline-flex; align-items: center; gap: 4px; background: none; border: 0; cursor: pointer; font: inherit; }
+.pt-hist-btn.solo { align-self: flex-start; font-size: 11.5px; color: var(--muted); padding: 2px 0; }
+.pt-hist { margin-top: 6px; background: #faf9f7; border-radius: 8px; padding: 8px 10px; }
+.pt-hist .hist { border-top: 0; padding-top: 0; }
+/* senha do Financeiro */
+.fin-lock { display: flex; justify-content: center; padding: 8vh 16px; }
+.fin-lock-box { background: #fff; border-radius: 16px; padding: 32px 28px; width: min(380px, 100%); display: flex; flex-direction: column; gap: 14px; text-align: center; align-items: stretch; }
+.fin-lock-ic { width: 56px; height: 56px; border-radius: 50%; background: var(--ink); color: #fff; display: inline-flex; align-items: center; justify-content: center; align-self: center; }
+.fin-lock-box h1 { margin: 0; font-family: var(--display); font-size: 30px; text-transform: uppercase; }
+.fin-lock-box p { margin: 0; font-size: 13.5px; color: var(--muted); line-height: 1.5; }
+.fin-lock-box input { text-align: center; font-size: 22px; letter-spacing: 0.3em; }
+.fin-lock-out { display: flex; justify-content: flex-end; margin-bottom: -10px; }

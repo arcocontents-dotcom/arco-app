@@ -115,7 +115,14 @@ export async function updatePlanAction(clientId: string, planId: string, x: Plan
   if (typeof p === 'string') return { ok: false, error: p };
   try {
     await updatePlanItem(planId, p);
-    await logPlanEdit(who.name, planId, p.title ?? item.title, Object.keys(p));
+    if (p.title !== undefined && p.title !== item.title) {
+      await logActivity({ area: 'Planejamento', who: who.name, action: `${who.name} mudou o título`, item: p.title, itemId: planId, detail: `${item.title || '(sem título)'} → ${p.title}` });
+    }
+    if (p.owner !== undefined && p.owner !== item.owner) {
+      await logActivity({ area: 'Planejamento', who: who.name, action: `${who.name} transferiu a demanda${item.owner ? ` de ${item.owner}` : ''} para ${p.owner ?? 'ninguém'}`, item: p.title ?? item.title, itemId: planId });
+    }
+    const rest = Object.keys(p).filter((k) => k !== 'title' && k !== 'owner');
+    if (rest.length) await logPlanEdit(who.name, planId, p.title ?? item.title, rest);
     return { ok: true };
   } catch (e) {
     console.error('[planejamento] editar', e);

@@ -1,10 +1,13 @@
-import { requireFinance } from '@/lib/access';
+import { financeUnlocked, requireFinanceAccess } from '@/lib/access';
+import FinanceLock from '@/components/FinanceLock';
+import { lockFinanceAction } from './actions';
 import { env } from '@/lib/env';
 import { listClients } from '@/lib/notion';
 import { todayIn } from '@/lib/domain';
 import { finConfigured, loadFin, painel } from '@/lib/financeiro';
 import AdminShell from '@/components/AdminShell';
 import FinanceBoard from '@/components/FinanceBoard';
+import Icon from '@/components/Icon';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Financeiro · Arco Contents', robots: { index: false, follow: false } };
@@ -14,7 +17,14 @@ type View = (typeof VIEWS)[number];
 
 // Financeiro: só para quem tem acesso (o administrador principal e quem tem "Financeiro" nos Acessos).
 export default async function Financeiro({ searchParams }: { searchParams: Promise<{ m?: string; v?: string; d?: string }> }) {
-  await requireFinance();
+  const viewer = await requireFinanceAccess();
+  if (!(await financeUnlocked(viewer.email))) {
+    return (
+      <AdminShell section="financeiro">
+        <FinanceLock />
+      </AdminShell>
+    );
+  }
   const sp = await searchParams;
   const today = todayIn(env.timeZone);
   const m = /^\d{4}-\d{2}$/.test(sp.m ?? '') ? sp.m! : today.slice(0, 7);
@@ -34,6 +44,11 @@ export default async function Financeiro({ searchParams }: { searchParams: Promi
 
   return (
     <AdminShell section="financeiro">
+      {env.financePassword && (
+        <form action={lockFinanceAction} className="fin-lock-out">
+          <button type="submit" className="link-btn ic-inline"><Icon name="x" size={12} />Bloquear o Financeiro</button>
+        </form>
+      )}
       <FinanceBoard
         month={m}
         today={today}
