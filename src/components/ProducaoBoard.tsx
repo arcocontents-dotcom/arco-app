@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import HistoryList from './HistoryList';
 import CardHistory from './CardHistory';
 import Icon from './Icon';
-import { addDays, dayNum, weekdayMon } from '@/lib/domain';
+import { FORMATO_LABEL, addDays, dayNum, formatoDe, weekdayMon } from '@/lib/domain';
 import { shootStatusAction } from '@/app/admin/producao/captacao/actions';
 import { teamToggleAction } from '@/app/equipe/actions';
 import { openCardsAction, passContentAction, saveRoutineAction, toggleContentAction, toggleRoutineAction, trashRoutineAction } from '@/app/admin/producao/actions';
@@ -568,9 +568,13 @@ function RoutineForm({
     if (!canLink) return;
     let alive = true;
     setCards(null);
-    openCardsAction(client).then((l) => alive && setCards(l)).catch(() => alive && setCards([]));
+    openCardsAction(client, format).then((l) => alive && setCards(l)).catch(() => alive && setCards([]));
     return () => { alive = false; };
-  }, [canLink, client]);
+  }, [canLink, client, format]);
+  // trocou o formato e o card escolhido é de outro formato: volta para o padrão
+  useEffect(() => {
+    if (cards && planLink !== 'auto' && planLink !== 'nao' && planLink !== 'novo' && planLink !== row?.contentId && !cards.some((c) => c.id === planLink)) setPlanLink('auto');
+  }, [cards, planLink, row?.contentId]);
 
   const save = () =>
     start(async () => {
@@ -751,13 +755,14 @@ function RoutineForm({
                   <option value="auto">{canCreate ? 'Criar no planejamento (fica pendente para completar)' : 'Escolha um card do planejamento…'}</option>
                 )}
                 {(cards ?? []).filter((c) => c.id !== row?.contentId).length > 0 && (
-                  <optgroup label={cards === null ? 'Carregando…' : 'Ligar a um card do planejamento'}>
+                  <optgroup label={cards === null ? 'Carregando…' : `Ligar a um card do planejamento${formatoDe(format) ? ` · só ${FORMATO_LABEL[formatoDe(format)!]}` : ''}`}>
                     {cards!.filter((c) => c.id !== row?.contentId).map((c) => <option key={c.id} value={c.id}>{c.kind ? `${c.kind} · ` : ''}{c.title}{c.note ? ` — ${c.note}` : ''}</option>)}
                   </optgroup>
                 )}
                 {row?.contentId && canCreate && <option value="novo">Criar um card novo no planejamento</option>}
                 <option value="nao">{row?.contentId ? 'Desligar do planejamento' : 'Não ligar ao planejamento'}</option>
               </select>
+              {formatoDe(format) && <span className="hint">Mostrando só cards de {FORMATO_LABEL[formatoDe(format)!]} deste cliente.</span>}
               {row?.contentId && clientId(client) && (
                 <a className="link-btn ic-inline" href={`/admin/planejamento?c=${clientId(client)}&open=${row.contentId}`}><Icon name="bulb" size={13} />Abrir no planejamento</a>
               )}

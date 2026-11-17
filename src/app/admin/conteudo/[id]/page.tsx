@@ -6,6 +6,7 @@ import { videoThumbUrl } from '@/lib/media';
 import AdminShell from '@/components/AdminShell';
 import ContentForm from '@/components/ContentForm';
 import NotifyButton from '@/components/NotifyButton';
+import ContentLinks from '@/components/ContentLinks';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +30,7 @@ export default async function EditarConteudo({ params }: { params: Promise<{ id:
           <Link className="btn outline small" href={`/c/${c.clientId}/${c.id}`}>Ver aprovação</Link>
         </div>
       </div>
+      <ContentLinks contentId={c.id} clientId={c.clientId} type={c.type} />
       <ContentForm
         clients={clients.map((x) => ({ id: x.id, name: x.name }))}
         videoThumb={thumb}

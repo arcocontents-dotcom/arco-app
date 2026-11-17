@@ -67,6 +67,9 @@ export interface EntregaMes {
   postados: Combinado;
   /** Lançados para o mês e ainda não postados. */
   emProducao: Combinado;
+  /** Faltou postar nos meses anteriores: entra neste mês como atrasado. */
+  atrasados: Combinado;
+  atrasadosDe: string[];
   pagina: string | null;
 }
 
@@ -78,13 +81,9 @@ const kindOf = (k: string | null): Entrega | null => {
   return null;
 };
 
-export function entregasDoMes(c: { id: string; name: string; calName: string; notionPage: string; combinado: Combinado | null }, cal: string, first: string): Promise<EntregaMes> {
-  return memo(`plan:entregas:${cal}:${first}`, 30_000, async () => {
-    const pageId = await clientPageId(c).catch(() => null);
-    // lê ao vivo da página do cliente; se não der, usa a cópia guardada no cliente
-    const live = pageId ? await memo(`contrato:${pageId}`, 300_000, () => readCombinado(pageId)).catch(() => null) : null;
-    if (live && JSON.stringify(live) !== JSON.stringify(c.combinado)) await setClientCombinado(c.id, live).catch(() => undefined);
-    const combinado = live ?? c.combinado;
+/** Postados e em produção de um mês ("Referente ao mês" = mês). */
+function countMonth(cal: string, first: string): Promise<{ postados: Combinado; emProducao: Combinado }> {
+  return memo(`plan:entregas-mes:${cal}:${first}`, 60_000, async () => {
     const monthName = MONTHS[Number(first.slice(5, 7)) - 1];
     const pages = env.planningDb
       ? await queryAll(env.planningDb, {
@@ -108,6 +107,38 @@ export function entregasDoMes(c: { id: string; name: string; calName: string; no
       const posted = checkbox(pr[P.done]) || (st?.type === 'status' && st.status?.name === 'Postado');
       (posted ? postados : emProducao)[k]++;
     }
-    return { combinado, postados, emProducao, pagina: pageId ? `https://www.notion.so/${pageId}` : null };
+    return { postados, emProducao };
+  });
+}
+
+/** A conta dos atrasados começa aqui (antes disso o controle era manual, no Notion). */
+export const TRACK_START = '2026-10-01';
+
+export function entregasDoMes(c: { id: string; name: string; calName: string; notionPage: string; combinado: Combinado | null }, cal: string, first: string): Promise<EntregaMes> {
+  return memo(`plan:entregas:${cal}:${first}`, 30_000, async () => {
+    const pageId = await clientPageId(c).catch(() => null);
+    // lê ao vivo da página do cliente; se não der, usa a cópia guardada no cliente
+    const live = pageId ? await memo(`contrato:${pageId}`, 300_000, () => readCombinado(pageId)).catch(() => null) : null;
+    if (live && JSON.stringify(live) !== JSON.stringify(c.combinado)) await setClientCombinado(c.id, live).catch(() => undefined);
+    const combinado = live ?? c.combinado;
+    const { postados, emProducao } = await countMonth(cal, first);
+    // Atrasados: o que faltou postar nos meses anteriores entra neste mês (vai somando até ser postado).
+    // Postar a mais num mês abate o que estava atrasado.
+    const atrasados: Combinado = { reels: 0, post: 0, story: 0 };
+    const deMeses: string[] = [];
+    if (combinado) {
+      const back = addMonths(first, -6);
+      const start = back > TRACK_START ? back : TRACK_START;
+      for (let m = start; m < first; m = addMonths(m, 1)) {
+        const r = await countMonth(cal, m).catch(() => null);
+        if (!r) continue;
+        for (const k of ['reels', 'post', 'story'] as const) {
+          const before = atrasados[k];
+          atrasados[k] = Math.max(0, atrasados[k] + combinado[k] - r.postados[k]);
+          if (atrasados[k] > before && !deMeses.includes(m)) deMeses.push(m);
+        }
+      }
+    }
+    return { combinado, postados, emProducao, atrasados, atrasadosDe: deMeses.map((m) => MONTHS[Number(m.slice(5, 7)) - 1]), pagina: pageId ? `https://www.notion.so/${pageId}` : null };
   });
 }

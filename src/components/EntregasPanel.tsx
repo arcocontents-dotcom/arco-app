@@ -31,10 +31,13 @@ function Ring({ done, prod, total, color }: { done: number; prod: number; total:
 /** Lateral do Planejamento: o combinado com a marca no mês e quanto já foi postado. */
 export default function EntregasPanel({ data, monthLabel, clientName }: { data: EntregaMes; monthLabel: string; clientName: string }) {
   const c = data.combinado;
-  const rows = TYPES.filter((t) => (c?.[t.k] ?? 0) > 0 || data.postados[t.k] > 0);
-  const total = c ? TYPES.reduce((s, t) => s + c[t.k], 0) : 0;
-  const done = TYPES.reduce((s, t) => s + Math.min(data.postados[t.k], c?.[t.k] ?? data.postados[t.k]), 0);
+  // meta do mês = combinado + o que ficou atrasado dos meses anteriores
+  const meta = (k: Entrega) => (c?.[k] ?? 0) + (data.atrasados?.[k] ?? 0);
+  const rows = TYPES.filter((t) => meta(t.k) > 0 || data.postados[t.k] > 0);
+  const total = c ? TYPES.reduce((s, t) => s + meta(t.k), 0) : 0;
+  const done = TYPES.reduce((s, t) => s + Math.min(data.postados[t.k], c ? meta(t.k) : data.postados[t.k]), 0);
   const falta = Math.max(0, total - done);
+  const late = TYPES.reduce((s, t) => s + (data.atrasados?.[t.k] ?? 0), 0);
   return (
     <div role="complementary" className="ent rise" aria-label={`Entregas de ${monthLabel}`} style={{ ['--d' as string]: '140ms' }}>
       <div className="ent-head">
@@ -44,6 +47,11 @@ export default function EntregasPanel({ data, monthLabel, clientName }: { data: 
             <strong className="ent-big">{done}<small>/{total}</small></strong>
             <span className="ent-sub">{total === 0 ? 'Nada combinado para o mês' : falta === 0 ? 'Mês completo ✓' : `Falta${falta > 1 ? 'm' : ''} ${falta} para fechar o mês`}</span>
             <div className="ent-bar" aria-hidden="true"><span style={{ width: `${total ? Math.min(100, (done / total) * 100) : 0}%` }} /></div>
+            {late > 0 && (
+              <span className="ent-late" role="status">
+                <Icon name="clock" size={12} />{late} atrasado{late > 1 ? 's' : ''}{data.atrasadosDe?.length ? ` de ${data.atrasadosDe.join(', ')}` : ''} somado{late > 1 ? 's' : ''} a este mês
+              </span>
+            )}
           </>
         )}
       </div>
@@ -51,7 +59,8 @@ export default function EntregasPanel({ data, monthLabel, clientName }: { data: 
       {c ? (
         <ul className="ent-list">
           {rows.map((t) => {
-            const target = c[t.k];
+            const target = meta(t.k);
+            const lateK = data.atrasados?.[t.k] ?? 0;
             const p = data.postados[t.k];
             const prod = data.emProducao[t.k];
             const left = target - p;
@@ -64,6 +73,7 @@ export default function EntregasPanel({ data, monthLabel, clientName }: { data: 
                 <div className="ent-info">
                   <strong><i style={{ background: t.color }} />{t.label}</strong>
                   <span>{left > 0 ? `Falta${left > 1 ? 'm' : ''} ${left}` : left === 0 ? 'Completo ✓' : `+${-left} além do combinado`}</span>
+                  {lateK > 0 && <small className="ent-late-s">{c[t.k]} do mês + {lateK} atrasado{lateK > 1 ? 's' : ''}</small>}
                   {prod > 0 && <small>{prod} em produção</small>}
                 </div>
               </li>
@@ -79,7 +89,7 @@ export default function EntregasPanel({ data, monthLabel, clientName }: { data: 
       )}
 
       <p className="ent-foot">
-        Conta o que já foi <b>postado</b> com “Referente ao mês” = {monthLabel.split(' ')[0]}. O anel claro é o que está lançado e ainda em produção. Todo mês começa do zero.
+        Conta o que já foi <b>postado</b> com “Referente ao mês” = {monthLabel.split(' ')[0]}. O anel claro é o que está lançado e ainda em produção. Todo mês começa do zero; o que faltou postar no mês anterior entra aqui como atrasado até ser postado.
         {data.pagina && <> <a href={data.pagina.replace('https://www.notion.so/', 'notion://www.notion.so/')} className="ic-inline"><Icon name="external" size={11} />Combinado no Notion</a></>}
       </p>
     </div>

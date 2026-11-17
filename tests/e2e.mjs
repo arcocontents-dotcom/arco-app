@@ -582,7 +582,9 @@ try {
     // lateral: entregas do mês combinadas com a marca
     const ent = pd.getByRole('complementary', { name: /^Entregas de/ });
     await ent.getByText('Reels', { exact: true }).waitFor();
-    await ent.getByText(/\/4$/).first().waitFor();
+    // outubro não teve nada postado: os 4 reels e 2 posts entram em novembro como atrasados
+    await ent.getByText(/6 atrasados de Outubro/).waitFor();
+    await ent.getByText('4 do mês + 4 atrasados').waitFor();
     await shot(pd, '15b-planejamento-entregas');
     await pd.waitForTimeout(300);
     assert.equal(page(A).properties['Reels mensal'].number, 4, 'combinado guardado no cliente');
@@ -1043,6 +1045,49 @@ try {
     const post = [...store.values()].find((x) => txt(x, 'Tarefa') === 'Editar vídeo institucional Alfa' && x.properties.Pessoa?.select?.name === 'Marcos');
     assert.equal(post.properties['Conteúdo'].relation.length, 1, 'tarefa criada do card já vem ligada');
     assert.equal(post.properties.Cliente.rich_text.map((t) => t.plain_text).join(''), 'Studio Alfa');
+    // Vínculos no card: só conteúdos e tarefas do mesmo cliente e do mesmo formato (reels com reels)
+    await dr.getByText('Vínculos · só Reels').waitFor();
+    const csel = dr.getByLabel('Vincular conteúdo da aprovação');
+    if (await csel.count()) {
+      const opts = await csel.locator('option').allTextContents();
+      assert.ok(opts.slice(1).every((o) => o.startsWith('Reels')), `só reels: ${opts}`);
+      assert.ok(!opts.some((o) => /Antes e depois|Promoção de sábado|Rascunho secreto|Post do Beta/.test(o)), 'sem post/story/outro cliente');
+      const reelsOpt = opts.find((o) => o.includes('Depoimento de cliente'));
+      if (reelsOpt) {
+        await csel.selectOption({ label: reelsOpt });
+        await csel.locator('xpath=..').getByRole('button', { name: 'Vincular' }).click();
+        await dr.getByRole('link', { name: /Reels · Depoimento de cliente/ }).waitFor();
+        assert.equal(page(REELS).properties.Planejamento.relation.length, 1, 'conteúdo ligado ao card');
+      }
+    }
+    // Produção: task de post não mostra cards de reels
+    await pd.goto(`${APP}/admin/producao`);
+    await col.getByRole('button', { name: 'Adicionar task para Yan' }).click();
+    const t2 = pd.getByRole('dialog', { name: 'Novo lembrete ou tarefa' });
+    await t2.getByLabel('Tarefa', { exact: true }).fill('Arte do post Alfa');
+    await t2.getByRole('radio', { name: 'Editar post' }).click();
+    await t2.getByRole('radio', { name: 'Cliente', exact: true }).click();
+    await t2.getByLabel('Cliente da agência').selectOption('Studio Alfa');
+    await t2.getByText('Mostrando só cards de Post deste cliente.').waitFor();
+    await pd.waitForTimeout(600);
+    const postOpts = await t2.getByLabel('Conteúdo do planejamento').locator('option').allTextContents();
+    assert.ok(!postOpts.some((o) => /Reels do lançamento|Editar vídeo institucional Alfa/.test(o)), `post não liga com reels: ${postOpts}`);
+    await t2.getByRole('radio', { name: 'Editar reels' }).click();
+    await pd.waitForTimeout(800);
+    const reelOpts = await t2.getByLabel('Conteúdo do planejamento').locator('option').allTextContents();
+    assert.ok(reelOpts.some((o) => /Editar vídeo institucional Alfa/.test(o)), `reels liga com reels: ${reelOpts}`);
+    assert.ok(!reelOpts.some((o) => /^(Post|Story|Fotos)\b/.test(o)), `reels não mostra post: ${reelOpts}`);
+    await t2.getByRole('button', { name: 'Fechar' }).click().catch(() => pd.keyboard.press('Escape'));
+    // Aprovação: o carrossel só liga com cards de post
+    await pd.goto(`${APP}/admin/conteudo/${page(CARR).id}`);
+    await pd.getByText('Vínculos · só Post').waitFor();
+    await pd.getByText(/Não está ligado a um card do planejamento/).waitFor();
+    const apSel = pd.getByLabel('Card do planejamento');
+    if (await apSel.count()) {
+      const ao = await apSel.locator('option').allTextContents();
+      assert.ok(!ao.some((o) => /Reels/.test(o)), `aprovação filtra formato: ${ao}`);
+    }
+    await shot(pd, '31-vinculos-aprovacao');
   });
 
   await step('dashboard da produção: o que cada um captou, editou e postou', async () => {

@@ -566,3 +566,24 @@ export async function setClientCombinado(id: string, c: { reels: number; post: n
   await notion().pages.update({ page_id: id, properties: { [C.reelsM]: { number: c.reels }, [C.postM]: { number: c.post }, [C.storyM]: { number: c.story } } as never });
   invalidate('clients');
 }
+
+/** Vínculos: conteúdos da aprovação ligados a um card do Planejamento. */
+export async function contentsOfPlanning(cardId: string): Promise<ContentRecord[]> {
+  const pages = await queryAll(env.contentsDb, { filter: { property: K.planning, relation: { contains: cardId } } });
+  return pages.filter((p) => !p.archived).map(toContent);
+}
+
+/** Vínculos: conteúdos do cliente ainda não postados (inclui rascunhos), os mais novos primeiro. */
+export async function contentsToLink(clientId: string): Promise<ContentRecord[]> {
+  const pages = await queryAll(env.contentsDb, {
+    filter: { and: [{ property: K.client, relation: { contains: clientId } }, { property: K.status, select: { does_not_equal: 'Postado' } }] },
+    sorts: [{ property: K.date, direction: 'descending' }]
+  });
+  return pages.filter((p) => !p.archived).map(toContent).slice(0, 80);
+}
+
+/** Liga (ou desliga) um conteúdo da aprovação a um card do Planejamento. Só mexe na relação. */
+export async function setContentPlanning(id: string, cardId: string | null, clientId: string | null) {
+  await notion().pages.update({ page_id: id, properties: { [K.planning]: { relation: cardId ? [{ id: cardId }] : [] } } as never });
+  if (clientId) invalidateContents(clientId);
+}

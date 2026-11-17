@@ -3,7 +3,7 @@ import type { PageObjectResponse } from '@notionhq/client/build/src/api-endpoint
 import schema from './schema.json';
 import { env } from './env';
 import { invalidate } from './cache';
-import { MONTHS } from './domain';
+import { MONTHS, formatoDe, mesmoFormato } from './domain';
 import { isPage, listClients, normId, notion, queryAll, select, text, titleProp } from './notion';
 import { planOptions } from './planning';
 import type { Produto } from './produtos';
@@ -189,7 +189,7 @@ export interface OpenCard {
 }
 
 /** Cards abertos do cliente no Planejamento (para ligar uma task a um conteúdo que já existe). */
-export async function openCards(client: string): Promise<OpenCard[]> {
+export async function openCards(client: string, formato?: string | null): Promise<OpenCard[]> {
   const cal = await calNameOf(client);
   if (!cal || !env.planningDb) return [];
   const pages = await queryAll(env.planningDb, {
@@ -198,6 +198,8 @@ export async function openCards(client: string): Promise<OpenCard[]> {
   });
   return pages
     .filter((p) => !p.archived && !(p.properties[P.done]?.type === 'checkbox' && (p.properties[P.done] as { checkbox: boolean }).checkbox))
+    // mesmo formato: reels com reels, post com post (card sem tipo de demanda aparece para todos)
+    .filter((p) => !formatoDe(formato) || !formatoDe(select(p.properties[P.kind])) || mesmoFormato(formato, select(p.properties[P.kind])))
     .slice(0, 60)
     .map((p) => ({ id: p.id, title: text(p.properties[P.title]) || 'Sem título', kind: select(p.properties[P.kind]), note: select(p.properties[P.note]) }));
 }
@@ -221,7 +223,11 @@ export async function linkTaskToPlanning(routineId: string, x: { title: string; 
   let cardId: string | null = null;
   if (chosen && chosen !== 'novo') {
     const p = await notion().pages.retrieve({ page_id: chosen }).catch(() => null);
-    if (p && isPage(p) && normId(p.parent.type === 'database_id' ? p.parent.database_id : '') === normId(env.planningDb)) cardId = p.id;
+    if (p && isPage(p) && normId(p.parent.type === 'database_id' ? p.parent.database_id : '') === normId(env.planningDb)) {
+      // não liga formatos diferentes (reels com post)
+      if (!mesmoFormato(x.format, select(p.properties[P.kind]))) throw new Error('formato');
+      cardId = p.id;
+    }
   }
   if (!cardId && chosen !== 'novo') return null;
   if (!cardId && x.format) {
@@ -311,4 +317,12 @@ export function formatFromKind(kind: string | null): string | null {
   if (k.startsWith('foto')) return 'Editar foto';
   if (k.startsWith('post')) return 'Editar post';
   return null;
+}
+
+/** Tipo de demanda de um card do Planejamento (undefined = não é um card do Planejamento). */
+export async function planCardKind(cardId: string): Promise<string | null | undefined> {
+  if (!env.planningDb) return undefined;
+  const p = await notion().pages.retrieve({ page_id: cardId }).catch(() => null);
+  if (!p || !isPage(p) || normId(p.parent.type === 'database_id' ? p.parent.database_id : '') !== normId(env.planningDb)) return undefined;
+  return select(p.properties[P.kind]);
 }

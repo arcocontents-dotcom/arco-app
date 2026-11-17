@@ -259,3 +259,24 @@ export function formatPhone(p: string): string {
   const m = p.match(/^\+55(\d{2})(\d{4,5})(\d{4})$/);
   return m ? `(${m[1]}) ${m[2]}-${m[3]}` : p;
 }
+
+/**
+ * Formato de um conteúdo para os vínculos (Planejamento ↔ Produção ↔ Aprovação).
+ * Aceita o tipo de demanda do card ("Reels 2"), o formato da task ("Editar reels") ou o tipo do conteúdo ("Carrossel").
+ * Reels só liga com Reels, Post com Post (carrossel conta como post), Story com Story, Foto com Foto.
+ */
+export type Formato = 'reels' | 'post' | 'story' | 'foto';
+export function formatoDe(s: string | null | undefined): Formato | null {
+  const k = (s ?? '').toLowerCase().replace(/^editar\s+/, '').trim();
+  if (k.startsWith('reels') || k.startsWith('víd') || k.startsWith('vid')) return 'reels';
+  if (k.startsWith('stor')) return 'story';
+  if (k.startsWith('foto')) return 'foto';
+  if (k.startsWith('post') || k.startsWith('carross')) return 'post';
+  return null;
+}
+/** Dois itens podem ser ligados? Se um dos lados não tem formato (roteiro, postar), vale qualquer um. */
+export const mesmoFormato = (a: string | null | undefined, b: string | null | undefined) => {
+  const fa = formatoDe(a), fb = formatoDe(b);
+  return !fa || !fb || fa === fb;
+};
+export const FORMATO_LABEL: Record<Formato, string> = { reels: 'Reels', post: 'Post', story: 'Story', foto: 'Foto' };

@@ -5,7 +5,8 @@ import { parseDay, todayIn } from '@/lib/domain';
 import { env } from '@/lib/env';
 import { diffLine, logHistory } from '@/lib/historico';
 import { logActivity } from '@/lib/registro';
-import { linkTaskToPlanning, openCards, setTaskCard, type OpenCard } from '@/lib/vinculo';
+import { linkTaskToPlanning, openCards, planCardKind, setTaskCard, type OpenCard } from '@/lib/vinculo';
+import { mesmoFormato } from '@/lib/domain';
 import {
   FORMATS, ROUTINE_TYPES, TEAM, URGENCY_LABEL, WEEKDAYS, createRoutine, getRoutine, passContent, setContentDone, setRoutineDone, trashRoutine, updateRoutine,
   type RoutineInput
@@ -56,6 +57,13 @@ export async function saveRoutineAction(
   const who = await requireAdmin();
   const v = clean(x);
   if (typeof v === 'string') return { ok: false, error: v };
+  // vínculo só com o mesmo formato: reels com reels, post com post
+  if (link && link !== 'novo' && link !== 'desligar') {
+    const card = await planCardKind(link).catch(() => undefined);
+    if (card !== undefined && !mesmoFormato(v.format, card)) {
+      return { ok: false, error: `Esse card é de ${card}: não dá para ligar uma task de ${v.format} a ele. Escolha um card do mesmo formato.` };
+    }
+  }
   try {
     const before = id ? await updateRoutine(id, v) : null;
     const rid = id ?? (await createRoutine(v));
@@ -76,13 +84,17 @@ export async function saveRoutineAction(
     }
     let planId: string | null = null;
     if (link === 'desligar') {
-      if (id) await setTaskCard(rid, null);
+      if (id) {
+        await setTaskCard(rid, null);
+        await logHistory(rid, `${who.name} desvinculou do planejamento`);
+      }
     } else if (link && v.client) {
       // card novo (edição/roteiro/postagem de cliente da agência) ou um card que já existe no Planejamento
       planId = await linkTaskToPlanning(rid, { title: v.title, client: v.client, format: v.format, date: v.date, desc: v.desc, person: v.person }, link).catch((e) => {
         console.error('[producao] planejamento', e);
         return null;
       });
+      if (planId && planId !== before?.contentId) await logHistory(rid, `${who.name} ${link === 'novo' ? 'criou o card no planejamento' : 'vinculou a um card do planejamento'}`);
     }
     return { ok: true, id: rid, planId };
   } catch (e) {
@@ -135,7 +147,7 @@ export async function toggleContentAction(id: string, done: boolean): Promise<R>
 }
 
 /** Cards abertos do cliente no Planejamento, para ligar a task a um conteúdo que já existe. */
-export async function openCardsAction(client: string): Promise<OpenCard[]> {
+export async function openCardsAction(client: string, format?: string | null): Promise<OpenCard[]> {
   await requireAdmin();
-  return openCards(String(client).slice(0, 120)).catch(() => []);
+  return openCards(String(client).slice(0, 120), format ? String(format).slice(0, 40) : null).catch(() => []);
 }
