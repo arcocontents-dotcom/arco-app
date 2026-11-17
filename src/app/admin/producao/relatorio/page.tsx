@@ -164,6 +164,28 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
               ))}
               {!d.agendamentos.porPessoa.length && <li className="hint">Nenhuma captação agendada pelo app neste mês.</li>}
             </ul>
+            {d.agendamentos.lista.length > 0 && (
+              <details className="ag-hist" open={d.agendamentos.lista.length <= 12}>
+                <summary className="label">Histórico de agendamentos da agência · {d.agendamentos.lista.length}</summary>
+                <table className="ag-table">
+                  <thead>
+                    <tr><th>Agendou em</th><th>Quem agendou</th><th>Cliente</th><th>Captação</th><th>Dia</th><th>Situação</th></tr>
+                  </thead>
+                  <tbody>
+                    {d.agendamentos.lista.map((x) => (
+                      <tr key={x.id} className={x.status === 'Cancelada' ? 'cancel' : ''}>
+                        <td>{x.createdAt.slice(8, 10)}/{x.createdAt.slice(5, 7)}</td>
+                        <td>{x.by}</td>
+                        <td>{x.client ?? '—'}</td>
+                        <td><a href={x.url} target="_blank" rel="noreferrer">{x.title}</a></td>
+                        <td>{x.day ? `${x.day.slice(8, 10)}/${x.day.slice(5, 7)}` : '—'}</td>
+                        <td>{x.status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </details>
+            )}
           </section>
         )}
 

@@ -1098,6 +1098,10 @@ try {
     const ag = pd.getByRole('region', { name: 'Captações agendadas' });
     await ag.getByText(/Captações agendadas no mês · \d+ no total/).waitFor();
     await ag.locator('.ag-name', { hasText: 'Arco' }).waitFor();
+    await ag.getByText(/Histórico de agendamentos da agência · \d+/).waitFor();
+    const hist = ag.locator('.ag-table tbody tr');
+    assert.ok((await hist.count()) >= 1, 'histórico unificado de agendamentos');
+    await hist.first().getByRole('cell', { name: /Arco/ }).first().waitFor();
     const yan = pd.locator('.db-person', { hasText: 'Yan' });
     await yan.locator('li.f-capt').first().waitFor();
     await yan.getByLabel('Ver tudo o que Yan produziu').click();

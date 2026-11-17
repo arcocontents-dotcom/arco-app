@@ -507,7 +507,12 @@ export interface TeamDashboard {
   team: MetricCounts;
   posted: PostedTotals;
   /** Captações agendadas no mês (pela aba Captação), por quem agendou: conta como produção dela. */
-  agendamentos: { total: number; porPessoa: { name: string; n: number }[] };
+  agendamentos: {
+    total: number;
+    porPessoa: { name: string; n: number }[];
+    /** Histórico unificado da agência: cada captação agendada no mês, quem agendou e quando. */
+    lista: { id: string; title: string; client: string | null; by: string; createdAt: string; day: string | null; status: string; url: string }[];
+  };
 }
 
 /**
@@ -668,10 +673,13 @@ export async function teamDashboard(first: string, today: string): Promise<TeamD
     // Agendamentos: quem marcou a captação pelo app (vale como produção, sem lançar tarefa)
     const ag = new Map<string, number>();
     let agTotal = 0;
+    const agList: TeamDashboard['agendamentos']['lista'] = [];
     for (const sh of scheduled) {
-      if (sh.createdAt < first || sh.createdAt > last || sh.status === 'Cancelada') continue;
-      agTotal++;
+      if (sh.createdAt < first || sh.createdAt > last) continue;
       const who = (sh.scheduledBy ?? 'Sem registro').replace(/ \(admin\)$/, '');
+      agList.push({ id: sh.id, title: sh.title, client: sh.client || null, by: who, createdAt: sh.createdAt, day: sh.day, status: sh.status, url: sh.url });
+      if (sh.status === 'Cancelada') continue;
+      agTotal++;
       ag.set(who, (ag.get(who) ?? 0) + 1);
       const person = TEAM.find((t) => t.toLowerCase() === who.toLowerCase());
       if (person) bump(person, 'agendou', { title: sh.title, client: sh.client || null, day: sh.day, url: sh.url });
@@ -679,7 +687,11 @@ export async function teamDashboard(first: string, today: string): Promise<TeamD
     team.agendou = agTotal;
     return {
       month: first, people, team, posted: postedT,
-      agendamentos: { total: agTotal, porPessoa: [...ag.entries()].map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n) }
+      agendamentos: {
+        total: agTotal,
+        porPessoa: [...ag.entries()].map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n),
+        lista: agList.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || (b.day ?? '').localeCompare(a.day ?? ''))
+      }
     };
   }).catch((e) => {
     console.error('[producao] dashboard', e);
