@@ -1050,6 +1050,9 @@ try {
     await pd.getByText('Captações feitas').waitFor();
     await pd.getByText('Postado no Instagram', { exact: true }).first().waitFor();
     await pd.getByText('Pelo cliente', { exact: true }).waitFor();
+    const ag = pd.getByRole('region', { name: 'Captações agendadas' });
+    await ag.getByText(/Captações agendadas no mês · \d+ no total/).waitFor();
+    await ag.locator('.ag-name', { hasText: 'Arco' }).waitFor();
     const yan = pd.locator('.db-person', { hasText: 'Yan' });
     await yan.locator('li.f-capt').first().waitFor();
     await yan.getByLabel('Ver tudo o que Yan produziu').click();

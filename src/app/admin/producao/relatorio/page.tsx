@@ -46,7 +46,7 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
     { label: 'Reels postados', n: ps?.reels ?? 0, sub: 'vídeos no feed', cls: 'f-reels' },
     { label: 'Posts estáticos', n: ps?.post ?? 0, sub: 'post, carrossel e fotos', cls: 'f-post' },
     { label: 'Stories postados', n: ps?.story ?? 0, sub: 'stories', cls: 'f-story' },
-    { label: 'Captações feitas', n: d?.team.captacoes ?? 0, sub: `${d?.team.captou ?? 0} vídeos captados (sem repetir dupla)`, cls: 'f-capt' }
+    { label: 'Captações feitas', n: d?.team.captacoes ?? 0, sub: `${d?.team.captou ?? 0} vídeos captados · ${d?.agendamentos.total ?? 0} agendadas`, cls: 'f-capt' }
   ];
 
   return (
@@ -148,6 +148,24 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
             );
           })}
         </section>
+
+        {d && (
+          <section className="rp-card rise" aria-label="Captações agendadas" style={{ ['--d' as string]: '220ms' }}>
+            <h2 className="label">Captações agendadas no mês · {d.agendamentos.total} no total</h2>
+            <p className="hint" style={{ margin: 0 }}>Cada captação marcada na aba Captação conta como produção de quem agendou, sem precisar lançar tarefa.</p>
+            <ul className="ag-rank">
+              {d.agendamentos.porPessoa.map((x) => (
+                <li key={x.name}>
+                  <span className="pav sm">{x.name.charAt(0)}</span>
+                  <span className="ag-name">{x.name}</span>
+                  <span className="db-bar" aria-hidden="true" style={{ ['--fc' as string]: '#e03e3e' }}><span style={{ width: `${Math.round((x.n / Math.max(1, d.agendamentos.porPessoa[0]?.n ?? 1)) * 100)}%` }} /></span>
+                  <b>{x.n}</b>
+                </li>
+              ))}
+              {!d.agendamentos.porPessoa.length && <li className="hint">Nenhuma captação agendada pelo app neste mês.</li>}
+            </ul>
+          </section>
+        )}
 
         {ps && (
           <section className="rp-card rise" aria-label="Postado no Instagram" style={{ ['--d' as string]: '240ms' }}>

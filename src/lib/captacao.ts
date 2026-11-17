@@ -7,6 +7,7 @@ import { localParts } from './domain';
 import { isPage, normId, notion, queryAll, select, text, titleProp } from './notion';
 import { multi } from './planning';
 import { produtosToText, textToProdutos, type Produto } from './produtos';
+import { creatorOf } from './historico';
 
 // 📸 Captações: calendário de gravação da agência.
 // Fica numa tabela do app no Notion (aparece no Notion Calendar) e na aba Captação do site.
@@ -35,6 +36,9 @@ export interface Shoot {
   products: Produto[];
   /** Quem agendou e editou (mais novo em cima). */
   history: string;
+  /** Quem agendou pelo app e quando a captação foi criada. */
+  scheduledBy: string | null;
+  createdAt: string;
   url: string;
 }
 
@@ -64,6 +68,8 @@ function toShoot(p: PageObjectResponse): Shoot | null {
     note: text(pr[S.note]),
     products: textToProdutos(text(pr[S.products])),
     history: text(pr[S.history]),
+    scheduledBy: creatorOf(text(pr[S.history])),
+    createdAt: p.created_time.slice(0, 10),
     url: `https://www.notion.so/${normId(p.id)}`
   };
 }

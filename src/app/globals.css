@@ -1526,3 +1526,7 @@ details.db-person[open] .db-more { color: var(--muted); }
 .fin-lock-box p { margin: 0; font-size: 13.5px; color: var(--muted); line-height: 1.5; }
 .fin-lock-box input { text-align: center; font-size: 22px; letter-spacing: 0.3em; }
 .fin-lock-out { display: flex; justify-content: flex-end; margin-bottom: -10px; }
+.ag-rank { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ag-rank li { display: grid; grid-template-columns: 26px 120px 1fr 34px; gap: 10px; align-items: center; font-size: 14px; }
+.ag-rank .pav { --pc: var(--ink); }
+.ag-rank b { font-family: var(--display); font-size: 18px; text-align: right; }

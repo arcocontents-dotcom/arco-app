@@ -459,6 +459,7 @@ export async function passContent(id: string, to: Person | 'Finalizado', editedB
 // ---------- dashboard da produção (equipe) ----------
 
 export const METRICS = [
+  { k: 'agendou', label: 'Captações agendadas', cls: 'f-capt' },
   { k: 'captacoes', label: 'Captações', cls: 'f-capt' },
   { k: 'captou', label: 'Vídeos captados', cls: 'f-capt' },
   { k: 'reels', label: 'Vídeos editados', cls: 'f-reels' },
@@ -505,6 +506,8 @@ export interface TeamDashboard {
   people: { name: Person; m: MetricCounts; items: DashItem[]; posted: { reels: number; post: number; story: number; outro: number }; dupla: number }[];
   team: MetricCounts;
   posted: PostedTotals;
+  /** Captações agendadas no mês (pela aba Captação), por quem agendou: conta como produção dela. */
+  agendamentos: { total: number; porPessoa: { name: string; n: number }[] };
 }
 
 /**
@@ -520,7 +523,7 @@ export async function teamDashboard(first: string, today: string): Promise<TeamD
   const monthName = MONTHS[Number(first.slice(5, 7)) - 1];
   return memo(`prod:dash:${first}:${today}`, 30_000, async () => {
     const near = [{ property: P.date, date: { on_or_after: addDays(first, -75) } }, { property: P.date, date: { on_or_before: addDays(last, 75) } }];
-    const [edited, editedNoMonth, recordedDated, recordedNoDate, posted, shoots, routines] = await Promise.all([
+    const [edited, editedNoMonth, recordedDated, recordedNoDate, posted, shoots, scheduled, routines] = await Promise.all([
       queryAll(env.planningDb!, { filter: { and: [{ property: P.editMonth, select: { equals: monthName } }, ...near] } }),
       queryAll(env.planningDb!, {
         filter: {
@@ -545,6 +548,8 @@ export async function teamDashboard(first: string, today: string): Promise<TeamD
         }
       }),
       listShoots(first, last).catch(() => [] as Shoot[]),
+      // agendadas neste mês (a captação pode ser em outro mês)
+      listShoots(addDays(first, -60), addDays(last, 120)).catch(() => [] as Shoot[]),
       listRoutines().catch(() => [] as Routine[])
     ]);
     const people = TEAM.map((name) => ({ name, m: zeroM(), items: [] as DashItem[], posted: { reels: 0, post: 0, story: 0, outro: 0 }, dupla: 0 }));
@@ -660,7 +665,22 @@ export async function teamDashboard(first: string, today: string): Promise<TeamD
       bump(r.person, k, { title: r.title, client: r.client || null, day: r.date, url: `https://www.notion.so/${normId(r.id)}` });
     }
     for (const p of people) p.items.sort((a, b) => (b.day ?? '').localeCompare(a.day ?? ''));
-    return { month: first, people, team, posted: postedT };
+    // Agendamentos: quem marcou a captação pelo app (vale como produção, sem lançar tarefa)
+    const ag = new Map<string, number>();
+    let agTotal = 0;
+    for (const sh of scheduled) {
+      if (sh.createdAt < first || sh.createdAt > last || sh.status === 'Cancelada') continue;
+      agTotal++;
+      const who = (sh.scheduledBy ?? 'Sem registro').replace(/ \(admin\)$/, '');
+      ag.set(who, (ag.get(who) ?? 0) + 1);
+      const person = TEAM.find((t) => t.toLowerCase() === who.toLowerCase());
+      if (person) bump(person, 'agendou', { title: sh.title, client: sh.client || null, day: sh.day, url: sh.url });
+    }
+    team.agendou = agTotal;
+    return {
+      month: first, people, team, posted: postedT,
+      agendamentos: { total: agTotal, porPessoa: [...ag.entries()].map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n) }
+    };
   }).catch((e) => {
     console.error('[producao] dashboard', e);
     return 'erro';
