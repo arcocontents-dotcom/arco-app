@@ -1,45 +1,9 @@
-import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { requireAdmin } from '@/lib/access';
-import { env } from '@/lib/env';
-import { listClients, sameId } from '@/lib/notion';
-import { parseDay, todayIn } from '@/lib/domain';
-import AdminShell from '@/components/AdminShell';
-import ContentForm from '@/components/ContentForm';
 
-export const dynamic = 'force-dynamic';
-
-export default async function NovoConteudo({ searchParams }: { searchParams: Promise<{ c?: string; d?: string }> }) {
+// Conteúdo novo nasce no Planejamento (ou numa tarefa); a Aprovação é só para revisar e aprovar.
+export default async function NovoConteudo({ searchParams }: { searchParams: Promise<{ c?: string }> }) {
   await requireAdmin();
-  const sp = await searchParams;
-  const clients = (await listClients()).filter((c) => !c.cancelled);
-  const client = clients.find((c) => sameId(c.id, sp.c ?? '')) ?? clients[0];
-  if (!client) {
-    return (
-      <AdminShell>
-        <p>Crie um cliente primeiro.</p>
-        <Link className="btn" href="/admin/clientes/novo" style={{ alignSelf: 'flex-start' }}>+ Novo cliente</Link>
-      </AdminShell>
-    );
-  }
-  return (
-    <AdminShell current={client.id}>
-      <p className="label rise">{client.name}</p>
-      <h1 className="display rise" style={{ fontSize: 'clamp(40px, 6vw, 72px)', ['--d' as string]: '60ms' }}>Novo conteúdo</h1>
-      <ContentForm
-        clients={clients.map((c) => ({ id: c.id, name: c.name }))}
-        initial={{
-          clientId: client.id,
-          title: '',
-          day: parseDay(sp.d) ?? todayIn(env.timeZone),
-          time: '18:00',
-          type: 'Reels',
-          caption: '',
-          videoUrl: '',
-          coverUrl: '',
-          artUrls: [],
-          storyImageUrl: ''
-        }}
-      />
-    </AdminShell>
-  );
+  const { c } = await searchParams;
+  redirect(c ? `/admin/planejamento?c=${encodeURIComponent(c)}` : '/admin/planejamento');
 }

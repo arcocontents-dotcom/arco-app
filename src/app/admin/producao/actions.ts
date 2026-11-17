@@ -3,6 +3,7 @@
 import { requireAdmin } from '@/lib/access';
 import { parseDay, todayIn } from '@/lib/domain';
 import { env } from '@/lib/env';
+import { diffLine, logHistory } from '@/lib/historico';
 import { linkTaskToPlanning, openCards, setTaskCard, type OpenCard } from '@/lib/vinculo';
 import {
   FORMATS, ROUTINE_TYPES, TEAM, URGENCY_LABEL, WEEKDAYS, createRoutine, passContent, setContentDone, setRoutineDone, trashRoutine, updateRoutine,
@@ -29,12 +30,15 @@ function clean(x: Partial<RoutineInput>): RoutineInput | string {
   return { title, person: person as RoutineInput['person'], type: type as RoutineInput['type'], days, date, urgency, client: String(x.client ?? '').trim().slice(0, 120), format, formatOther, desc: String(x.desc ?? '').trim().slice(0, 1900) };
 }
 
+const br = (d: string | null | undefined) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : '');
+
 export async function toggleRoutineAction(id: string, day: string, done: boolean): Promise<R> {
-  await requireAdmin();
+  const v = await requireAdmin();
   const d = parseDay(day);
   if (!d) return { ok: false, error: 'Dia inválido.' };
   try {
     await setRoutineDone(id, d, done);
+    await logHistory(id, `${v.name} ${done ? 'marcou como feita' : 'desmarcou'} (${br(d)})`);
     return { ok: true };
   } catch (e) {
     console.error('[producao] feito', e);
@@ -48,12 +52,27 @@ export async function saveRoutineAction(
   /** Card do Planejamento: id de um existente, 'novo' para criar pendente, 'desligar' para tirar, null para não mexer. */
   link: string | null = 'novo'
 ): Promise<R<{ id: string; planId: string | null }>> {
-  await requireAdmin();
+  const who = await requireAdmin();
   const v = clean(x);
   if (typeof v === 'string') return { ok: false, error: v };
   try {
-    if (id) await updateRoutine(id, v);
+    const before = id ? await updateRoutine(id, v) : null;
     const rid = id ?? (await createRoutine(v));
+    if (before) {
+      const diff = diffLine([
+        ['tarefa', before.title, v.title],
+        ['pessoa', before.person, v.person],
+        ['entrega', br(before.date), br(v.date)],
+        ['formato', before.format === 'Outro' ? before.formatOther : before.format, v.format === 'Outro' ? v.formatOther : v.format],
+        ['urgência', before.urgency, v.urgency],
+        ['cliente', before.client, v.client]
+      ]);
+      const descChanged = (before.desc ?? '') !== v.desc;
+      const line = [diff, descChanged ? 'descrição alterada' : ''].filter(Boolean).join(' · ');
+      if (line) await logHistory(rid, `${who.name} editou: ${line}`);
+    } else {
+      await logHistory(rid, `${who.name} lançou para ${v.person}${v.date ? ` · entrega ${br(v.date)}` : ''}`);
+    }
     let planId: string | null = null;
     if (link === 'desligar') {
       if (id) await setTaskCard(rid, null);

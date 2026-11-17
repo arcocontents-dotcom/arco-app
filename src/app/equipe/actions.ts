@@ -4,6 +4,7 @@ import { parseDay } from '@/lib/domain';
 import { allow } from '@/lib/ratelimit';
 import { setShootStatus } from '@/lib/captacao';
 import { setContentDone, setRoutineDone, taskBelongsTo, validTeamKey } from '@/lib/producao';
+import { logHistory } from '@/lib/historico';
 
 type R = { ok: true } | { ok: false; error: string };
 
@@ -17,8 +18,10 @@ export async function teamToggleAction(person: string, k: string, source: string
       const d = parseDay(day ?? '');
       if (!d) return { ok: false, error: 'Dia inválido.' };
       await setRoutineDone(id, d, done);
+      await logHistory(id, `${person} ${done ? 'marcou como feita' : 'desmarcou'} (${d.slice(8, 10)}/${d.slice(5, 7)}) pelo link da equipe`);
     } else if (source === 'captacao') {
       await setShootStatus(id, done ? 'Realizada' : 'Agendada');
+      await logHistory(id, `${person} ${done ? 'marcou como realizada' : 'voltou para agendada'} pelo link da equipe`);
     } else {
       await setContentDone(id, done);
     }

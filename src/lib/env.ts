@@ -15,6 +15,16 @@ export const env = {
   get adminEmail() {
     return (read('ADMIN_EMAIL') ?? 'arcocontents@gmail.com').toLowerCase();
   },
+  /** Tabela "🔑 Acessos do app": outros administradores (e quem vê o Financeiro). */
+  get accessDb() {
+    return read('NOTION_ACCESS_DB') ?? null;
+  },
+  get finDb() {
+    return read('NOTION_FIN_DB') ?? null;
+  },
+  get finAccountsDb() {
+    return read('NOTION_FIN_ACCOUNTS_DB') ?? null;
+  },
   get appUrl() {
     return (read('APP_URL') ?? 'http://localhost:3000').replace(/\/$/, '');
   },

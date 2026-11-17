@@ -4,7 +4,7 @@
 export type IconName =
   | 'calendar' | 'grid' | 'users' | 'chart' | 'feed' | 'week' | 'month' | 'plus' | 'eye' | 'logout'
   | 'search' | 'bell' | 'download' | 'check' | 'pencil' | 'x' | 'send' | 'link' | 'chat' | 'left'
-  | 'right' | 'copy' | 'image' | 'video' | 'trash' | 'clock' | 'inbox' | 'undo' | 'command' | 'bulb' | 'phone' | 'external' | 'drag';
+  | 'right' | 'copy' | 'image' | 'video' | 'trash' | 'clock' | 'inbox' | 'undo' | 'command' | 'bulb' | 'phone' | 'external' | 'drag' | 'wallet';
 
 const P = {
   fill: 'none',
@@ -159,6 +159,12 @@ function paths(name: IconName) {
       return (<>
         <path d="M18 13.5V19a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 19V7.5A1.5 1.5 0 0 1 5.5 6H11" />
         <g className="a-nudge"><path d="M14.5 3.5h6v6M20.5 3.5 11 13" /></g>
+      </>);
+    case 'wallet':
+      return (<>
+        <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3" />
+        <rect x="3.5" y="7.5" width="17" height="12" rx="2.5" />
+        <g className="a-nudge"><path d="M20.5 11.5h-4a2 2 0 0 0 0 4h4" /><circle cx="16.5" cy="13.5" r=".6" fill="currentColor" /></g>
       </>);
     case 'drag':
       return (<>{[7, 12, 17].flatMap((y) => [9, 15].map((x) => <circle key={`${x}${y}`} cx={x} cy={y} r="1" fill="currentColor" stroke="none" />))}</>);

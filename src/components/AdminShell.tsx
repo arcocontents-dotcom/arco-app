@@ -3,10 +3,11 @@ import Link from 'next/link';
 import { env } from '@/lib/env';
 import { listAllOpenContents, listClients, sameId } from '@/lib/notion';
 import { localParts, todayIn } from '@/lib/domain';
+import { currentViewer } from '@/lib/access';
 import Icon from './Icon';
 import CommandPalette from './CommandPalette';
 
-type Section = 'calendario' | 'captacao' | 'gestao' | 'pendencias' | 'planejamento' | 'producao';
+type Section = 'calendario' | 'captacao' | 'financeiro' | 'gestao' | 'pendencias' | 'planejamento' | 'producao';
 
 /** Conteúdos que pedem ação: atrasados (data passou e não postou) e ajustes/reprovados. */
 export async function alerts() {
@@ -22,7 +23,8 @@ export async function alerts() {
 export default async function AdminShell({
   current, children, section = 'calendario'
 }: { current?: string | null; children: ReactNode; section?: Section }) {
-  const [all, a] = await Promise.all([listClients().catch(() => []), alerts()]);
+  const [all, a, viewer] = await Promise.all([listClients().catch(() => []), alerts(), currentViewer().catch(() => null)]);
+  const canFinance = viewer?.role === 'admin' && viewer.finance;
   const clients = all.filter((c) => !c.cancelled);
   const gone = all.filter((c) => c.cancelled);
   const active = (id: string | null) => clients.some((c) => sameId(c.id, id));
@@ -56,6 +58,11 @@ export default async function AdminShell({
           <Link href="/admin/captacao" aria-current={section === 'captacao' ? 'page' : undefined}>
             <Icon name="video" /> <span>Captação</span>
           </Link>
+          {canFinance && (
+            <Link href="/admin/financeiro" aria-current={section === 'financeiro' ? 'page' : undefined}>
+              <Icon name="wallet" /> <span>Financeiro</span>
+            </Link>
+          )}
           <Link href="/admin/gestao" aria-current={section === 'gestao' ? 'page' : undefined}>
             <Icon name="grid" /> <span>Gestão</span>
           </Link>

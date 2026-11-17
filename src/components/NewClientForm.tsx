@@ -32,7 +32,7 @@ export default function NewClientForm() {
           <p className="hint">Nenhum e-mail liberado ainda. Você pode liberar na página de acessos.</p>
         )}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <Link className="btn" href={`/admin/conteudo/novo?c=${done.id}`}>+ Primeiro conteúdo</Link>
+          <Link className="btn" href={`/admin/planejamento?c=${done.id}`}>Abrir o planejamento</Link>
           <Link className="btn outline" href={`/admin/clientes/${done.id}`}>Acessos e logo</Link>
         </div>
       </div>

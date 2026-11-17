@@ -1,6 +1,7 @@
 import 'server-only';
 import { createHmac } from 'node:crypto';
 import type { PageObjectResponse } from '@notionhq/client/build/src/api-endpoints';
+import { creatorOf } from './historico';
 import schema from './schema.json';
 import { env } from './env';
 import { invalidate, memo } from './cache';
@@ -57,6 +58,9 @@ export interface ProdTask {
   desc?: string | null;
   /** Card do Planejamento ligado (task da Produção). */
   planId?: string | null;
+  /** Quem lançou e o histórico de alterações (tasks da Produção). */
+  by?: string | null;
+  history?: string | null;
 }
 
 export interface Routine {
@@ -79,6 +83,8 @@ export interface Routine {
   desc: string;
   /** Card do Planejamento (Calendário mensal) ligado. */
   contentId: string | null;
+  /** Quem lançou, editou e marcou (mais novo em cima). */
+  history: string;
 }
 
 export const routineConfigured = () => !!env.routineDb;
@@ -139,6 +145,7 @@ function toRoutine(p: PageObjectResponse): Routine {
     })(),
     formatOther: text(pr[R.formatOther]),
     desc: text(pr[R.desc]),
+    history: text(pr[R.history]),
     contentId: (() => {
       const c = pr[R.content];
       return c?.type === 'relation' ? c.relation[0]?.id ?? null : null;
@@ -290,6 +297,8 @@ export async function productionWeek(
       fmt: r.format,
       desc: r.desc || null,
       planId: r.contentId,
+      by: creatorOf(r.history),
+      history: r.history || null,
       note: null,
       type: r.type,
       url: `https://www.notion.so/${normId(r.id)}`,
@@ -391,10 +400,16 @@ export async function createRoutine(x: RoutineInput): Promise<string> {
   return p.id;
 }
 
-export async function updateRoutine(id: string, x: RoutineInput) {
-  await routinePage(id);
+/** Atualiza e devolve como estava antes (para o histórico). */
+export async function updateRoutine(id: string, x: RoutineInput): Promise<Routine> {
+  const before = toRoutine(await routinePage(id));
   await notion().pages.update({ page_id: id, properties: routineProps(x) as never });
   invalidate('prod:');
+  return before;
+}
+
+export async function getRoutine(id: string): Promise<Routine> {
+  return toRoutine(await routinePage(id));
 }
 
 /** Tirar da lista: vai para a lixeira do Notion (dá para restaurar por 30 dias). */

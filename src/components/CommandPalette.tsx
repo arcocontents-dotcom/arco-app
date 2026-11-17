@@ -40,7 +40,7 @@ export default function CommandPalette({ clients, current }: { clients: C[]; cur
   const items = useMemo<Item[]>(() => {
     const cur = clients.find((c) => c.id === current) ?? null;
     const base: Item[] = [
-      ...(cur ? [{ key: 'new-here', label: `Novo conteúdo · ${cur.name}`, hint: 'Criar', href: `/admin/conteudo/novo?c=${cur.id}`, icon: 'plus' as const, words: 'novo conteudo post reels story criar' }] : []),
+      ...(cur ? [{ key: 'new-here', label: `Planejamento · ${cur.name}`, hint: 'Criar', href: `/admin/planejamento?c=${cur.id}`, icon: 'plus' as const, words: 'novo conteudo post reels story criar planejamento' }] : []),
       { key: 'plan', label: 'Planejamento', hint: 'Ideias e produção', href: '/admin/planejamento', icon: 'bulb', words: 'planejamento ideias producao pauta notion calendario mensal' },
       { key: 'cal', label: 'Aprovação', hint: 'Calendário editorial', href: '/admin', icon: 'calendar', words: 'aprovacao calendario editorial mes' },
       { key: 'pend', label: 'Pendências', hint: 'Ir para', href: '/admin/pendencias', icon: 'bell', words: 'pendencias atrasados ajustes reprovados alertas' },
@@ -52,7 +52,7 @@ export default function CommandPalette({ clients, current }: { clients: C[]; cur
       base.push(
         { key: `cal-${c.id}`, label: c.name, hint: 'Aprovação', href: `/admin?c=${c.id}`, icon: 'calendar', words: `${c.name} calendario aprovacao` },
         { key: `plan-${c.id}`, label: `Planejamento · ${c.name}`, hint: 'Ideias e produção', href: `/admin/planejamento?c=${c.id}`, icon: 'bulb', words: `${c.name} planejamento ideias` },
-        { key: `new-${c.id}`, label: `Novo conteúdo · ${c.name}`, hint: 'Criar', href: `/admin/conteudo/novo?c=${c.id}`, icon: 'plus', words: `${c.name} novo conteudo` },
+        { key: `new-${c.id}`, label: `Planejamento · ${c.name}`, hint: 'Criar', href: `/admin/planejamento?c=${c.id}`, icon: 'plus', words: `${c.name} novo conteudo planejamento` },
         { key: `man-${c.id}`, label: `Gerenciar ${c.name}`, hint: 'Acessos e dados', href: `/admin/clientes/${c.id}`, icon: 'users', words: `${c.name} gerenciar acesso link logo instagram` },
         { key: `see-${c.id}`, label: `Ver como ${c.name}`, hint: 'Visão do cliente', href: `/c/${c.id}`, icon: 'eye', words: `${c.name} ver cliente aprovacao feed` }
       );

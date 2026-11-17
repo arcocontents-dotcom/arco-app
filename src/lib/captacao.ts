@@ -33,6 +33,8 @@ export interface Shoot {
   note: string;
   /** O que vai ser feito: Reels ×2, Story ×2… */
   products: Produto[];
+  /** Quem agendou e editou (mais novo em cima). */
+  history: string;
   url: string;
 }
 
@@ -61,6 +63,7 @@ function toShoot(p: PageObjectResponse): Shoot | null {
     place: text(pr[S.place]),
     note: text(pr[S.note]),
     products: textToProdutos(text(pr[S.products])),
+    history: text(pr[S.history]),
     url: `https://www.notion.so/${normId(p.id)}`
   };
 }
@@ -142,10 +145,11 @@ export async function createShoot(x: ShootInput): Promise<string> {
   return p.id;
 }
 
-export async function updateShoot(id: string, x: ShootInput) {
-  await shootPage(id);
+export async function updateShoot(id: string, x: ShootInput): Promise<Shoot | null> {
+  const before = toShoot(await shootPage(id));
   await notion().pages.update({ page_id: id, properties: shootProps(x) as never });
   invalidate('prod:');
+  return before;
 }
 
 export async function setShootStatus(id: string, status: ShootStatus) {

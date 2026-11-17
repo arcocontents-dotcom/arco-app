@@ -13,6 +13,9 @@ export const CONTENTS_DB = '22222222222222222222222222222222';
 export const PLANNING_DB = '33333333333333333333333333333333';
 export const ROUTINE_DB = '44444444444444444444444444444444';
 export const SHOOTS_DB = '66666666666666666666666666666666';
+export const ACCESS_DB = '77777777777777777777777777777777';
+export const FIN_DB = '88888888888888888888888888888888';
+export const FINACC_DB = '99999999999999999999999999999999';
 
 const TYPES = {
   [CLIENTS_DB]: {
@@ -33,10 +36,20 @@ const TYPES = {
     [PL.briefBy]: 'multi_select', [PL.deadline]: 'formula'
   },
   [SHOOTS_DB]: {
-    'Captação': 'title', Data: 'date', Cliente: 'rich_text', 'Quem vai': 'multi_select', Tipo: 'select', Status: 'select', Local: 'rich_text', 'Observação': 'rich_text', Produtos: 'rich_text', 'Conteúdos': 'relation'
+    'Captação': 'title', Data: 'date', Cliente: 'rich_text', 'Quem vai': 'multi_select', Tipo: 'select', Status: 'select', Local: 'rich_text', 'Observação': 'rich_text', Produtos: 'rich_text', 'Conteúdos': 'relation', 'Histórico': 'rich_text'
+  },
+  [ACCESS_DB]: { Nome: 'title', 'E-mail': 'email', Ativo: 'checkbox', Financeiro: 'checkbox' },
+  [FIN_DB]: {
+    'Descrição': 'title', Tipo: 'select', Categoria: 'select', Grupo: 'rich_text', Valor: 'number', Vencimento: 'date', 'Pago em': 'date',
+    Recorrente: 'checkbox', Dia: 'number', 'Início': 'date', Fim: 'date', 'Situação': 'select', Cliente: 'rich_text', Conta: 'rich_text',
+    Origem: 'rich_text', 'Competência': 'rich_text', 'Observação': 'rich_text', 'Histórico': 'rich_text'
+  },
+  [FINACC_DB]: {
+    Nome: 'title', Tipo: 'select', Saldo: 'number', 'Saldo em': 'date', Fechamento: 'number', Vencimento: 'number', 'Pago por': 'rich_text',
+    Cor: 'select', Final: 'rich_text', 'Histórico': 'rich_text'
   },
   [ROUTINE_DB]: {
-    Tarefa: 'title', Pessoa: 'select', Tipo: 'select', Dias: 'multi_select', Data: 'date', 'Urgência': 'select', Cliente: 'rich_text', 'Feito em': 'rich_text', Ativo: 'checkbox', Formato: 'select', 'Formato (outro)': 'rich_text', 'Descrição': 'rich_text', 'Conteúdo': 'relation'
+    Tarefa: 'title', Pessoa: 'select', Tipo: 'select', Dias: 'multi_select', Data: 'date', 'Urgência': 'select', Cliente: 'rich_text', 'Feito em': 'rich_text', Ativo: 'checkbox', Formato: 'select', 'Formato (outro)': 'rich_text', 'Descrição': 'rich_text', 'Conteúdo': 'relation', 'Histórico': 'rich_text'
   }
 };
 

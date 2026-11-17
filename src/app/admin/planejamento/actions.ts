@@ -15,6 +15,7 @@ import {
 
 import { FORMATS, createRoutine, isPerson, type TaskFormat } from '@/lib/producao';
 import { setTaskCard, tasksOfCard, type CardTask } from '@/lib/vinculo';
+import { logHistory } from '@/lib/historico';
 
 type R<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -221,7 +222,7 @@ export async function createTaskFromCardAction(
   planId: string,
   x: { person: string; format: string | null; date: string | null; desc?: string }
 ): Promise<R<{ id: string }>> {
-  await requireAdmin();
+  const who = await requireAdmin();
   const c = await clientCal(clientId);
   const item = await getPlanItem(planId);
   if (!c || !item) return { ok: false, error: 'Card não encontrado.' };
@@ -234,6 +235,7 @@ export async function createTaskFromCardAction(
       client: c.name, format, formatOther: '', desc: String(x.desc ?? '').trim().slice(0, 1900)
     });
     await setTaskCard(id, planId);
+    await logHistory(id, `${who.name} lançou para ${x.person} pelo planejamento · entrega ${date.slice(8, 10)}/${date.slice(5, 7)}`);
     return { ok: true, id };
   } catch (e) {
     console.error('[planejamento] criar tarefa', e);

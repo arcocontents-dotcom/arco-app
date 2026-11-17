@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import HistoryList from './HistoryList';
 import Icon from './Icon';
 import { addDays, dayNum, weekdayMon } from '@/lib/domain';
 import { shootStatusAction } from '@/app/admin/producao/captacao/actions';
@@ -35,6 +36,8 @@ export interface Task {
   fmt?: string | null;
   desc?: string | null;
   planId?: string | null;
+  by?: string | null;
+  history?: string | null;
 }
 export interface RoutineRow {
   id: string;
@@ -51,6 +54,7 @@ export interface RoutineRow {
   formatOther: string;
   desc: string;
   contentId: string | null;
+  history?: string;
 }
 
 const TEAM: Person[] = ['Lemuel', 'Marcos', 'Yan', 'Rafa'];
@@ -237,7 +241,7 @@ export default function ProducaoBoard({
               {late && <span className="pt-late">Atrasado{t.day ? ` · ${dayNum(t.day)}/${t.day.slice(5, 7)}` : ''}</span>}
               {!late && t.urgency === 'alta' && !t.done && <span className="pt-urg">Urgente</span>}
               {showDay && t.day && !late && <span className="pt-day">{WD[weekdayMon(t.day)]} {dayNum(t.day)}{t.time ? ` · ${t.time}` : ''}</span>}
-              {t.launched && t.type !== 'Tarefa fixa' && <span className="pt-day">Lançada {t.launched.slice(8, 10)}/{t.launched.slice(5, 7)}</span>}
+              {t.launched && t.type !== 'Tarefa fixa' && <span className="pt-day">Lançada {t.launched.slice(8, 10)}/{t.launched.slice(5, 7)}{t.by ? ` por ${t.by}` : ''}</span>}
             </div>
           )}
           {admin && t.source === 'rotina' && t.planId && (
@@ -749,6 +753,7 @@ function RoutineForm({
           </label>
         )}
 
+        {row?.history && <HistoryList history={row.history} />}
         {err && <p className="error" role="alert" style={{ margin: 0 }}>{err}</p>}
         <button type="button" className="btn block" disabled={pending} onClick={save}><Icon name="check" size={16} />{pending ? 'Salvando…' : 'Salvar'}</button>
         {row && (

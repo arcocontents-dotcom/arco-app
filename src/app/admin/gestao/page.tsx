@@ -5,13 +5,16 @@ import { listAllOpenContents, listClients, sameId } from '@/lib/notion';
 import { syncClientsFromGestao } from '@/lib/gestao-sync';
 import { syncGestaoAction } from '../actions';
 import AdminShell from '@/components/AdminShell';
+import TeamAccess from '@/components/TeamAccess';
+import { listTeamAdmins } from '@/lib/acessos';
 import GestaoTabs from '@/components/GestaoTabs';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Gestao({ searchParams }: { searchParams: Promise<{ sync?: string; novos?: string }> }) {
-  await requireAdmin();
+  const viewer = await requireAdmin();
   const sp = await searchParams;
+  const team = await listTeamAdmins();
   const sync = await syncClientsFromGestao().catch(() => null);
   const [all, open] = await Promise.all([listClients(), listAllOpenContents().catch(() => [])]);
   const active = all.filter((c) => !c.cancelled);
@@ -90,6 +93,8 @@ export default async function Gestao({ searchParams }: { searchParams: Promise<{
           </table>
         </div>
       </section>
+
+      <TeamAccess admins={team.map((a) => ({ name: a.name, email: a.email, finance: a.finance }))} canLink={viewer.master} />
 
       {removed.length > 0 && (
         <details className="panel">

@@ -315,3 +315,15 @@ export async function syncGestaoAction() {
   const r = await syncClientsFromGestao().catch(() => null);
   redirect(`/admin/gestao?sync=${r?.status ?? 'erro'}&novos=${r?.created.length ?? 0}`);
 }
+
+/** Link de entrada (vale 24h) para um administrador da equipe, para mandar pelo WhatsApp. Só o administrador principal gera. */
+export async function teamLoginLinkAction(email: string): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const v = await requireAdmin();
+  if (!v.master) return { ok: false, error: 'Só o administrador principal gera links.' };
+  const { listTeamAdmins } = await import('@/lib/acessos');
+  const { signLoginToken } = await import('@/lib/session');
+  const a = (await listTeamAdmins()).find((x) => x.email === String(email).toLowerCase());
+  if (!a) return { ok: false, error: 'Essa pessoa não está ativa nos Acessos.' };
+  const t = await signLoginToken(a.email, '24h');
+  return { ok: true, url: `${env.appUrl}/entrar/confirmar?t=${encodeURIComponent(t)}` };
+}

@@ -1,6 +1,8 @@
 'use server';
 
 import { requireAdmin } from '@/lib/access';
+import { diffLine, logHistory } from '@/lib/historico';
+import { produtosToText } from '@/lib/produtos';
 import { parseDay } from '@/lib/domain';
 import { cleanProdutos } from '@/lib/produtos';
 import { env } from '@/lib/env';
@@ -32,12 +34,27 @@ function clean(x: Partial<ShootInput>): ShootInput | string {
 }
 
 export async function saveShootAction(id: string | null, x: Partial<ShootInput>): Promise<R<{ id: string; planned: number }>> {
-  await requireAdmin();
+  const who = await requireAdmin();
   const v = clean(x);
   if (typeof v === 'string') return { ok: false, error: v };
   try {
-    if (id) await updateShoot(id, v);
+    const before = id ? await updateShoot(id, v) : null;
     const sid = id ?? (await createShoot(v));
+    const br = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+    if (!id) await logHistory(sid, `${who.name} agendou para ${br(v.day)}${v.time ? ` às ${v.time}` : ''}`);
+    else if (before) {
+      const line = diffLine([
+        ['captação', before.title, v.title],
+        ['dia', br(before.day), br(v.day)],
+        ['horário', before.time, v.time],
+        ['quem vai', before.crew.join(', '), v.crew.join(', ')],
+        ['cliente', before.client, v.client],
+        ['local', before.place, v.place],
+        ['produtos', produtosToText(before.products), produtosToText(v.products)],
+        ['status', before.status, v.status]
+      ]);
+      if (line || before.note !== v.note) await logHistory(sid, `${who.name} editou: ${[line, before.note !== v.note ? 'descrição alterada' : ''].filter(Boolean).join(' · ')}`);
+    }
     // produtos → cards no Planejamento do cliente (roteiro, bastidor, edição, aprovação)
     const planned = await linkShootToPlanning(sid, v).catch((e) => {
       console.error('[captacao] planejamento', e);
@@ -52,10 +69,11 @@ export async function saveShootAction(id: string | null, x: Partial<ShootInput>)
 }
 
 export async function shootStatusAction(id: string, status: string): Promise<R> {
-  await requireAdmin();
+  const who = await requireAdmin();
   if (!(SHOOT_STATUS as readonly string[]).includes(status)) return { ok: false, error: 'Status inválido.' };
   try {
     await setShootStatus(id, status as ShootInput['status']);
+    await logHistory(id, `${who.name} marcou como ${status}`);
     if (status === 'Realizada') await shootDoneOnPlanning(id, todayIn(env.timeZone)).catch((e) => console.error('[captacao] planejamento', e));
     return { ok: true };
   } catch (e) {

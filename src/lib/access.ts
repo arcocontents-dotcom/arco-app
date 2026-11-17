@@ -5,9 +5,10 @@ import { env } from './env';
 import { sessionEmail } from './session';
 import { getClientFresh, getContentFresh, listClients, listClientsFresh, sameId, type ClientRecord } from './notion';
 import { normalizeEmail } from './domain';
+import { listTeamAdmins } from './acessos';
 
 export type Viewer =
-  | { email: string; role: 'admin' }
+  | { email: string; role: 'admin'; name: string; master: boolean; finance: boolean }
   | { email: string; role: 'client'; clients: { id: string; name: string; canApprove: boolean }[] };
 
 export function isAdminEmail(email: string): boolean {
@@ -17,7 +18,10 @@ export function isAdminEmail(email: string): boolean {
 /** Quem pode entrar e o que pode ver. Nunca confia no navegador: sempre consulta o Notion. */
 export async function resolveViewer(email: string): Promise<Viewer | null> {
   const e = normalizeEmail(email);
-  if (isAdminEmail(e)) return { email: e, role: 'admin' };
+  if (isAdminEmail(e)) return { email: e, role: 'admin', name: 'Arco (admin)', master: true, finance: true };
+  // Outros administradores: tabela "🔑 Acessos do app" no Notion
+  const team = (await listTeamAdmins()).find((a) => a.email === e);
+  if (team) return { email: e, role: 'admin', name: team.name, master: false, finance: team.finance };
   const pick = (clients: ClientRecord[]) =>
     clients
       .filter((c) => !c.cancelled && (c.approvers.includes(e) || c.viewers.includes(e)))
@@ -44,6 +48,13 @@ export async function requireViewer(): Promise<Viewer> {
 export async function requireAdmin(): Promise<Viewer & { role: 'admin' }> {
   const v = await requireViewer();
   if (v.role !== 'admin') notFound();
+  return v;
+}
+
+/** Financeiro: só o administrador principal e quem tem "Financeiro" marcado nos Acessos. Link direto também não abre. */
+export async function requireFinance(): Promise<Viewer & { role: 'admin' }> {
+  const v = await requireAdmin();
+  if (!v.finance) notFound();
   return v;
 }
 

@@ -4,6 +4,7 @@ import { useState, useTransition, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import HistoryList from './HistoryList';
 import Icon from './Icon';
 import { dayNum, weekdayMon } from '@/lib/domain';
 import { PRODUTOS_PADRAO, type Produto } from '@/lib/produtos';
@@ -25,6 +26,7 @@ export interface ShootRow {
   place: string;
   note: string;
   products: Produto[];
+  history?: string;
   url: string;
 }
 
@@ -422,6 +424,7 @@ function ShootForm({
           <textarea className="ninput" style={{ flex: 1, minHeight: 60 }} aria-label="Descrição" placeholder="O que precisa ser feito, roteiro, detalhes…" value={note} onChange={(e) => setNote(e.target.value)} maxLength={1500} />
         </label>
 
+        {row?.history && <HistoryList history={row.history} />}
         {err && <p className="error" role="alert" style={{ margin: 0 }}>{err}</p>}
         <button type="button" className="btn block" disabled={pending} onClick={save}><Icon name="check" size={16} />{pending ? 'Salvando…' : 'Salvar'}</button>
         {row && (

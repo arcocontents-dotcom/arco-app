@@ -46,7 +46,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         </div>
         <div className="actions rise" style={{ ['--d' as string]: '120ms' }}>
           <Link className="btn outline small" href={`/c/${client.id}`}><Icon name="eye" size={16} />Ver como cliente</Link>
-          <Link className="btn small" href={`/admin/conteudo/novo?c=${client.id}`}><Icon name="plus" size={16} />Novo conteúdo</Link>
         </div>
       </div>
 
@@ -59,7 +58,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               <div key={c.day} className={`cell${c.inMonth ? '' : ' out'}${c.day === today ? ' today' : ''}${list.length ? ' has' : ''}`}>
                 <div className="n">
                   <span>{dayNum(c.day)} <small className="wd-m">{dayLabel(c.day).split(' ')[0]}</small></span>
-                  <Link className="add" href={`/admin/conteudo/novo?c=${client.id}&d=${c.day}`} aria-label={`Novo conteúdo em ${c.day}`}><Icon name="plus" size={16} /></Link>
                 </div>
                 {list.map((x) => (
                   <div key={x.id} className="card-wrap">

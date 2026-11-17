@@ -163,7 +163,7 @@ export default async function ClienteAcessos({
       <section className="panel rise" style={{ ['--d' as string]: '320ms' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <h2 className="label ic-inline"><Icon name="clock" size={14} />Histórico · {history.length} conteúdos · {posted} postados</h2>
-          <Link className="btn small" href={`/admin/conteudo/novo?c=${c.id}`}><Icon name="plus" size={15} />Novo conteúdo</Link>
+          <Link className="btn small" href={`/admin/planejamento?c=${c.id}`}><Icon name="bulb" size={15} />Planejamento</Link>
         </div>
         {history.length ? (
           <div>{history.slice(0, 12).map((x, i) => <ContentRow key={x.id} c={x} href={`/c/${c.id}/${x.id}`} delay={i * 30} />)}</div>

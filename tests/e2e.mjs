@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
 import { SignJWT } from 'jose';
 import { chromium } from 'playwright';
-import { CLIENTS_DB, CONTENTS_DB, PLANNING_DB, ROUTINE_DB, SHOOTS_DB, blocks, seedBlocks, seedPage, startMock, store } from './mock-notion.mjs';
+import { ACCESS_DB, CLIENTS_DB, CONTENTS_DB, FINACC_DB, FIN_DB, PLANNING_DB, ROUTINE_DB, SHOOTS_DB, blocks, seedBlocks, seedPage, startMock, store } from './mock-notion.mjs';
 
 const MOCK_PORT = 4010;
 const APP_PORT = 3100;
@@ -15,6 +15,7 @@ const SECRET = 'teste-teste-teste-teste-teste-teste-123456';
 const SHOTS = process.env.SHOTS_DIR;
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 
+const shiftM = (m, n) => { const t = new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1 + n, 1)); return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}`; };
 const rt = (s) => ({ rich_text: [{ text: { content: s } }] });
 const title = (s) => ({ title: [{ text: { content: s } }] });
 const sel = (s) => ({ select: { name: s } });
@@ -22,6 +23,7 @@ const sel = (s) => ({ select: { name: s } });
 // ---------- dados ----------
 const A = seedPage(CLIENTS_DB, { Nome: title('Studio Alfa'), 'E-mails que aprovam': rt('a@x.com'), 'E-mails que só visualizam': rt('v@x.com'), Instagram: rt('studioalfa') });
 const B = seedPage(CLIENTS_DB, { Nome: title('Beta Ltda'), 'E-mails que aprovam': rt('b@x.com') });
+seedPage(ACCESS_DB, { Nome: title('Lemuel'), 'E-mail': { email: 'lemuel@x.com' }, Ativo: { checkbox: true }, Financeiro: { checkbox: false } });
 const rel = (id) => ({ relation: [{ id }] });
 const date = (s) => ({ date: { start: s, time_zone: 'America/Cuiaba' } });
 const REELS = seedPage(CONTENTS_DB, { 'Título': title('Depoimento de cliente'), Cliente: rel(A), Data: date('2026-11-12T18:00:00'), Tipo: sel('Reels'), Status: sel('Aguardando'), 'Vídeo': { url: 'https://midia.test/v.mp4' }, Capa: { url: 'https://midia.test/capa.jpg' }, Legenda: rt('Legenda do reels #teste') });
@@ -77,6 +79,9 @@ const app = spawn('npx', ['next', 'start', '-p', String(APP_PORT)], {
     NOTION_ROUTINE_DB: ROUTINE_DB,
     NOTION_SHOOTS_DB: SHOOTS_DB,
     NOTION_GESTAO_PAGE: GESTAO,
+    NOTION_ACCESS_DB: ACCESS_DB,
+    NOTION_FIN_DB: FIN_DB,
+    NOTION_FIN_ACCOUNTS_DB: FINACC_DB,
     ADMIN_PASSWORD: 'senha-do-admin-teste',
     NOTION_BASE_URL: `http://127.0.0.1:${MOCK_PORT}`,
     R2_PUBLIC_URL: 'https://midia.test',
@@ -86,7 +91,7 @@ const app = spawn('npx', ['next', 'start', '-p', String(APP_PORT)], {
   detached: true
 });
 app.stdout.on('data', (d) => (logs += d));
-app.stderr.on('data', (d) => (logs += d));
+app.stderr.on('data', (d) => { logs += d; if (process.env.SRV) process.stdout.write('SERVER ' + d); });
 for (let i = 0; i < 60 && !/Ready|started server/i.test(logs); i++) await new Promise((r) => setTimeout(r, 500));
 
 const browser0 = await chromium.launch();
@@ -749,18 +754,13 @@ try {
     await pd.locator('img[alt="Logo de Studio Alfa"]').waitFor();
   });
 
-  await step('admin cria conteúdo (rascunho) pelo app e ele vai para o Notion', async () => {
-    await pd.goto(`${APP}/admin/conteudo/novo?c=${A}&d=2026-11-20`);
-    await pd.fill('#ti', 'Lançamento de dezembro');
-    await pd.getByRole('button', { name: 'Carrossel' }).click();
-    await pd.fill('#lg', 'Nova coleção');
-    await pd.getByRole('button', { name: 'Salvar como rascunho' }).click();
-    await pd.waitForURL(/\/admin\?c=/);
-    const created = [...store.values()].find((p) => p.properties['Título']?.title?.[0]?.plain_text === 'Lançamento de dezembro');
-    assert.ok(created, 'não criou no Notion');
-    assert.equal(created.properties.Status.select.name, 'Rascunho');
-    assert.equal(created.properties.Tipo.select.name, 'Carrossel');
-    assert.equal(created.properties.Data.date.start.slice(0, 10), '2026-11-20');
+  await step('aprovação só revisa: criar conteúdo leva para o Planejamento', async () => {
+    await pd.goto(`${APP}/admin?c=${A}`);
+    await pd.locator('.cal').waitFor();
+    assert.equal(await pd.getByRole('link', { name: 'Novo conteúdo' }).count(), 0, 'sem criar conteúdo na aprovação');
+    assert.equal(await pd.locator('.cal .add').count(), 0);
+    await pd.goto(`${APP}/admin/conteudo/novo?c=${A}`);
+    await pd.waitForURL(/\/admin\/planejamento\?c=/);
   });
   await step('produção da equipe: por pessoa, rotina, lembrete, passar a vez, semana, cliente e TV', async () => {
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Cuiaba', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -1065,11 +1065,135 @@ try {
     await pd.setViewportSize({ width: 1440, height: 900 });
   });
 
+  await step('outro administrador (Acessos): entra, lança tarefa com histórico e não vê o Financeiro', async () => {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Cuiaba', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const p = await ctx.newPage();
+    await p.goto(`${APP}/entrar`);
+    await p.fill('#email', 'lemuel@x.com');
+    await p.click('button[type=submit]');
+    await p.getByText('Confira seu e-mail').waitFor();
+    await new Promise((r) => setTimeout(r, 300));
+    const link = logs.match(/\[login\] link para lemuel@x\.com: (\S+)/)?.[1];
+    assert.ok(link, 'admin da equipe recebe link');
+    await p.goto(link);
+    await p.click('button:has-text("Entrar")');
+    await p.waitForURL(/\/admin/);
+    await p.goto(`${APP}/admin/producao`);
+    assert.equal(await p.getByRole('link', { name: 'Financeiro' }).count(), 0, 'sem Financeiro no menu');
+    const col = p.locator('section.pcol[aria-label="Marcos"]');
+    await col.getByRole('button', { name: 'Adicionar task para Marcos' }).click();
+    const f = p.getByRole('dialog', { name: 'Novo lembrete ou tarefa' });
+    await f.getByLabel('Tarefa', { exact: true }).fill('Revisar legenda Beta');
+    await f.getByLabel('Data de entrega').fill(today);
+    await f.getByRole('button', { name: 'Salvar' }).click();
+    const card = col.locator('article.pt', { hasText: 'Revisar legenda Beta' });
+    await card.getByText(/por Lemuel/).waitFor();
+    const row = [...store.values()].find((x) => x.properties.Tarefa?.title?.[0]?.plain_text === 'Revisar legenda Beta');
+    assert.match(row.properties['Histórico'].rich_text.map((t) => t.plain_text).join(''), /Lemuel lançou para Marcos/);
+    // edição aparece no histórico
+    await card.locator('.pt-title').click();
+    const e = p.getByRole('dialog', { name: 'Editar tarefa' });
+    await e.getByRole('radio', { name: 'Alta' }).click();
+    await e.getByRole('button', { name: 'Salvar' }).click();
+    await p.waitForTimeout(800);
+    assert.match(row.properties['Histórico'].rich_text.map((t) => t.plain_text).join(''), /Lemuel editou: urgência Média → Alta/);
+    const r = await p.goto(`${APP}/admin/financeiro`);
+    assert.equal(r.status(), 404, 'Financeiro fechado por link direto');
+    await ctx.close();
+  });
+
+  await step('financeiro: bancos, cartão, recorrentes sem duplicar, fatura e calendário', async () => {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Cuiaba', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const m = today.slice(0, 7);
+    const fin = () => [...store.values()].filter((x) => !x.archived && x.parent?.database_id?.replace(/-/g, '') === FIN_DB);
+    const txt = (x, n) => (x.properties[n]?.title ?? x.properties[n]?.rich_text ?? []).map((t) => t.plain_text).join('');
+    await pd.goto(`${APP}/admin/financeiro?v=contas`);
+    // banco
+    await pd.getByRole('button', { name: 'Banco ou cartão' }).click();
+    let d = pd.getByRole('dialog', { name: 'Novo banco ou cartão' });
+    await d.getByLabel('Nome').fill('Nubank PJ');
+    await d.getByLabel('Saldo informado').fill('10000');
+    await d.getByLabel('Saldo em').fill(`${m}-01`);
+    await d.getByRole('button', { name: 'Salvar' }).click();
+    await pd.getByText('Nubank PJ').first().waitFor();
+    // cartão
+    await pd.getByRole('button', { name: 'Banco ou cartão' }).click();
+    d = pd.getByRole('dialog', { name: 'Novo banco ou cartão' });
+    await d.getByRole('radio', { name: 'Cartão' }).click();
+    await d.getByLabel('Nome').fill('Cartão Inter');
+    await d.getByLabel('Dia de fechamento').fill('20');
+    await d.getByLabel('Dia de vencimento').fill('27');
+    await d.getByLabel('Banco que paga a fatura').selectOption('Nubank PJ');
+    await d.getByRole('button', { name: 'Salvar' }).click();
+    await pd.getByText('Cartão Inter').first().waitFor();
+    // mensalidade recorrente (todo dia 10)
+    const lancar = async (o) => {
+      await pd.getByRole('button', { name: 'Lançar entrada ou saída' }).click();
+      const f = pd.getByRole('dialog', { name: 'Novo lançamento' });
+      await f.getByRole('radio', { name: o.tipo === 'in' ? '+ Entrada' : '− Saída' }).click();
+      await f.getByRole('radio', { name: o.cat }).click();
+      await f.getByLabel('Descrição').fill(o.desc);
+      await f.getByLabel('Valor').fill(o.valor);
+      if (o.dia) await f.getByLabel('Dia do vencimento').fill(o.dia);
+      if (o.inicio) await f.getByLabel('Início').fill(o.inicio);
+      if (o.venc) await f.getByLabel('Vencimento').fill(o.venc);
+      if (o.conta) await f.getByLabel('Banco ou cartão').selectOption(o.conta);
+      if (o.cliente) await f.getByLabel('Cliente').fill(o.cliente);
+      await f.getByRole('button', { name: 'Salvar' }).click();
+      await f.waitFor({ state: 'detached' });
+    };
+    await lancar({ tipo: 'in', cat: 'Mensalidade', desc: 'Mensalidade Studio Alfa', valor: '1.500,00', dia: '10', inicio: `${m}-01`, conta: 'Nubank PJ', cliente: 'Studio Alfa' });
+    await lancar({ tipo: 'out', cat: 'Despesa avulsa', desc: 'Microfone', valor: '200', venc: today, conta: 'Nubank PJ' });
+    await lancar({ tipo: 'out', cat: 'Plataforma', desc: 'Adobe', valor: '100', dia: '5', inicio: `${m}-01`, conta: 'Cartão Inter' });
+    const tpl = fin().find((x) => txt(x, 'Descrição') === 'Mensalidade Studio Alfa');
+    assert.equal(tpl.properties.Recorrente.checkbox, true);
+    assert.equal(tpl.properties.Dia.number, 10);
+    assert.equal(tpl.properties.Valor.number, 1500);
+    assert.match(txt(tpl, 'Histórico'), /criou: R\$\s?1\.500,00 todo dia 10/);
+    // visão geral
+    await pd.goto(`${APP}/admin/financeiro?m=${m}`);
+    await pd.getByText('Saldo disponível').waitFor();
+    const proxMes = `${String(Number(m.slice(5)) % 12 + 1).padStart(2, '0')}`;
+    // receber a mensalidade deste mês: vira ocorrência própria (Origem + Competência), sem duplicar
+    await pd.goto(`${APP}/admin/financeiro?m=${m}&v=receitas`);
+    await pd.getByRole('button', { name: 'Marcar como recebido: Mensalidade Studio Alfa' }).click();
+    await pd.getByRole('button', { name: 'Desfazer pagamento: Mensalidade Studio Alfa' }).waitFor();
+    let occ = fin().filter((x) => txt(x, 'Origem') === tpl.id.replace(/-/g, ''));
+    assert.equal(occ.length, 1);
+    assert.equal(txt(occ[0], 'Competência'), m);
+    assert.equal(occ[0].properties['Pago em'].date.start, today);
+    await pd.getByRole('button', { name: 'Desfazer pagamento: Mensalidade Studio Alfa' }).click();
+    await pd.getByRole('button', { name: 'Marcar como recebido: Mensalidade Studio Alfa' }).waitFor();
+    await pd.getByRole('button', { name: 'Marcar como recebido: Mensalidade Studio Alfa' }).click();
+    await pd.getByRole('button', { name: 'Desfazer pagamento: Mensalidade Studio Alfa' }).waitFor();
+    occ = fin().filter((x) => txt(x, 'Origem') === tpl.id.replace(/-/g, ''));
+    assert.equal(occ.length, 1, 'sem duplicar');
+    // próximo mês também aparece (gerado sozinho) e ainda pendente
+    await pd.goto(`${APP}/admin/financeiro?m=${shiftM(m, 1)}&v=receitas`);
+    await pd.getByRole('button', { name: 'Marcar como recebido: Mensalidade Studio Alfa' }).waitFor();
+    // cartão: Adobe vai para a fatura do Cartão Inter
+    await pd.goto(`${APP}/admin/financeiro?m=${m}&v=contas`);
+    const acc = pd.locator('article.acc', { hasText: 'Cartão Inter' });
+    await acc.getByText('Adobe').waitFor();
+    await acc.getByText('Fatura Cartão Inter').first().waitFor();
+    // calendário com contagem regressiva
+    await pd.goto(`${APP}/admin/financeiro?m=${m}&v=calendario`);
+    await pd.locator('.fchip', { hasText: 'Microfone' }).waitFor();
+    await pd.locator('.fcell', { hasText: 'Microfone' }).first().click();
+    await pd.getByText('vence hoje').first().waitFor();
+    await shot(pd, '31-financeiro-calendario');
+    await pd.goto(`${APP}/admin/financeiro?m=${m}`);
+    await pd.waitForTimeout(600);
+    await shot(pd, '32-financeiro');
+  });
+
   await step('cliente novo na Gestão do Notion entra no app sozinho', async () => {
     gClients.push(gb('child_page', { child_page: { title: 'Imperial Casa & Conforto' } }));
     await pd.goto(`${APP}/admin/gestao`);
     await pd.getByRole('button', { name: 'Atualizar do Notion' }).click();
-    await pd.getByText('1 cliente(s) novo(s) do Notion.').waitFor();
+    // a página também sincroniza sozinha ao abrir: pode já ter entrado antes do clique
+    await pd.getByText(/1 cliente\(s\) novo\(s\) do Notion\.|Tudo em dia com o Notion\./).waitFor();
     await pd.getByRole('link', { name: /Imperial Casa & Conforto/ }).first().waitFor();
     assert.equal(await pd.getByText('Cliente arquivado antigo').count(), 0, 'Bastidores não entra');
     const imp = [...store.values()].find((x) => x.properties.Nome?.title?.[0]?.plain_text === 'Imperial Casa & Conforto');

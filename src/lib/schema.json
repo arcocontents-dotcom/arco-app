@@ -80,7 +80,8 @@
     "format": "Formato",
     "formatOther": "Formato (outro)",
     "desc": "Descrição",
-    "content": "Conteúdo"
+    "content": "Conteúdo",
+    "history": "Histórico"
   },
   "shoot": {
     "title": "Captação",
@@ -92,6 +93,7 @@
     "place": "Local",
     "note": "Observação",
     "products": "Produtos",
-    "contents": "Conteúdos"
+    "contents": "Conteúdos",
+    "history": "Histórico"
   }
 }

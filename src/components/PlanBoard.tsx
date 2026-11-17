@@ -67,6 +67,9 @@ export default function PlanBoard({
   const router = useRouter();
   const [items, setItems] = useState(initial);
   const [open, setOpen] = useState<string | null>(openId ?? null);
+  // card aberto pelo link (?open=): o painel só monta no navegador
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const [tab, setTab] = useState('todos');
   const [drag, setDrag] = useState<string | null>(null);
   const [over, setOver] = useState<PlanStatus | null>(null);
@@ -369,7 +372,7 @@ export default function PlanBoard({
           <button type="button" onClick={restore}><Icon name="undo" size={14} />Desfazer</button>
         </div>
       )}
-      {current && createPortal(
+      {current && mounted && createPortal(
         <div className="drawer-overlay" onMouseDown={(e) => e.target === e.currentTarget && closeDrawer()}>
           <aside className="drawer" role="dialog" aria-modal="true" aria-label={isNew ? 'Nova task' : current.title}>
             <div className="drawer-top">
