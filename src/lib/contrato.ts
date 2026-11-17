@@ -3,7 +3,7 @@ import schema from './schema.json';
 import { env } from './env';
 import { memo } from './cache';
 import { MONTHS, addDays, addMonths } from './domain';
-import { checkbox, date, isPage, queryAll, select } from './notion';
+import { checkbox, date, isPage, queryAll, select, setClientCombinado } from './notion';
 import { children, gestaoClientPages, norm, plain } from './gestao-sync';
 
 // Entregas do mês por cliente: o "Combinado com a marca" da página do cliente na Gestão
@@ -78,10 +78,13 @@ const kindOf = (k: string | null): Entrega | null => {
   return null;
 };
 
-export function entregasDoMes(c: { name: string; calName: string; notionPage: string }, cal: string, first: string): Promise<EntregaMes> {
+export function entregasDoMes(c: { id: string; name: string; calName: string; notionPage: string; combinado: Combinado | null }, cal: string, first: string): Promise<EntregaMes> {
   return memo(`plan:entregas:${cal}:${first}`, 30_000, async () => {
     const pageId = await clientPageId(c).catch(() => null);
-    const combinado = pageId ? await memo(`contrato:${pageId}`, 300_000, () => readCombinado(pageId)).catch(() => null) : null;
+    // lê ao vivo da página do cliente; se não der, usa a cópia guardada no cliente
+    const live = pageId ? await memo(`contrato:${pageId}`, 300_000, () => readCombinado(pageId)).catch(() => null) : null;
+    if (live && JSON.stringify(live) !== JSON.stringify(c.combinado)) await setClientCombinado(c.id, live).catch(() => undefined);
+    const combinado = live ?? c.combinado;
     const monthName = MONTHS[Number(first.slice(5, 7)) - 1];
     const pages = env.planningDb
       ? await queryAll(env.planningDb, {

@@ -13,7 +13,10 @@
     "calName": "Nome no Calendário mensal",
     "push": "Avisos (inscrições)",
     "phone": "Celular (WhatsApp/SMS)",
-    "page": "Página do cliente"
+    "page": "Página do cliente",
+    "reelsM": "Reels mensal",
+    "postM": "Post mensal",
+    "storyM": "Story mensal"
   },
   "contents": {
     "title": "Título",

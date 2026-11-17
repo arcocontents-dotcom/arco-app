@@ -17,7 +17,7 @@ export const SHOOTS_DB = '66666666666666666666666666666666';
 const TYPES = {
   [CLIENTS_DB]: {
     [C.name]: 'title', [C.approvers]: 'rich_text', [C.viewers]: 'rich_text', [C.instagram]: 'rich_text',
-    [C.igConnected]: 'checkbox', [C.igUserId]: 'rich_text', [C.igToken]: 'rich_text', [C.igTokenExpires]: 'date', [C.logo]: 'url', [C.cancelled]: 'checkbox', [C.calName]: 'rich_text', [C.push]: 'rich_text', [C.page]: 'url'
+    [C.igConnected]: 'checkbox', [C.igUserId]: 'rich_text', [C.igToken]: 'rich_text', [C.igTokenExpires]: 'date', [C.logo]: 'url', [C.cancelled]: 'checkbox', [C.calName]: 'rich_text', [C.push]: 'rich_text', [C.page]: 'url', [C.reelsM]: 'number', [C.postM]: 'number', [C.storyM]: 'number'
   },
   [CONTENTS_DB]: {
     [K.title]: 'title', [K.client]: 'relation', [K.date]: 'date', [K.type]: 'select', [K.status]: 'select',

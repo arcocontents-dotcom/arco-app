@@ -577,6 +577,8 @@ try {
     await ent.getByText('Reels', { exact: true }).waitFor();
     await ent.getByText(/\/4$/).first().waitFor();
     await shot(pd, '15b-planejamento-entregas');
+    await pd.waitForTimeout(300);
+    assert.equal(page(A).properties['Reels mensal'].number, 4, 'combinado guardado no cliente');
     // relatório do mês em PDF, pronto para o WhatsApp
     await pd.getByRole('button', { name: 'Planejamento do mês' }).click();
     const rep = pd.getByRole('dialog', { name: 'Planejamento do mês' });

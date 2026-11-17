@@ -51,6 +51,8 @@ export interface ClientRecord {
   phone: string;
   /** Página do cliente no Notion (Gestão). */
   notionPage: string;
+  /** Combinado com a marca por mês (cópia do toggle da página do cliente). null = não preenchido. */
+  combinado: { reels: number; post: number; story: number } | null;
 }
 
 export interface PushSub {
@@ -149,7 +151,15 @@ function toClient(p: PageObjectResponse): ClientRecord {
     cancelled: checkbox(pr[C.cancelled]),
     calName: text(pr[C.calName]).trim(),
     phone: text(pr[C.phone]).trim(),
-    notionPage: text(pr[C.page]).trim()
+    notionPage: text(pr[C.page]).trim(),
+    combinado: (() => {
+      const n = (k: string) => {
+        const v = pr[k];
+        return v && v.type === 'number' && typeof v.number === 'number' ? v.number : null;
+      };
+      const r = n(C.reelsM), po = n(C.postM), st = n(C.storyM);
+      return r === null && po === null && st === null ? null : { reels: r ?? 0, post: po ?? 0, story: st ?? 0 };
+    })()
   };
 }
 
@@ -549,4 +559,10 @@ export function listContentsLinked(clientId: string): Promise<ContentRecord[]> {
     });
     return pages.filter((p) => !p.archived).map(toContent);
   });
+}
+
+/** Guarda o combinado com a marca no cliente (colunas do app). */
+export async function setClientCombinado(id: string, c: { reels: number; post: number; story: number }) {
+  await notion().pages.update({ page_id: id, properties: { [C.reelsM]: { number: c.reels }, [C.postM]: { number: c.post }, [C.storyM]: { number: c.story } } as never });
+  invalidate('clients');
 }
