@@ -12,6 +12,8 @@ export interface TeamAdmin {
   name: string;
   email: string;
   finance: boolean;
+  /** Pode pausar e reativar clientes. */
+  pause: boolean;
 }
 
 export function listTeamAdmins(): Promise<TeamAdmin[]> {
@@ -23,7 +25,7 @@ export function listTeamAdmins(): Promise<TeamAdmin[]> {
       .map((p) => {
         const e = p.properties['E-mail'];
         const email = normalizeEmail(e?.type === 'email' ? e.email ?? '' : text(e));
-        return { id: p.id, name: text(p.properties['Nome']) || email, email, finance: checkbox(p.properties['Financeiro']) };
+        return { id: p.id, name: text(p.properties['Nome']) || email, email, finance: checkbox(p.properties['Financeiro']), pause: checkbox(p.properties['Pausa clientes']) };
       })
       .filter((a) => a.email.includes('@'));
   }).catch((err) => {

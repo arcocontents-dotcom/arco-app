@@ -51,7 +51,7 @@ export default async function Planejamento({ searchParams }: { searchParams: Pro
   const options = await planOptions();
   if (typeof options === 'string') {
     return (
-      <AdminShell section="planejamento" current={client.id} base={client.base}>
+      <AdminShell section="planejamento" current={client.id} client={client}>
         {head}
         <section className="panel setup rise">
           <Icon name="link" size={28} />
@@ -87,7 +87,7 @@ export default async function Planejamento({ searchParams }: { searchParams: Pro
   }
   if (!cal) {
     return (
-      <AdminShell section="planejamento" current={client.id} base={client.base}>
+      <AdminShell section="planejamento" current={client.id} client={client}>
         {head}
         <section className="panel setup rise">
           <h2 className="display" style={{ fontSize: 26, margin: 0 }}>Qual é {client.name} no Calendário mensal?</h2>
@@ -105,7 +105,7 @@ export default async function Planejamento({ searchParams }: { searchParams: Pro
     marcaDoCliente(client).catch(() => null)
   ]);
   if (typeof items === 'string') {
-    return <AdminShell section="planejamento" current={client.id} base={client.base}>{head}<p className="error">Não foi possível ler o Calendário mensal agora.</p></AdminShell>;
+    return <AdminShell section="planejamento" current={client.id} client={client}>{head}<p className="error">Não foi possível ler o Calendário mensal agora.</p></AdminShell>;
   }
   await pullPostedFromPlan(items, linked);
   // ?open=<card>: abre o card direto (vindo de uma tarefa da Produção), mesmo se for de outro mês
@@ -125,7 +125,7 @@ export default async function Planejamento({ searchParams }: { searchParams: Pro
   );
 
   return (
-    <AdminShell section="planejamento" current={client.id} base={client.base}>
+    <AdminShell section="planejamento" current={client.id} client={client}>
       {head}
       <div className="plan-actions rise" style={{ ['--d' as string]: '110ms' }}>
         <p className="hint" style={{ margin: 0 }}>Antes do mês começar, mande o planejamento para o cliente aprovar no WhatsApp. Depois, cada conteúdo é aprovado na semana dele.</p>

@@ -22,7 +22,7 @@ export const AVULSOS_DB = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const TYPES = {
   [CLIENTS_DB]: {
     [C.name]: 'title', [C.approvers]: 'rich_text', [C.viewers]: 'rich_text', [C.instagram]: 'rich_text',
-    [C.igConnected]: 'checkbox', [C.igUserId]: 'rich_text', [C.igToken]: 'rich_text', [C.igTokenExpires]: 'date', [C.logo]: 'url', [C.cancelled]: 'checkbox', [C.calName]: 'rich_text', [C.push]: 'rich_text', [C.page]: 'url', [C.reelsM]: 'number', [C.postM]: 'number', [C.storyM]: 'number', [C.base]: 'select'
+    [C.igConnected]: 'checkbox', [C.igUserId]: 'rich_text', [C.igToken]: 'rich_text', [C.igTokenExpires]: 'date', [C.logo]: 'url', [C.cancelled]: 'checkbox', [C.calName]: 'rich_text', [C.push]: 'rich_text', [C.page]: 'url', [C.reelsM]: 'number', [C.postM]: 'number', [C.storyM]: 'number', [C.base]: 'select', [C.paused]: 'checkbox', [C.pauses]: 'rich_text'
   },
   [CONTENTS_DB]: {
     [K.title]: 'title', [K.client]: 'relation', [K.date]: 'date', [K.type]: 'select', [K.status]: 'select',
@@ -41,7 +41,7 @@ const TYPES = {
     'Captação': 'title', Data: 'date', Cliente: 'rich_text', 'Quem vai': 'multi_select', Tipo: 'select', Status: 'select', Local: 'rich_text', 'Observação': 'rich_text', Produtos: 'rich_text', 'Conteúdos': 'relation', 'Histórico': 'rich_text'
   },
   [LOG_DB]: { 'Ação': 'title', Quem: 'rich_text', 'Área': 'select', Item: 'rich_text', 'Item ID': 'rich_text', Quando: 'date', Detalhe: 'rich_text' },
-  [ACCESS_DB]: { Nome: 'title', 'E-mail': 'email', Ativo: 'checkbox', Financeiro: 'checkbox' },
+  [ACCESS_DB]: { Nome: 'title', 'E-mail': 'email', Ativo: 'checkbox', Financeiro: 'checkbox', 'Pausa clientes': 'checkbox' },
   [AVULSOS_DB]: { Nome: 'title', Tipo: 'select', Contato: 'rich_text', Instagram: 'rich_text', 'Observação': 'rich_text', Ativo: 'checkbox', 'Histórico': 'rich_text' },
   [FIN_DB]: {
     'Descrição': 'title', Tipo: 'select', Categoria: 'select', Grupo: 'rich_text', Valor: 'number', Vencimento: 'date', 'Pago em': 'date',

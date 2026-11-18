@@ -3,7 +3,7 @@ import schema from './schema.json';
 import { env } from './env';
 import { memo } from './cache';
 import { MONTHS, addMonths, formatoDe, type Formato } from './domain';
-import { date, listClients, queryAll, select } from './notion';
+import { date, listClients, mesPausado, queryAll, select, type Pausa } from './notion';
 import { planOptions } from './planning';
 
 // Saldo de conteúdo: o cliente contrata N reels/posts/stories por mês. Cada card do Planejamento ocupa uma vaga
@@ -79,6 +79,9 @@ export async function cotaDe(cal: string): Promise<{ reels: number; post: number
   const c = (await listClients().catch(() => [])).find((x) => x.calName === cal);
   return c?.combinado ?? null;
 }
+async function pausasDe(cal: string): Promise<Pausa[]> {
+  return (await listClients().catch(() => [])).find((x) => x.calName === cal)?.pauses ?? [];
+}
 
 /**
  * Próxima vaga livre de um formato: a mais antiga em aberto (desde o início da contagem),
@@ -93,8 +96,11 @@ export async function proximaVaga(cal: string, formato: string | null, today: st
   const opts = await planOptions();
   const names = typeof opts === 'string' ? [] : opts.kind.map((o) => o.name);
   const used = await ocupadas(cal, exclude);
+  const pausas = await pausasDe(cal);
   const cur = `${today.slice(0, 7)}-01`;
   for (let m = COTA_START < cur ? COTA_START : cur, i = 0; i < 24; m = addMonths(m, 1), i++) {
+    // mês com o cliente pausado: não tem cota (nada renova)
+    if (mesPausado(pausas, m)) continue;
     const taken = used.get(`${f}|${m}`) ?? new Set<number>();
     for (let n = 1; n <= total; n++) {
       const kind = `${BASE[f]} ${n}`;

@@ -2,7 +2,8 @@ import type { ReactNode } from 'react';
 import { listAvulsos } from '@/lib/avulsos';
 import Link from 'next/link';
 import { env } from '@/lib/env';
-import { listAllOpenContents, listClients, sameId } from '@/lib/notion';
+import { listAllOpenContents, listClients, sameId, type ClientRecord } from '@/lib/notion';
+import ClientStatus from './ClientStatus';
 import { localParts, todayIn } from '@/lib/domain';
 import { currentViewer } from '@/lib/access';
 import Icon from './Icon';
@@ -22,8 +23,8 @@ export async function alerts() {
 }
 
 export default async function AdminShell({
-  current, children, section = 'calendario', base
-}: { current?: string | null; children: ReactNode; section?: Section; base?: 'Marcos' | 'Lemuel' | null }) {
+  current, children, section = 'calendario', client
+}: { current?: string | null; children: ReactNode; section?: Section; client?: ClientRecord | null }) {
   const [all, a, viewer, avulsos] = await Promise.all([listClients().catch(() => []), alerts(), currentViewer().catch(() => null), listAvulsos().catch(() => [])]);
   const canFinance = viewer?.role === 'admin' && viewer.finance;
   const clients = all.filter((c) => !c.cancelled);
@@ -92,6 +93,7 @@ export default async function AdminShell({
                     {c.logoUrl ? <img src={c.logoUrl} alt="" loading="lazy" /> : <span>{c.name.charAt(0)}</span>}
                   </span>
                   <span className="client-name">{c.name}</span>
+                  {c.paused && <small className="side-kind">pausado</small>}
                   {n > 0 && <i className="dot" title={`${n} pendência${n > 1 ? 's' : ''}`} />}
                 </Link>
               );
@@ -143,7 +145,18 @@ export default async function AdminShell({
         </form>
       </aside>
       <main>
-        {base && <span className="base-tag" title="Base responsável pelo cliente">Base {base}</span>}
+        {client && (
+          <div className="client-corner">
+            <span className="base-tag" title="Base responsável pelo cliente">Base {client.base}</span>
+            <ClientStatus
+              clientId={client.id}
+              name={client.name}
+              paused={client.paused}
+              since={client.pauses.find((p) => !p.to)?.from ?? null}
+              canPause={viewer?.role === 'admin' && viewer.pause}
+            />
+          </div>
+        )}
         {children}
       </main>
     </div>

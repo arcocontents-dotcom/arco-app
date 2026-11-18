@@ -11,6 +11,8 @@ import { XIcon } from '@/components/icons';
 import LogoUploader from '@/components/LogoUploader';
 import AccessLink from '@/components/AccessLink';
 import CancelClient from '@/components/CancelClient';
+import ClientMarca from '@/components/ClientMarca';
+import { marcaDoCliente } from '@/lib/marca';
 import { addAccessAction, removeAccessAction, setClientPhoneAction, updateClientAction } from '../../actions';
 
 const OK: Record<string, string> = {
@@ -51,9 +53,10 @@ export default async function ClienteAcessos({
   const history = (await listContentsInRangeAdmin(c.id, '2026-01-01', addDays(today, 120)).catch(() => []))
     .sort((a, b) => (b.dateIso ?? b.day ?? '').localeCompare(a.dateIso ?? a.day ?? ''));
   const posted = history.filter((x) => x.status === 'Postado').length;
+  const marca = await marcaDoCliente(c).catch(() => null);
 
   return (
-    <AdminShell current={c.id} section="gestao" base={c.base}>
+    <AdminShell current={c.id} section="gestao" client={c}>
       <div className="toolbar">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <Link href="/admin/gestao" className="label rise ic-inline" style={{ textDecoration: 'none' }}><Icon name="left" size={14} />Gestão</Link>
@@ -72,6 +75,8 @@ export default async function ClienteAcessos({
           Esse e-mail já está liberado no cliente {sp.quem ?? 'outro'}. Cada e-mail só pode acessar um cliente. Remova de lá antes, ou use outro e-mail.
         </p>
       )}
+
+      <ClientMarca marca={marca} clientName={c.name} />
 
       <section className="panel rise" style={{ ['--d' as string]: '100ms' }}>
         <h2 className="label">Logo do cliente</h2>

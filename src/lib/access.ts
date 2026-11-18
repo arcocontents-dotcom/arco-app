@@ -8,7 +8,7 @@ import { normalizeEmail } from './domain';
 import { listTeamAdmins } from './acessos';
 
 export type Viewer =
-  | { email: string; role: 'admin'; name: string; master: boolean; finance: boolean }
+  | { email: string; role: 'admin'; name: string; master: boolean; finance: boolean; pause: boolean }
   | { email: string; role: 'client'; clients: { id: string; name: string; canApprove: boolean }[] };
 
 export function isAdminEmail(email: string): boolean {
@@ -18,10 +18,10 @@ export function isAdminEmail(email: string): boolean {
 /** Quem pode entrar e o que pode ver. Nunca confia no navegador: sempre consulta o Notion. */
 export async function resolveViewer(email: string): Promise<Viewer | null> {
   const e = normalizeEmail(email);
-  if (isAdminEmail(e)) return { email: e, role: 'admin', name: 'Arco (admin)', master: true, finance: true };
+  if (isAdminEmail(e)) return { email: e, role: 'admin', name: 'Arco (admin)', master: true, finance: true, pause: true };
   // Outros administradores: tabela "🔑 Acessos do app" no Notion
   const team = (await listTeamAdmins()).find((a) => a.email === e);
-  if (team) return { email: e, role: 'admin', name: team.name, master: false, finance: team.finance };
+  if (team) return { email: e, role: 'admin', name: team.name, master: false, finance: team.finance, pause: team.pause };
   const pick = (clients: ClientRecord[]) =>
     clients
       .filter((c) => !c.cancelled && (c.approvers.includes(e) || c.viewers.includes(e)))

@@ -59,7 +59,12 @@ const gPal = gb('toggle', { has_children: true, toggle: { rich_text: [{ type: 't
 const gFon = gb('toggle', { has_children: true, toggle: { rich_text: [{ type: 'text', plain_text: 'Fontes', text: { content: 'Fontes' } }] } });
 blocks.set(gClients[0].id.replace(/-/g, ''), [gComb, gBastCli]);
 blocks.set(gBastCli.id.replace(/-/g, ''), [gMarca]);
-blocks.set(gMarca.id.replace(/-/g, ''), [gPal, gFon]);
+const gCta = gb('toggle', { has_children: true, toggle: { rich_text: [{ type: 'text', plain_text: 'CTA (Links e Informações)', text: { content: 'CTA (Links e Informações)' } }] } });
+const gBanco = gb('toggle', { has_children: true, toggle: { rich_text: [{ type: 'text', plain_text: 'Banco de dados (Drive) ', text: { content: 'Banco de dados (Drive) ' } }] } });
+const paraLink = (t, href) => gb('paragraph', { paragraph: { rich_text: [{ type: 'text', plain_text: t, href, text: { content: t, link: { url: href } } }] } });
+blocks.set(gMarca.id.replace(/-/g, ''), [gPal, gFon, gCta, gBanco]);
+blocks.set(gCta.id.replace(/-/g, ''), [para('Endereços: Av. das Flores, 100 - Centro'), para('Telefone:'), para('(66) 99999-1234'), para('Maps:'), paraLink('https://maps.app.goo.gl/alfa', 'https://maps.app.goo.gl/alfa')]);
+blocks.set(gBanco.id.replace(/-/g, ''), [para('Logos:'), paraLink('https://drive.google.com/drive/folders/alfa-logos', 'https://drive.google.com/drive/folders/alfa-logos')]);
 blocks.set(gPal.id.replace(/-/g, ''), [para('Branco: #ffffff\nVerde Alfa: #1f7a4d')]);
 blocks.set(gFon.id.replace(/-/g, ''), [para('Fonte título: Prumo\nFonte secundária: Radiano'), para('Tamanho legenda: 8 com sombra')]);
 blocks.set(gComb.id.replace(/-/g, ''), [para('Reels mensal: 4'), para('Post mensal: 2'), para('Story mensal: 0')]);
@@ -576,7 +581,7 @@ try {
     await pd.getByRole('tab', { name: 'Quadro' }).click();
     // lateral: entregas do mês combinadas com a marca
     const ent = pd.getByRole('complementary', { name: /^Entregas de/ });
-    await ent.getByText('Reels', { exact: true }).waitFor();
+    await ent.locator('.ent-info strong', { hasText: 'Reels' }).waitFor();
     // outubro não teve nada postado: os 4 reels e 2 posts entram em novembro como atrasados
     await ent.getByText(/6 atrasados de Outubro/).waitFor();
     await ent.getByText('4 do mês + 4 atrasados').waitFor();
@@ -1114,6 +1119,28 @@ try {
     assert.notEqual(slots[0], slots[1], 'cada card ocupa uma vaga só');
     await pd.locator('.plan-card', { hasText: 'Reels da cota A' }).locator('.plan-vaga').waitFor();
     await shot(pd, '32-planejamento-cota-marca');
+    // aba do cliente: MARCA (paleta, tipografia, dados e links vindos da página Marca do Notion)
+    await pd.goto(`${APP}/admin/clientes/${A}`);
+    const cm = pd.getByRole('region', { name: 'Marca' });
+    await cm.getByText('#1F7A4D').waitFor();
+    await cm.getByText('Prumo').waitFor();
+    await cm.getByText('Radiano').waitFor();
+    await cm.getByRole('link', { name: '(66) 99999-1234' }).waitFor();
+    assert.equal(await cm.getByRole('link', { name: /Av\. das Flores/ }).getAttribute('href'), 'https://maps.app.goo.gl/alfa');
+    await cm.getByRole('link', { name: /Logos/ }).waitFor();
+    await shot(pd, '34-cliente-marca');
+    // cliente ativo / pausado (canto superior direito)
+    const sw = pd.getByRole('switch', { name: /Studio Alfa: Cliente ativo/ });
+    await sw.click();
+    await pd.getByRole('alertdialog', { name: 'Pausar cliente' }).getByRole('button', { name: 'Pausar cliente' }).click();
+    await pd.getByRole('switch', { name: /Studio Alfa: Pausado · a partir de/ }).waitFor();
+    assert.equal(page(A).properties['Pausado'].checkbox, true);
+    assert.match(page(A).properties['Pausas'].rich_text.map((t) => t.plain_text).join(''), /^\d{4}-\d{2}-01\.\. · Arco/);
+    await shot(pd, '35-cliente-pausado');
+    await pd.getByRole('switch', { name: /Studio Alfa: Pausado/ }).click();
+    await pd.getByRole('alertdialog', { name: 'Reativar cliente' }).getByRole('button', { name: 'Reativar' }).click();
+    await pd.getByRole('switch', { name: /Studio Alfa: Cliente ativo/ }).waitFor();
+    assert.equal(page(A).properties['Pausado'].checkbox, false);
     // clientes avulsos: cadastra, aparece na barra lateral e não duplica
     await pd.goto(`${APP}/admin/avulsos`);
     const f = pd.getByRole('region', { name: 'Cadastrar cliente avulso' });
@@ -1180,6 +1207,9 @@ try {
     assert.equal(await p.getByRole('link', { name: 'Financeiro' }).count(), 0, 'sem Financeiro no menu');
     // menu da conta: quem está logado
     await p.locator('.side-me', { hasText: 'lemuel@x.com' }).getByText('Lemuel', { exact: true }).waitFor();
+    await p.goto(`${APP}/admin/clientes/${A}`);
+    assert.equal(await p.getByRole('switch', { name: /Studio Alfa: Cliente ativo/ }).isDisabled(), true, 'sem permissão para pausar');
+    await p.goto(`${APP}/admin/producao`);
     const col = p.locator('section.pcol[aria-label="Marcos"]');
     await col.getByRole('button', { name: 'Adicionar task para Marcos' }).click();
     const f = p.getByRole('dialog', { name: 'Novo lembrete ou tarefa' });

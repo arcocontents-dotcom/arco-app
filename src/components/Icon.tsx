@@ -4,7 +4,7 @@
 export type IconName =
   | 'calendar' | 'grid' | 'users' | 'chart' | 'feed' | 'week' | 'month' | 'plus' | 'eye' | 'logout'
   | 'search' | 'bell' | 'download' | 'check' | 'pencil' | 'x' | 'send' | 'link' | 'chat' | 'left'
-  | 'right' | 'copy' | 'image' | 'video' | 'trash' | 'clock' | 'inbox' | 'undo' | 'command' | 'bulb' | 'phone' | 'external' | 'drag' | 'wallet';
+  | 'right' | 'copy' | 'image' | 'video' | 'trash' | 'clock' | 'inbox' | 'undo' | 'command' | 'bulb' | 'phone' | 'external' | 'drag' | 'wallet' | 'pin';
 
 const P = {
   fill: 'none',
@@ -154,6 +154,11 @@ function paths(name: IconName) {
         <rect x="6.5" y="2.5" width="11" height="19" rx="2" />
         <path d="M10.5 18.5h3" />
         <g className="a-swing"><path d="M20.5 6.5c.8 1 1 2.3.6 3.5M3.5 6.5c-.8 1-1 2.3-.6 3.5" /></g>
+      </>);
+    case 'pin':
+      return (<>
+        <path d="M12 21s-6.5-6.2-6.5-11.2a6.5 6.5 0 0 1 13 0C18.5 14.8 12 21 12 21Z" />
+        <circle cx="12" cy="9.8" r="2.3" />
       </>);
     case 'external':
       return (<>

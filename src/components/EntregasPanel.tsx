@@ -42,6 +42,9 @@ export default function EntregasPanel({ data, monthLabel, clientName }: { data: 
     <div role="complementary" className="ent rise" aria-label={`Entregas de ${monthLabel}`} style={{ ['--d' as string]: '140ms' }}>
       <div className="ent-head">
         <span className="label">Entregas · {monthLabel}</span>
+        {data.pausado && (
+          <span className="ent-paused" role="status"><Icon name="clock" size={12} />Cliente pausado: a cota deste mês não renova e os atrasados estão congelados.</span>
+        )}
         {c && (
           <>
             <strong className="ent-big">{done}<small>/{total}</small></strong>
@@ -88,8 +91,29 @@ export default function EntregasPanel({ data, monthLabel, clientName }: { data: 
         </div>
       )}
 
+      {c && data.saldo?.length > 1 && (
+        <details className="ent-saldo">
+          <summary className="label">Saldo mês a mês</summary>
+          <table>
+            <thead><tr><th>Mês</th>{rows.map((t) => <th key={t.k}>{t.label}</th>)}</tr></thead>
+            <tbody>
+              {data.saldo.map((m) => (
+                <tr key={m.first} className={m.pausado ? 'paused' : ''}>
+                  <td>{m.mes}{m.pausado ? ' · pausado' : ''}</td>
+                  {rows.map((t) => {
+                    const deve = m.combinado[t.k];
+                    const fez = m.postados[t.k];
+                    return <td key={t.k} className={fez < deve ? 'due' : ''}>{m.pausado ? '—' : `${Math.min(fez, deve)}/${deve}`}</td>;
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      )}
+
       <p className="ent-foot">
-        Conta o que já foi <b>postado</b> com “Referente ao mês” = {monthLabel.split(' ')[0]}. O anel claro é o que está lançado e ainda em produção. Todo mês começa do zero; o que faltou postar no mês anterior entra aqui como atrasado até ser postado.
+        O contrato é mensal e acumula: cada mês tem a sua cota. Um conteúdo com “Referente ao mês” de um mês anterior está <b>pagando aquele mês</b>, quantidade por quantidade, até zerar o atrasado. Aqui conta o que já foi <b>postado</b>; o anel claro é o que está lançado e ainda em produção.
         {data.pagina && <> <a href={data.pagina.replace('https://www.notion.so/', 'notion://www.notion.so/')} className="ic-inline"><Icon name="external" size={11} />Combinado no Notion</a></>}
       </p>
     </div>

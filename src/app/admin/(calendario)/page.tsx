@@ -34,7 +34,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const nav = (m: string) => `/admin?c=${client.id}&m=${m}`;
 
   return (
-    <AdminShell current={client.id} base={client.base}>
+    <AdminShell current={client.id} client={client}>
       <div className="toolbar">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <p className="label rise ic-inline"><Icon name="calendar" size={14} />Aprovação · calendário editorial · {client.name}</p>

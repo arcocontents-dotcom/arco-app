@@ -55,7 +55,21 @@ export interface ClientRecord {
   combinado: { reels: number; post: number; story: number } | null;
   /** Base responsável (coluna Base; vazia → regra da Arco). */
   base: Base;
+  /** Pausado agora (a cota não renova e os atrasados ficam congelados). */
+  paused: boolean;
+  /** Períodos de pausa: meses [de, até) no formato YYYY-MM-01; até = null enquanto pausado. */
+  pauses: Pausa[];
 }
+
+export interface Pausa { from: string; to: string | null; by: string }
+/** "2026-12-01..2027-02-01 · Marcos" (um por linha). */
+export function parsePausas(txt: string): Pausa[] {
+  return txt.split(/\n+/).map((l) => l.match(/^(\d{4}-\d{2}-01)\.\.(\d{4}-\d{2}-01)?\s*(?:·\s*(.*))?$/)).filter((m): m is RegExpMatchArray => !!m)
+    .map((m) => ({ from: m[1], to: m[2] ?? null, by: (m[3] ?? '').trim() }));
+}
+export const pausasText = (l: Pausa[]) => l.map((p) => `${p.from}..${p.to ?? ''}${p.by ? ` · ${p.by}` : ''}`).join('\n');
+/** O mês (YYYY-MM-01) está dentro de uma pausa? */
+export const mesPausado = (pauses: Pausa[], first: string) => pauses.some((p) => first >= p.from && (!p.to || first < p.to));
 
 export type Base = 'Marcos' | 'Lemuel';
 /** Base Marcos: Simonetto, Hiperbáricas e Amanda Gatto. Os demais, Base Lemuel. */
@@ -172,7 +186,9 @@ function toClient(p: PageObjectResponse): ClientRecord {
     base: (() => {
       const b = select(pr[C.base]);
       return b === 'Marcos' || b === 'Lemuel' ? b : baseDoCliente(text(pr[C.name]), text(pr[C.calName]));
-    })()
+    })(),
+    paused: checkbox(pr[C.paused]),
+    pauses: parsePausas(text(pr[C.pauses]))
   };
 }
 
@@ -578,6 +594,14 @@ export function listContentsLinked(clientId: string): Promise<ContentRecord[]> {
 export async function setClientCombinado(id: string, c: { reels: number; post: number; story: number }) {
   await notion().pages.update({ page_id: id, properties: { [C.reelsM]: { number: c.reels }, [C.postM]: { number: c.post }, [C.storyM]: { number: c.story } } as never });
   invalidate('clients');
+}
+
+/** Pausa/reativa o cliente (só as colunas Pausado e Pausas). */
+export async function setClientPauses(id: string, paused: boolean, pauses: Pausa[]) {
+  await notion().pages.update({ page_id: id, properties: { [C.paused]: { checkbox: paused }, [C.pauses]: { rich_text: [{ text: { content: pausasText(pauses).slice(0, 1900) } }] } } as never });
+  invalidate('clients');
+  invalidate('plan:');
+  invalidate('contrato:');
 }
 
 /** Vínculos: conteúdos da aprovação ligados a um card do Planejamento. */

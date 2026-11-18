@@ -3,7 +3,7 @@ import schema from './schema.json';
 import { env } from './env';
 import { memo } from './cache';
 import { MONTHS, addDays, addMonths } from './domain';
-import { checkbox, date, isPage, queryAll, select, setClientCombinado } from './notion';
+import { checkbox, date, isPage, mesPausado, queryAll, select, setClientCombinado, type Pausa } from './notion';
 import { children, gestaoClientPages, norm, plain } from './gestao-sync';
 
 // Entregas do mês por cliente: o "Combinado com a marca" da página do cliente na Gestão
@@ -70,6 +70,10 @@ export interface EntregaMes {
   /** Faltou postar nos meses anteriores: entra neste mês como atrasado. */
   atrasados: Combinado;
   atrasadosDe: string[];
+  /** Saldo mês a mês desde o início da contagem (o que foi contratado e o que já foi entregue de cada mês). */
+  saldo: { first: string; mes: string; combinado: Combinado; postados: Combinado; pausado: boolean }[];
+  /** Este mês está com o cliente pausado (cota congelada). */
+  pausado: boolean;
   pagina: string | null;
 }
 
@@ -114,7 +118,7 @@ function countMonth(cal: string, first: string): Promise<{ postados: Combinado; 
 /** A conta dos atrasados começa aqui (antes disso o controle era manual, no Notion). */
 export const TRACK_START = '2026-10-01';
 
-export function entregasDoMes(c: { id: string; name: string; calName: string; notionPage: string; combinado: Combinado | null }, cal: string, first: string): Promise<EntregaMes> {
+export function entregasDoMes(c: { id: string; name: string; calName: string; notionPage: string; combinado: Combinado | null; pauses?: Pausa[] }, cal: string, first: string): Promise<EntregaMes> {
   return memo(`plan:entregas:${cal}:${first}`, 30_000, async () => {
     const pageId = await clientPageId(c).catch(() => null);
     // lê ao vivo da página do cliente; se não der, usa a cópia guardada no cliente
@@ -126,12 +130,18 @@ export function entregasDoMes(c: { id: string; name: string; calName: string; no
     // Postar a mais num mês abate o que estava atrasado.
     const atrasados: Combinado = { reels: 0, post: 0, story: 0 };
     const deMeses: string[] = [];
+    const saldo: EntregaMes['saldo'] = [];
+    const pauses = c.pauses ?? [];
     if (combinado) {
       const back = addMonths(first, -6);
       const start = back > TRACK_START ? back : TRACK_START;
       for (let m = start; m < first; m = addMonths(m, 1)) {
         const r = await countMonth(cal, m).catch(() => null);
         if (!r) continue;
+        // pausado: nada renova nesse mês e os atrasados ficam congelados
+        const pausado = mesPausado(pauses, m);
+        saldo.push({ first: m, mes: MONTHS[Number(m.slice(5, 7)) - 1], combinado: pausado ? { reels: 0, post: 0, story: 0 } : combinado, postados: r.postados, pausado });
+        if (pausado) continue;
         for (const k of ['reels', 'post', 'story'] as const) {
           const before = atrasados[k];
           atrasados[k] = Math.max(0, atrasados[k] + combinado[k] - r.postados[k]);
@@ -139,6 +149,8 @@ export function entregasDoMes(c: { id: string; name: string; calName: string; no
         }
       }
     }
-    return { combinado, postados, emProducao, atrasados, atrasadosDe: deMeses.map((m) => MONTHS[Number(m.slice(5, 7)) - 1]), pagina: pageId ? `https://www.notion.so/${pageId}` : null };
+    const pausadoAgora = mesPausado(pauses, first);
+    if (combinado && first >= TRACK_START) saldo.push({ first, mes: MONTHS[Number(first.slice(5, 7)) - 1], combinado: pausadoAgora ? { reels: 0, post: 0, story: 0 } : combinado, postados, pausado: pausadoAgora });
+    return { combinado: pausadoAgora && combinado ? { reels: 0, post: 0, story: 0 } : combinado, postados, emProducao, atrasados, saldo, pausado: pausadoAgora, atrasadosDe: deMeses.map((m) => MONTHS[Number(m.slice(5, 7)) - 1]), pagina: pageId ? `https://www.notion.so/${pageId}` : null };
   });
 }

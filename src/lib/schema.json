@@ -17,7 +17,9 @@
     "reelsM": "Reels mensal",
     "postM": "Post mensal",
     "storyM": "Story mensal",
-    "base": "Base"
+    "base": "Base",
+    "paused": "Pausado",
+    "pauses": "Pausas"
   },
   "contents": {
     "title": "Título",
