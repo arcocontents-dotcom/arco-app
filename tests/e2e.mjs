@@ -1094,11 +1094,18 @@ try {
     const txt = (x, n) => (x.properties[n]?.title ?? x.properties[n]?.rich_text ?? []).map((t) => t.plain_text).join('');
     await pd.goto(`${APP}/admin/planejamento?c=${A}&m=2026-11-01`);
     await pd.locator('.base-tag', { hasText: 'Base Lemuel' }).waitFor();
-    const mk = pd.getByRole('region', { name: 'Identidade visual de Studio Alfa' });
-    await mk.getByText('Prumo').waitFor();
-    await mk.getByText('#1f7a4d').waitFor();
-    await mk.getByText('Radiano').waitFor();
+    // aba Marca do Planejamento, ao lado do Calendário
+    await pd.getByRole('tab', { name: 'Marca' }).click();
+    const mk = pd.getByRole('region', { name: 'Marca' });
+    await mk.getByText('Prumo', { exact: true }).waitFor();
+    assert.equal(await mk.getByLabel('Código da cor Verde Alfa').inputValue(), '#1F7A4D');
+    await mk.getByRole('button', { name: /Copiar a cor Verde Alfa/ }).waitFor();
+    await mk.getByText('Radiano', { exact: true }).waitFor();
     await mk.getByText('8 com sombra').waitFor();
+    await shot(pd, '31b-planejamento-marca');
+    await pd.waitForTimeout(400);
+    assert.match(page(A).properties['Marca (dados)'].rich_text.map((t) => t.plain_text).join(''), /"fp":"Prumo"/, 'cópia da marca guardada no cliente');
+    await pd.getByRole('tab', { name: 'Quadro' }).click();
     // card novo de Reels: vaga mais antiga em aberto do contrato (tipo + mês de referência)
     const slots = [];
     for (const t of ['Reels da cota A', 'Reels da cota B']) {
@@ -1122,9 +1129,9 @@ try {
     // aba do cliente: MARCA (paleta, tipografia, dados e links vindos da página Marca do Notion)
     await pd.goto(`${APP}/admin/clientes/${A}`);
     const cm = pd.getByRole('region', { name: 'Marca' });
-    await cm.getByText('#1F7A4D').waitFor();
-    await cm.getByText('Prumo').waitFor();
-    await cm.getByText('Radiano').waitFor();
+    assert.equal(await cm.getByLabel('Código da cor Verde Alfa').inputValue(), '#1F7A4D');
+    await cm.getByText('Prumo', { exact: true }).waitFor();
+    await cm.getByText('Radiano', { exact: true }).waitFor();
     await cm.getByRole('link', { name: '(66) 99999-1234' }).waitFor();
     assert.equal(await cm.getByRole('link', { name: /Av\. das Flores/ }).getAttribute('href'), 'https://maps.app.goo.gl/alfa');
     await cm.getByRole('link', { name: /Logos/ }).waitFor();

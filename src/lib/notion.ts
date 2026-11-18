@@ -61,6 +61,8 @@ export interface ClientRecord {
   pauses: Pausa[];
   /** Página "Marca" do cliente no Notion (achada uma vez e guardada). */
   marcaPage: string;
+  /** Cópia da Marca (JSON) para abrir na hora. */
+  marcaData: string;
 }
 
 export interface Pausa { from: string; to: string | null; by: string }
@@ -191,7 +193,8 @@ function toClient(p: PageObjectResponse): ClientRecord {
     })(),
     paused: checkbox(pr[C.paused]),
     pauses: parsePausas(text(pr[C.pauses])),
-    marcaPage: url(pr[C.marcaPage]) ?? ''
+    marcaPage: url(pr[C.marcaPage]) ?? '',
+    marcaData: text(pr[C.marcaData])
   };
 }
 
@@ -602,6 +605,12 @@ export async function setClientCombinado(id: string, c: { reels: number; post: n
 /** Guarda a página Marca achada (assim não procura de novo). */
 export async function setClientMarcaPage(id: string, page: string) {
   await notion().pages.update({ page_id: id, properties: { [C.marcaPage]: { url: page } } as never });
+  invalidate('clients');
+}
+
+/** Guarda a cópia da Marca (JSON) no cliente. */
+export async function setClientMarcaData(id: string, json: string) {
+  await notion().pages.update({ page_id: id, properties: { [C.marcaData]: { rich_text: [{ text: { content: json.slice(0, 1990) } }] } } as never });
   invalidate('clients');
 }
 

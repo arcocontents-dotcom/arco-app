@@ -2,7 +2,7 @@ import 'server-only';
 import { memo } from './cache';
 import { children } from './gestao-sync';
 import { clientPageId } from './contrato';
-import { setClientMarcaPage } from './notion';
+import { setClientMarcaData, setClientMarcaPage } from './notion';
 
 // Identidade visual e dados do cliente, lidos da página "Marca" (Gestão → cliente → Bastidores → Marca) no Notion.
 // Só leitura. O modelo da Arco tem toggles: Paleta de cores, Fontes, CapCut, Banco de dados (Drive),
@@ -14,6 +14,8 @@ export interface Marca {
   fontePrincipal: string | null;
   fonteSecundaria: string | null;
   fonteInstagram: string | null;
+  /** Outras fontes da marca (terciária, itálica…). */
+  outrasFontes: Kv[];
   /** CapCut: tamanho da legenda, fonte, filtro, capa… */
   edicao: Kv[];
   contato: { endereco: string | null; maps: string | null; telefone: string | null; whatsapp: string | null; instagram: string | null; site: string | null; outros: Kv[] };
@@ -84,7 +86,7 @@ const KV = /^([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9 ./()&-]{1,40}?)\s*:\s*(.*)$/;
 
 export function parseMarca(lines: Line[], pagina: string): Marca {
   const m: Marca = {
-    cores: [], fontePrincipal: null, fonteSecundaria: null, fonteInstagram: null, edicao: [],
+    cores: [], fontePrincipal: null, fonteSecundaria: null, fonteInstagram: null, outrasFontes: [], edicao: [],
     contato: { endereco: null, maps: null, telefone: null, whatsapp: null, instagram: null, site: null, outros: [] },
     arquivos: [], referencias: [], pagina
   };
@@ -131,6 +133,7 @@ export function parseMarca(lines: Line[], pagina: string): Marca {
       else if (/secund/.test(k) && !m.fonteSecundaria) m.fonteSecundaria = p.valor;
       else if (/instagram/.test(k) && !m.fonteInstagram) m.fonteInstagram = p.valor;
       else if (!m.fontePrincipal) m.fontePrincipal = p.valor;
+      else m.outrasFontes.push({ nome: p.nome, valor: p.valor });
       continue;
     }
     if (/tamanho|filtro|capa|legenda/.test(k)) { m.edicao.push({ nome: p.nome, valor: p.valor, url: p.url }); continue; }
@@ -154,25 +157,76 @@ export function parseMarca(lines: Line[], pagina: string): Marca {
 const vazia = (m: Marca) =>
   !m.cores.length && !m.fontePrincipal && !m.fonteSecundaria && !m.contato.telefone && !m.contato.endereco && !m.arquivos.length;
 
-export function marcaDoCliente(c: { id: string; name: string; calName: string; notionPage: string; marcaPage?: string }): Promise<Marca | null> {
-  return memo(`contrato:marca:${c.id}`, 600_000, async () => {
-    // a página Marca já guardada no cliente; se não tiver, procura (uma vez) e guarda
-    let mp = (c.marcaPage ?? '').replace(/-/g, '').match(/[0-9a-f]{32}/i)?.[0] ?? null;
-    if (!mp) {
-      const page = await clientPageId(c);
-      if (!page) return null;
-      mp = await marcaPage(page);
-      if (!mp) return null;
-      await setClientMarcaPage(c.id, `https://www.notion.so/${mp.replace(/-/g, '')}`).catch(() => undefined);
-    }
-    const lines: Line[] = [];
-    await linesOf(mp, '', 0, lines);
-    const m = parseMarca(lines, `https://www.notion.so/${mp.replace(/-/g, '')}`);
-    return vazia(m) ? null : m;
-  }).catch((e) => {
+// --- cópia da Marca guardada no cliente (coluna "Marca (dados)"): abre na hora, sem ler o Notion toda vez ---
+type Pair = [string, string];
+interface MarcaData { cores?: Pair[]; fp?: string; fs?: string; fi?: string; outras?: Pair[]; ed?: Pair[]; end?: string; maps?: string; tel?: string; wa?: string; ig?: string; site?: string; arq?: Pair[]; ref?: Pair[] }
+
+export function marcaFromData(json: string, pagina: string): Marca | null {
+  let d: MarcaData;
+  try { d = JSON.parse(json); } catch { return null; }
+  if (!d || typeof d !== 'object') return null;
+  const pairs = (l?: Pair[]) => (Array.isArray(l) ? l.filter((x) => Array.isArray(x) && x.length >= 2).map(([nome, valor]) => ({ nome: String(nome), valor: String(valor), url: /^https?:\/\//.test(String(valor)) ? String(valor) : undefined })) : []);
+  return {
+    cores: (d.cores ?? []).filter((c) => /^#[0-9a-f]{3,8}$/i.test(c[1] ?? '')).map(([nome, hex]) => ({ nome, hex: hex.toLowerCase() })),
+    fontePrincipal: d.fp ?? null, fonteSecundaria: d.fs ?? null, fonteInstagram: d.fi ?? null,
+    outrasFontes: pairs(d.outras), edicao: pairs(d.ed),
+    contato: { endereco: d.end ?? null, maps: d.maps ?? null, telefone: d.tel ?? null, whatsapp: d.wa ?? null, instagram: d.ig ?? null, site: d.site ?? null, outros: [] },
+    arquivos: pairs(d.arq), referencias: pairs(d.ref), pagina
+  };
+}
+
+export function marcaToData(m: Marca): string {
+  const P = (l: Kv[]) => l.map((x) => [x.nome, x.url ?? x.valor] as Pair);
+  const short = (u: string | null) => (u && u.length <= 300 ? u : undefined);
+  const d: MarcaData = {
+    cores: m.cores.map((c) => [c.nome, c.hex]), fp: m.fontePrincipal ?? undefined, fs: m.fonteSecundaria ?? undefined, fi: m.fonteInstagram ?? undefined,
+    outras: P(m.outrasFontes), ed: P(m.edicao), end: m.contato.endereco ?? undefined, maps: short(m.contato.maps), tel: m.contato.telefone ?? undefined,
+    wa: short(m.contato.whatsapp), ig: short(m.contato.instagram), site: short(m.contato.site), arq: P(m.arquivos).filter((x) => x[1].length <= 300), ref: P(m.referencias).filter((x) => x[1].length <= 300)
+  };
+  return JSON.stringify(d).slice(0, 1990);
+}
+
+/** Lê a página Marca no Notion agora (ignora a cópia) e guarda uma cópia nova no cliente. */
+export async function lerMarcaDoNotion(c: { id: string; name: string; calName: string; notionPage: string; marcaPage?: string; marcaData?: string }): Promise<Marca | null> {
+  let mp = (c.marcaPage ?? '').replace(/-/g, '').match(/[0-9a-f]{32}/i)?.[0] ?? null;
+  if (!mp) {
+    const page = await clientPageId(c);
+    if (!page) return null;
+    mp = await marcaPage(page);
+    if (!mp) return null;
+    await setClientMarcaPage(c.id, `https://www.notion.so/${mp.replace(/-/g, '')}`).catch(() => undefined);
+  }
+  const lines: Line[] = [];
+  await linesOf(mp, '', 0, lines);
+  const m = parseMarca(lines, `https://www.notion.so/${mp.replace(/-/g, '')}`);
+  // o que a leitura não achou fica como estava na cópia (não apaga nada que já estava certo)
+  const prev = c.marcaData ? marcaFromData(c.marcaData, m.pagina) : null;
+  if (prev) {
+    if (!m.cores.length) m.cores = prev.cores;
+    m.fontePrincipal ??= prev.fontePrincipal;
+    m.fonteSecundaria ??= prev.fonteSecundaria;
+    m.fonteInstagram ??= prev.fonteInstagram;
+    if (!m.outrasFontes.length) m.outrasFontes = prev.outrasFontes;
+    if (!m.edicao.length) m.edicao = prev.edicao;
+    for (const k of ['endereco', 'maps', 'telefone', 'whatsapp', 'instagram', 'site'] as const) m.contato[k] ??= prev.contato[k];
+    if (!m.arquivos.length) m.arquivos = prev.arquivos;
+    if (!m.referencias.length) m.referencias = prev.referencias;
+  }
+  if (vazia(m)) return prev;
+  await setClientMarcaData(c.id, marcaToData(m)).catch(() => undefined);
+  return m;
+}
+
+export function marcaDoCliente(c: { id: string; name: string; calName: string; notionPage: string; marcaPage?: string; marcaData?: string }): Promise<Marca | null> {
+  // com cópia guardada: sem chamada ao Notion
+  if (c.marcaData) {
+    const m = marcaFromData(c.marcaData, c.marcaPage || '');
+    if (m) return Promise.resolve(m);
+  }
+  return memo(`contrato:marca:${c.id}`, 600_000, () => lerMarcaDoNotion(c)).catch((e) => {
     console.error('[marca]', e);
     return null;
   });
 }
 
-export { googleFontHref, fontFamilyOf } from './marca-view';
+export { googleFontHref, fontFamilyOf, fontStyle } from './marca-view';

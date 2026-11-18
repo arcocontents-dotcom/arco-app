@@ -9,7 +9,7 @@ import Icon from '@/components/Icon';
 import EntregasPanel from '@/components/EntregasPanel';
 import { entregasDoMes } from '@/lib/contrato';
 import PlanBoard from '@/components/PlanBoard';
-import MarcaLoader from '@/components/MarcaLoader';
+import { marcaFromData } from '@/lib/marca';
 import { contentThumb } from '@/lib/view';
 import CalNamePicker from '@/components/CalNamePicker';
 import PlanReport from '@/components/PlanReport';
@@ -142,12 +142,13 @@ export default async function Planejamento({ searchParams }: { searchParams: Pro
         openId={openId}
         today={today}
         cota={client.combinado}
+        marca={client.marcaData ? marcaFromData(client.marcaData, client.marcaPage) : null}
+        clientName={client.name}
         thumbs={thumbs}
       />
       </div>
       <div className="plan-side">
         {entregas && <EntregasPanel data={entregas} monthLabel={`${MONTHS[monthIdx(first)]} ${yearNum(first)}`} clientName={client.name} />}
-        <MarcaLoader clientId={client.id} clientName={client.name} variant="compact" />
       </div>
       </div>
     </AdminShell>

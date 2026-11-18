@@ -11,7 +11,8 @@ import { XIcon } from '@/components/icons';
 import LogoUploader from '@/components/LogoUploader';
 import AccessLink from '@/components/AccessLink';
 import CancelClient from '@/components/CancelClient';
-import MarcaLoader from '@/components/MarcaLoader';
+import BrandBoard from '@/components/BrandBoard';
+import { marcaFromData } from '@/lib/marca';
 import { addAccessAction, removeAccessAction, setClientPhoneAction, updateClientAction } from '../../actions';
 
 const OK: Record<string, string> = {
@@ -74,7 +75,7 @@ export default async function ClienteAcessos({
         </p>
       )}
 
-      <MarcaLoader clientId={c.id} clientName={c.name} variant="full" />
+      <BrandBoard clientId={c.id} clientName={c.name} initial={c.marcaData ? marcaFromData(c.marcaData, c.marcaPage) : null} />
 
       <section className="panel rise" style={{ ['--d' as string]: '100ms' }}>
         <h2 className="label">Logo do cliente</h2>

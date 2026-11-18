@@ -20,7 +20,8 @@
     "base": "Base",
     "paused": "Pausado",
     "pauses": "Pausas",
-    "marcaPage": "Página da marca"
+    "marcaPage": "Página da marca",
+    "marcaData": "Marca (dados)"
   },
   "contents": {
     "title": "Título",

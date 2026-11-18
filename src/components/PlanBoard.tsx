@@ -2,6 +2,8 @@
 
 import { useMemo, useRef, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
+import BrandBoard from './BrandBoard';
+import type { Marca } from '@/lib/marca';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import CardTasks from './CardTasks';
@@ -57,8 +59,11 @@ const PROPS: ({ kind: 'select'; field: SelectField; label: string; icon: IconNam
 ];
 
 export default function PlanBoard({
-  clientId, cal, month, items: initial, links, options, openId, today, cota, thumbs
+  clientId, cal, month, items: initial, links, options, openId, today, cota, thumbs, marca, clientName
 }: {
+  /** Marca do cliente (cópia guardada), para a aba Marca. */
+  marca?: Marca | null;
+  clientName?: string;
   /** Cota contratada por mês (Combinado com a marca). */
   cota?: { reels: number; post: number; story: number } | null;
   /** Miniatura de cada card (a mesma da Aprovação). */
@@ -85,7 +90,7 @@ export default function PlanBoard({
   const [draft, setDraft] = useState<PlanItem | null>(null);
   const [confirmDel, setConfirmDel] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
-  const [view, setView] = useState<'quadro' | 'calendario'>('quadro');
+  const [view, setView] = useState<'quadro' | 'calendario' | 'marca'>('quadro');
   const draftRef = useRef<PlanItem | null>(null);
   const creating = useRef(false);
   const [undo, setUndo] = useState<PlanItem | null>(null);
@@ -325,7 +330,10 @@ export default function PlanBoard({
       <div className="plan-views rise" role="tablist" aria-label="Visualização">
         <button type="button" role="tab" aria-selected={view === 'quadro'} onClick={() => setView('quadro')}><Icon name="grid" size={15} />Quadro</button>
         <button type="button" role="tab" aria-selected={view === 'calendario'} onClick={() => setView('calendario')}><Icon name="calendar" size={15} />Calendário</button>
+        <button type="button" role="tab" aria-selected={view === 'marca'} onClick={() => setView('marca')}><Icon name="bulb" size={15} />Marca</button>
       </div>
+      {view === 'marca' && <BrandBoard clientId={clientId} clientName={clientName ?? cal} initial={marca ?? null} />}
+      {view !== 'marca' && (<>
       <nav className="ntabs rise" aria-label="Formato">
         {TABS.map((t) => (
           <button key={t.key} type="button" aria-pressed={tab === t.key} onClick={() => setTab(t.key)}>
@@ -408,6 +416,7 @@ export default function PlanBoard({
         ))}
       </div>
       )}
+      </>)}
 
       {undo && (
         <div className="undo-bar" role="status">
