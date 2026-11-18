@@ -1,6 +1,7 @@
 import Icon from './Icon';
 import { MarcaFonts } from './MarcaPanel';
-import { fontFamilyOf, type Marca } from '@/lib/marca';
+import { fontFamilyOf } from '@/lib/marca-view';
+import type { Marca } from '@/lib/marca';
 
 const tel = (s: string) => `tel:+55${s.replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '')}`;
 const host = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };

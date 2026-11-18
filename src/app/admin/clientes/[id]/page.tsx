@@ -11,8 +11,7 @@ import { XIcon } from '@/components/icons';
 import LogoUploader from '@/components/LogoUploader';
 import AccessLink from '@/components/AccessLink';
 import CancelClient from '@/components/CancelClient';
-import ClientMarca from '@/components/ClientMarca';
-import { marcaDoCliente } from '@/lib/marca';
+import MarcaLoader from '@/components/MarcaLoader';
 import { addAccessAction, removeAccessAction, setClientPhoneAction, updateClientAction } from '../../actions';
 
 const OK: Record<string, string> = {
@@ -53,7 +52,6 @@ export default async function ClienteAcessos({
   const history = (await listContentsInRangeAdmin(c.id, '2026-01-01', addDays(today, 120)).catch(() => []))
     .sort((a, b) => (b.dateIso ?? b.day ?? '').localeCompare(a.dateIso ?? a.day ?? ''));
   const posted = history.filter((x) => x.status === 'Postado').length;
-  const marca = await marcaDoCliente(c).catch(() => null);
 
   return (
     <AdminShell current={c.id} section="gestao" client={c}>
@@ -76,7 +74,7 @@ export default async function ClienteAcessos({
         </p>
       )}
 
-      <ClientMarca marca={marca} clientName={c.name} />
+      <MarcaLoader clientId={c.id} clientName={c.name} variant="full" />
 
       <section className="panel rise" style={{ ['--d' as string]: '100ms' }}>
         <h2 className="label">Logo do cliente</h2>

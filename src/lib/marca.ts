@@ -2,6 +2,7 @@ import 'server-only';
 import { memo } from './cache';
 import { children } from './gestao-sync';
 import { clientPageId } from './contrato';
+import { setClientMarcaPage } from './notion';
 
 // Identidade visual e dados do cliente, lidos da página "Marca" (Gestão → cliente → Bastidores → Marca) no Notion.
 // Só leitura. O modelo da Arco tem toggles: Paleta de cores, Fontes, CapCut, Banco de dados (Drive),
@@ -69,7 +70,7 @@ async function marcaPage(clientPage: string): Promise<string | null> {
       if (b.type === 'child_page' && /^\s*(🔖\s*)?marca\b/i.test(String((b.child_page as { title?: string })?.title ?? ''))) return b.id;
     }
     for (const b of list) {
-      if (b.has_children && ['toggle', 'column_list', 'column', 'callout'].includes(b.type)) {
+      if (b.has_children && ['toggle', 'column_list', 'column', 'callout', 'synced_block'].includes(b.type)) {
         const hit = await walk(b.id, depth + 1);
         if (hit) return hit;
       }
@@ -153,12 +154,17 @@ export function parseMarca(lines: Line[], pagina: string): Marca {
 const vazia = (m: Marca) =>
   !m.cores.length && !m.fontePrincipal && !m.fonteSecundaria && !m.contato.telefone && !m.contato.endereco && !m.arquivos.length;
 
-export function marcaDoCliente(c: { id: string; name: string; calName: string; notionPage: string }): Promise<Marca | null> {
+export function marcaDoCliente(c: { id: string; name: string; calName: string; notionPage: string; marcaPage?: string }): Promise<Marca | null> {
   return memo(`contrato:marca:${c.id}`, 600_000, async () => {
-    const page = await clientPageId(c);
-    if (!page) return null;
-    const mp = await marcaPage(page);
-    if (!mp) return null;
+    // a página Marca já guardada no cliente; se não tiver, procura (uma vez) e guarda
+    let mp = (c.marcaPage ?? '').replace(/-/g, '').match(/[0-9a-f]{32}/i)?.[0] ?? null;
+    if (!mp) {
+      const page = await clientPageId(c);
+      if (!page) return null;
+      mp = await marcaPage(page);
+      if (!mp) return null;
+      await setClientMarcaPage(c.id, `https://www.notion.so/${mp.replace(/-/g, '')}`).catch(() => undefined);
+    }
     const lines: Line[] = [];
     await linesOf(mp, '', 0, lines);
     const m = parseMarca(lines, `https://www.notion.so/${mp.replace(/-/g, '')}`);
@@ -169,18 +175,4 @@ export function marcaDoCliente(c: { id: string; name: string; calName: string; n
   });
 }
 
-/** Link do Google Fonts para pré-visualizar a fonte (se ela existir lá). */
-export function googleFontHref(name: string | null): string | null {
-  if (!name) return null;
-  const alias: Record<string, string> = { 'julius sans': 'Julius Sans One', 'adobe caslon pro': 'Libre Caslon Text' };
-  const base = name.replace(/[-_](blk|black|bold|regular|light|extralight|thin|medium|semibold)\b.*$/i, '').replace(/\s+/g, ' ').trim();
-  if (!base || base.length > 40) return null;
-  const fam = alias[base.toLowerCase()] ?? base.toLowerCase().replace(/\b\w/g, (x) => x.toUpperCase());
-  return `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fam).replace(/%20/g, '+')}&display=swap`;
-}
-export function fontFamilyOf(name: string | null): string | null {
-  if (!name) return null;
-  const href = googleFontHref(name);
-  const fam = href ? decodeURIComponent(href.split('family=')[1].split('&')[0]).replace(/\+/g, ' ') : name;
-  return `'${fam}', '${name}', var(--body), sans-serif`;
-}
+export { googleFontHref, fontFamilyOf } from './marca-view';

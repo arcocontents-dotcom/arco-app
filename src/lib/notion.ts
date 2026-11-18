@@ -59,6 +59,8 @@ export interface ClientRecord {
   paused: boolean;
   /** Períodos de pausa: meses [de, até) no formato YYYY-MM-01; até = null enquanto pausado. */
   pauses: Pausa[];
+  /** Página "Marca" do cliente no Notion (achada uma vez e guardada). */
+  marcaPage: string;
 }
 
 export interface Pausa { from: string; to: string | null; by: string }
@@ -188,7 +190,8 @@ function toClient(p: PageObjectResponse): ClientRecord {
       return b === 'Marcos' || b === 'Lemuel' ? b : baseDoCliente(text(pr[C.name]), text(pr[C.calName]));
     })(),
     paused: checkbox(pr[C.paused]),
-    pauses: parsePausas(text(pr[C.pauses]))
+    pauses: parsePausas(text(pr[C.pauses])),
+    marcaPage: url(pr[C.marcaPage]) ?? ''
   };
 }
 
@@ -593,6 +596,12 @@ export function listContentsLinked(clientId: string): Promise<ContentRecord[]> {
 /** Guarda o combinado com a marca no cliente (colunas do app). */
 export async function setClientCombinado(id: string, c: { reels: number; post: number; story: number }) {
   await notion().pages.update({ page_id: id, properties: { [C.reelsM]: { number: c.reels }, [C.postM]: { number: c.post }, [C.storyM]: { number: c.story } } as never });
+  invalidate('clients');
+}
+
+/** Guarda a página Marca achada (assim não procura de novo). */
+export async function setClientMarcaPage(id: string, page: string) {
+  await notion().pages.update({ page_id: id, properties: { [C.marcaPage]: { url: page } } as never });
   invalidate('clients');
 }
 

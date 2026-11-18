@@ -9,8 +9,7 @@ import Icon from '@/components/Icon';
 import EntregasPanel from '@/components/EntregasPanel';
 import { entregasDoMes } from '@/lib/contrato';
 import PlanBoard from '@/components/PlanBoard';
-import MarcaPanel from '@/components/MarcaPanel';
-import { marcaDoCliente } from '@/lib/marca';
+import MarcaLoader from '@/components/MarcaLoader';
 import { contentThumb } from '@/lib/view';
 import CalNamePicker from '@/components/CalNamePicker';
 import PlanReport from '@/components/PlanReport';
@@ -98,11 +97,10 @@ export default async function Planejamento({ searchParams }: { searchParams: Pro
     );
   }
 
-  const [items, linked, entregas, marca] = await Promise.all([
+  const [items, linked, entregas] = await Promise.all([
     listPlanning(cal, first, last),
     linkedContents(client.id).catch(() => []),
-    entregasDoMes(client, cal, first).catch(() => null),
-    marcaDoCliente(client).catch(() => null)
+    entregasDoMes(client, cal, first).catch(() => null)
   ]);
   if (typeof items === 'string') {
     return <AdminShell section="planejamento" current={client.id} client={client}>{head}<p className="error">Não foi possível ler o Calendário mensal agora.</p></AdminShell>;
@@ -147,12 +145,10 @@ export default async function Planejamento({ searchParams }: { searchParams: Pro
         thumbs={thumbs}
       />
       </div>
-      {(entregas || marca) && (
-        <div className="plan-side">
-          {entregas && <EntregasPanel data={entregas} monthLabel={`${MONTHS[monthIdx(first)]} ${yearNum(first)}`} clientName={client.name} />}
-          {marca && <MarcaPanel marca={marca} clientName={client.name} />}
-        </div>
-      )}
+      <div className="plan-side">
+        {entregas && <EntregasPanel data={entregas} monthLabel={`${MONTHS[monthIdx(first)]} ${yearNum(first)}`} clientName={client.name} />}
+        <MarcaLoader clientId={client.id} clientName={client.name} variant="compact" />
+      </div>
       </div>
     </AdminShell>
   );

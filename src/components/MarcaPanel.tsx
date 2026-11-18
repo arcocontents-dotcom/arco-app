@@ -1,5 +1,6 @@
 import Icon from './Icon';
-import { fontFamilyOf, googleFontHref, type Marca } from '@/lib/marca';
+import { fontFamilyOf, googleFontHref } from '@/lib/marca-view';
+import type { Marca } from '@/lib/marca';
 
 const tel = (s: string) => `tel:+55${s.replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '')}`;
 
