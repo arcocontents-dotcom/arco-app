@@ -17,11 +17,12 @@ export const ACCESS_DB = '77777777777777777777777777777777';
 export const FIN_DB = '88888888888888888888888888888888';
 export const FINACC_DB = '99999999999999999999999999999999';
 export const LOG_DB = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+export const AVULSOS_DB = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 
 const TYPES = {
   [CLIENTS_DB]: {
     [C.name]: 'title', [C.approvers]: 'rich_text', [C.viewers]: 'rich_text', [C.instagram]: 'rich_text',
-    [C.igConnected]: 'checkbox', [C.igUserId]: 'rich_text', [C.igToken]: 'rich_text', [C.igTokenExpires]: 'date', [C.logo]: 'url', [C.cancelled]: 'checkbox', [C.calName]: 'rich_text', [C.push]: 'rich_text', [C.page]: 'url', [C.reelsM]: 'number', [C.postM]: 'number', [C.storyM]: 'number'
+    [C.igConnected]: 'checkbox', [C.igUserId]: 'rich_text', [C.igToken]: 'rich_text', [C.igTokenExpires]: 'date', [C.logo]: 'url', [C.cancelled]: 'checkbox', [C.calName]: 'rich_text', [C.push]: 'rich_text', [C.page]: 'url', [C.reelsM]: 'number', [C.postM]: 'number', [C.storyM]: 'number', [C.base]: 'select'
   },
   [CONTENTS_DB]: {
     [K.title]: 'title', [K.client]: 'relation', [K.date]: 'date', [K.type]: 'select', [K.status]: 'select',
@@ -34,13 +35,14 @@ const TYPES = {
     [PL.title]: 'title', [PL.client]: 'select', [PL.date]: 'date', [PL.status]: 'status', [PL.kind]: 'select',
     [PL.note]: 'select', [PL.owner]: 'select', [PL.done]: 'checkbox', [PL.month]: 'select',
     [PL.recMonth]: 'select', [PL.editMonth]: 'select', [PL.designBy]: 'select', [PL.postedBy]: 'select',
-    [PL.briefBy]: 'multi_select', [PL.deadline]: 'formula'
+    [PL.briefBy]: 'multi_select', [PL.deadline]: 'formula', [PL.copyBy]: 'select'
   },
   [SHOOTS_DB]: {
     'Captação': 'title', Data: 'date', Cliente: 'rich_text', 'Quem vai': 'multi_select', Tipo: 'select', Status: 'select', Local: 'rich_text', 'Observação': 'rich_text', Produtos: 'rich_text', 'Conteúdos': 'relation', 'Histórico': 'rich_text'
   },
   [LOG_DB]: { 'Ação': 'title', Quem: 'rich_text', 'Área': 'select', Item: 'rich_text', 'Item ID': 'rich_text', Quando: 'date', Detalhe: 'rich_text' },
   [ACCESS_DB]: { Nome: 'title', 'E-mail': 'email', Ativo: 'checkbox', Financeiro: 'checkbox' },
+  [AVULSOS_DB]: { Nome: 'title', Tipo: 'select', Contato: 'rich_text', Instagram: 'rich_text', 'Observação': 'rich_text', Ativo: 'checkbox', 'Histórico': 'rich_text' },
   [FIN_DB]: {
     'Descrição': 'title', Tipo: 'select', Categoria: 'select', Grupo: 'rich_text', Valor: 'number', Vencimento: 'date', 'Pago em': 'date',
     Recorrente: 'checkbox', Dia: 'number', 'Início': 'date', Fim: 'date', 'Situação': 'select', Cliente: 'rich_text', Conta: 'rich_text',
@@ -58,14 +60,15 @@ const TYPES = {
 // Opções existentes do Calendário mensal (o app só pode usar estas).
 export const PLAN_OPTIONS = {
   [PL.client]: ['Studio Alfa', 'Beta Ltda', 'Outro Cliente'],
-  [PL.kind]: ['Reels 1', 'Reels 2', 'Post 1', 'Storys 1', 'Fotos'],
+  [PL.kind]: ['Reels 1', 'Reels 2', 'Reels 3', 'Reels 4', 'Reels 5', 'Post 1', 'Post 2', 'Post 3', 'Storys 1', 'Storys 2', 'Fotos'],
   [PL.note]: ['Falta copy', 'Falta captação', 'Falta design', 'Falta edição', 'Aprovação post', 'Finalizado', 'Outros'],
   [PL.owner]: ['Lemuel', 'Rafa', 'Yan', 'Marcos', 'Finalizado'],
   [PL.month]: ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'],
   [PL.status]: ['Ideia', 'Realizando', 'Postado'],
-  [PL.briefBy]: ['Yan', 'Marcos', 'Lemuel', 'Rafael', 'Cliente'],
+  [PL.briefBy]: ['Yan', 'Marcos', 'Lemuel', 'Rafael', 'Cliente', 'Nenhum'],
   [PL.designBy]: ['Yan', 'Marcos', 'Lemuel', 'Rafael', 'Cliente'],
-  [PL.postedBy]: ['Yan', 'Marcos', 'Cliente']
+  [PL.postedBy]: ['Yan', 'Marcos', 'Cliente'],
+  [PL.copyBy]: ['Yan', 'Marcos', 'Lemuel', 'Rafael', 'Cliente']
 };
 PLAN_OPTIONS[PL.recMonth] = PLAN_OPTIONS[PL.month];
 PLAN_OPTIONS[PL.editMonth] = PLAN_OPTIONS[PL.month];
@@ -150,6 +153,7 @@ function match(page, f) {
   if (!f) return true;
   if (f.and) return f.and.every((x) => match(page, x));
   if (f.or) return f.or.some((x) => match(page, x));
+  if (f.timestamp === 'created_time') return !f.created_time?.on_or_after || page.created_time.slice(0, 10) >= f.created_time.on_or_after.slice(0, 10);
   const p = page.properties[f.property];
   if (!p) return false;
   if (f.relation) {

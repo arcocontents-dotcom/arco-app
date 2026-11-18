@@ -10,7 +10,7 @@ import Icon from './Icon';
 import { FORMATO_LABEL, addDays, dayNum, formatoDe, weekdayMon } from '@/lib/domain';
 import { shootStatusAction } from '@/app/admin/producao/captacao/actions';
 import { teamToggleAction } from '@/app/equipe/actions';
-import { openCardsAction, passContentAction, saveRoutineAction, toggleContentAction, toggleRoutineAction, trashRoutineAction } from '@/app/admin/producao/actions';
+import { avulsoNamesAction, openCardsAction, passContentAction, saveRoutineAction, toggleContentAction, toggleRoutineAction, trashRoutineAction } from '@/app/admin/producao/actions';
 
 // Tipos copiados de lib/producao (não dá para importar lib server-only aqui).
 type Person = 'Lemuel' | 'Marcos' | 'Yan' | 'Rafa';
@@ -556,6 +556,11 @@ function RoutineForm({
   const [client, setClient] = useState(startKind === 'agencia' ? rc : '');
   const [freeName, setFreeName] = useState(startKind === 'freelancer' || startKind === 'casamento' ? rc.slice(PREFIX[startKind].length) : '');
   const [err, setErr] = useState<string | null>(null);
+  // clientes avulsos já cadastrados: sugere o nome (reaproveita o cadastro)
+  const [avNames, setAvNames] = useState<{ name: string; tipo: string }[] | null>(null);
+  useEffect(() => {
+    if ((ckind === 'freelancer' || ckind === 'casamento') && avNames === null) avulsoNamesAction().then(setAvNames).catch(() => setAvNames([]));
+  }, [ckind, avNames]);
   const [confirmDel, setConfirmDel] = useState(false);
   const [pending, start] = useTransition();
   // lançada em: o dia de hoje (ou o dia em que foi criada), fixo
@@ -739,8 +744,12 @@ function RoutineForm({
               value={freeName}
               autoFocus
               maxLength={80}
+              list="avulsos-cadastrados"
               onChange={(e) => setFreeName(e.target.value)}
             />
+            <datalist id="avulsos-cadastrados">
+              {(avNames ?? []).filter((a) => (ckind === 'casamento') === (a.tipo === 'Casamento')).map((a) => <option key={a.name} value={a.name} />)}
+            </datalist>
           </label>
         )}
 

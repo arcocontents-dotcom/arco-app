@@ -20,7 +20,7 @@ export async function logHistory(pageId: string, line: string, prop = 'Históric
     if (isPage(p)) {
       const db = p.parent.type === 'database_id' ? p.parent.database_id.replace(/-/g, '') : '';
       const n = (v: string | null | undefined) => (v || '~').replace(/-/g, '');
-      const area = db === n(env.routineDb) ? 'Produção' : db === n(env.shootsDb) ? 'Captação' : db === n(env.finDb) || db === n(env.finAccountsDb) ? 'Financeiro' : null;
+      const area = db === n(env.routineDb) ? 'Produção' : db === n(env.shootsDb) ? 'Captação' : db === n(env.avulsosDb) ? 'Clientes' : db === n(env.finDb) || db === n(env.finAccountsDb) ? 'Financeiro' : null;
       if (area) {
         const titleProp = Object.values(p.properties).find((v) => v.type === 'title');
         const { logActivity } = await import('./registro');

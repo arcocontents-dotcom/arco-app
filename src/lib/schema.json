@@ -16,7 +16,8 @@
     "page": "Página do cliente",
     "reelsM": "Reels mensal",
     "postM": "Post mensal",
-    "storyM": "Story mensal"
+    "storyM": "Story mensal",
+    "base": "Base"
   },
   "contents": {
     "title": "Título",
@@ -65,7 +66,8 @@
     "deadline": "Prazo",
     "briefBy": "Gravado/Briefing por",
     "designBy": "Editado/Design por",
-    "postedBy": "Postado por"
+    "postedBy": "Postado por",
+    "copyBy": "Roteiro/Copy por"
   },
   "routine": {
     "title": "Tarefa",

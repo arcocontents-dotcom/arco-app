@@ -19,7 +19,7 @@ export const PLAN_STATUSES = ['Ideia', 'Realizando', 'Postado'] as const;
 export type PlanStatus = (typeof PLAN_STATUSES)[number];
 
 /** Campos de escolha única, na mesma ordem e com os mesmos nomes do Notion. */
-export const SELECT_FIELDS = ['owner', 'note', 'kind', 'month', 'recMonth', 'editMonth', 'designBy', 'postedBy'] as const;
+export const SELECT_FIELDS = ['owner', 'note', 'kind', 'month', 'recMonth', 'editMonth', 'designBy', 'postedBy', 'copyBy'] as const;
 export type SelectField = (typeof SELECT_FIELDS)[number];
 
 export interface PlanItem {
@@ -38,6 +38,9 @@ export interface PlanItem {
   editMonth: string | null;
   designBy: string | null;
   postedBy: string | null;
+  copyBy: string | null;
+  /** Dia em que o card foi lançado (criado). */
+  created: string;
   briefBy: string[];
   deadline: string | null;
   done: boolean;
@@ -101,6 +104,8 @@ function toPlan(p: PageObjectResponse): PlanItem {
     editMonth: select(pr[P.editMonth]),
     designBy: select(pr[P.designBy]),
     postedBy: select(pr[P.postedBy]),
+    copyBy: P.copyBy ? select(pr[P.copyBy]) : null,
+    created: localParts(p.created_time, env.timeZone).day,
     briefBy: multi(pr[P.briefBy]),
     deadline: formula(pr[P.deadline]),
     done: checkbox(pr[P.done])
@@ -198,6 +203,7 @@ export interface PlanPatch {
   editMonth?: string | null;
   designBy?: string | null;
   postedBy?: string | null;
+  copyBy?: string | null;
   briefBy?: string[];
   day?: string | null;
   done?: boolean;
@@ -215,8 +221,6 @@ function patchProps(x: PlanPatch): Record<string, unknown> {
   if (x.done !== undefined) pr[P.done] = { checkbox: x.done };
   if (x.day !== undefined) {
     pr[P.date] = { date: x.day ? { start: x.day } : null };
-    // Igual ao jeito da Arco: a data já preenche o "Referente ao mês" (se não vier um escolhido).
-    if (x.day && x.month === undefined) pr[P.month] = { select: { name: MONTHS[Number(x.day.slice(5, 7)) - 1] } };
   }
   return pr;
 }
@@ -238,7 +242,8 @@ export async function createPlanItem(cal: string, x: PlanPatch & { title: string
   if (!env.planningDb) throw new Error('Planejamento não configurado');
   const page = await notion().pages.create({
     parent: { database_id: env.planningDb },
-    properties: { [P.client]: { select: { name: cal } }, ...patchProps({ status: 'Ideia', ...x }) } as never
+    // card novo sem mês de referência: a data agendada preenche o "Referente ao mês"
+    properties: { [P.client]: { select: { name: cal } }, ...patchProps({ status: 'Ideia', ...x, ...(x.day && !x.month ? { month: MONTHS[Number(x.day.slice(5, 7)) - 1] } : {}) }) } as never
   });
   invalidate('plan:');
   return page.id;

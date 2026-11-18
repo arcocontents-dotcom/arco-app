@@ -9,6 +9,9 @@ import Icon from '@/components/Icon';
 import EntregasPanel from '@/components/EntregasPanel';
 import { entregasDoMes } from '@/lib/contrato';
 import PlanBoard from '@/components/PlanBoard';
+import MarcaPanel from '@/components/MarcaPanel';
+import { marcaDoCliente } from '@/lib/marca';
+import { contentThumb } from '@/lib/view';
 import CalNamePicker from '@/components/CalNamePicker';
 import PlanReport from '@/components/PlanReport';
 
@@ -48,7 +51,7 @@ export default async function Planejamento({ searchParams }: { searchParams: Pro
   const options = await planOptions();
   if (typeof options === 'string') {
     return (
-      <AdminShell section="planejamento" current={client.id}>
+      <AdminShell section="planejamento" current={client.id} base={client.base}>
         {head}
         <section className="panel setup rise">
           <Icon name="link" size={28} />
@@ -84,7 +87,7 @@ export default async function Planejamento({ searchParams }: { searchParams: Pro
   }
   if (!cal) {
     return (
-      <AdminShell section="planejamento" current={client.id}>
+      <AdminShell section="planejamento" current={client.id} base={client.base}>
         {head}
         <section className="panel setup rise">
           <h2 className="display" style={{ fontSize: 26, margin: 0 }}>Qual é {client.name} no Calendário mensal?</h2>
@@ -95,13 +98,14 @@ export default async function Planejamento({ searchParams }: { searchParams: Pro
     );
   }
 
-  const [items, linked, entregas] = await Promise.all([
+  const [items, linked, entregas, marca] = await Promise.all([
     listPlanning(cal, first, last),
     linkedContents(client.id).catch(() => []),
-    entregasDoMes(client, cal, first).catch(() => null)
+    entregasDoMes(client, cal, first).catch(() => null),
+    marcaDoCliente(client).catch(() => null)
   ]);
   if (typeof items === 'string') {
-    return <AdminShell section="planejamento" current={client.id}>{head}<p className="error">Não foi possível ler o Calendário mensal agora.</p></AdminShell>;
+    return <AdminShell section="planejamento" current={client.id} base={client.base}>{head}<p className="error">Não foi possível ler o Calendário mensal agora.</p></AdminShell>;
   }
   await pullPostedFromPlan(items, linked);
   // ?open=<card>: abre o card direto (vindo de uma tarefa da Produção), mesmo se for de outro mês
@@ -112,12 +116,16 @@ export default async function Planejamento({ searchParams }: { searchParams: Pro
     if (extra && extra.cal === cal) items.push(extra);
     openId = have?.id ?? (extra && extra.cal === cal ? extra.id : null);
   }
+  // miniatura do card = a mesma do conteúdo na Aprovação
+  const thumbs = Object.fromEntries(
+    linked.filter((c) => c.planningId).map((c) => [c.planningId!.replace(/-/g, ''), contentThumb(c)]).filter((x): x is [string, string] => !!x[1])
+  );
   const links = Object.fromEntries(
     linked.filter((c) => c.planningId).map((c) => [c.planningId!.replace(/-/g, ''), { id: c.id, status: c.status }])
   );
 
   return (
-    <AdminShell section="planejamento" current={client.id}>
+    <AdminShell section="planejamento" current={client.id} base={client.base}>
       {head}
       <div className="plan-actions rise" style={{ ['--d' as string]: '110ms' }}>
         <p className="hint" style={{ margin: 0 }}>Antes do mês começar, mande o planejamento para o cliente aprovar no WhatsApp. Depois, cada conteúdo é aprovado na semana dele.</p>
@@ -135,9 +143,16 @@ export default async function Planejamento({ searchParams }: { searchParams: Pro
         options={options}
         openId={openId}
         today={today}
+        cota={client.combinado}
+        thumbs={thumbs}
       />
       </div>
-      {entregas && <EntregasPanel data={entregas} monthLabel={`${MONTHS[monthIdx(first)]} ${yearNum(first)}`} clientName={client.name} />}
+      {(entregas || marca) && (
+        <div className="plan-side">
+          {entregas && <EntregasPanel data={entregas} monthLabel={`${MONTHS[monthIdx(first)]} ${yearNum(first)}`} clientName={client.name} />}
+          {marca && <MarcaPanel marca={marca} clientName={client.name} />}
+        </div>
+      )}
       </div>
     </AdminShell>
   );

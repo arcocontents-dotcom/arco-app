@@ -6,7 +6,7 @@ import Icon from './Icon';
 import { contentLinksAction, linkContentAction } from '@/app/admin/vinculo/actions';
 
 type Data = {
-  card: { id: string; title: string; kind: string | null } | null;
+  card: { id: string; title: string; kind: string | null; vaga: string | null } | null;
   tasks: { id: string; title: string; person: string; format: string | null; date: string | null; done: boolean }[];
   cards: { id: string; title: string; kind: string | null; note: string | null }[];
 };
@@ -42,6 +42,7 @@ export default function ContentLinks({ contentId, clientId, type }: { contentId:
           <li>
             <Icon name="bulb" size={13} />
             <span className="ct-t"><Link href={`/admin/planejamento?c=${clientId}&open=${data.card.id}`}>{data.card.kind ? `${data.card.kind} · ` : ''}{data.card.title}</Link></span>
+            {data.card.vaga && <span className="plan-vaga">{data.card.vaga}</span>}
             <button type="button" className="link-btn" style={{ marginLeft: 'auto' }} disabled={pending} onClick={() => set(null)}>Desvincular</button>
           </li>
           {data.tasks.map((t) => (

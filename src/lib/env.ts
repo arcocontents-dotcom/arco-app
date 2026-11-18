@@ -19,6 +19,10 @@ export const env = {
   get accessDb() {
     return read('NOTION_ACCESS_DB') ?? null;
   },
+  /** "🧾 Clientes avulsos": freelancers e avulsos (cadastro reaproveitado quando voltam). */
+  get avulsosDb() {
+    return read('NOTION_AVULSOS_DB') ?? null;
+  },
   /** "📜 Registro do app": tudo o que é feito no app. */
   get logDb() {
     return read('NOTION_LOG_DB') ?? null;

@@ -7,7 +7,6 @@ import { syncGestaoAction } from '../actions';
 import AdminShell from '@/components/AdminShell';
 import TeamAccess from '@/components/TeamAccess';
 import { listTeamAdmins } from '@/lib/acessos';
-import GestaoTabs from '@/components/GestaoTabs';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,8 +34,6 @@ export default async function Gestao({ searchParams }: { searchParams: Promise<{
           <Link className="btn small" href="/admin/clientes/novo"><Icon name="plus" size={16} />Novo cliente</Link>
         </div>
       </div>
-
-      <GestaoTabs tab="clientes" />
 
       {sync?.status === 'sem-acesso' && (
         <p className="hint rise" style={{ marginBottom: 16 }}>

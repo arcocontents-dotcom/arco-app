@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { listAvulsos } from '@/lib/avulsos';
 import Link from 'next/link';
 import { env } from '@/lib/env';
 import { listAllOpenContents, listClients, sameId } from '@/lib/notion';
@@ -7,7 +8,7 @@ import { currentViewer } from '@/lib/access';
 import Icon from './Icon';
 import CommandPalette from './CommandPalette';
 
-type Section = 'calendario' | 'captacao' | 'financeiro' | 'registro' | 'gestao' | 'pendencias' | 'planejamento' | 'producao';
+type Section = 'avulsos' | 'calendario' | 'captacao' | 'financeiro' | 'registro' | 'gestao' | 'pendencias' | 'planejamento' | 'producao';
 
 /** Conteúdos que pedem ação: atrasados (data passou e não postou) e ajustes/reprovados. */
 export async function alerts() {
@@ -21,9 +22,9 @@ export async function alerts() {
 }
 
 export default async function AdminShell({
-  current, children, section = 'calendario'
-}: { current?: string | null; children: ReactNode; section?: Section }) {
-  const [all, a, viewer] = await Promise.all([listClients().catch(() => []), alerts(), currentViewer().catch(() => null)]);
+  current, children, section = 'calendario', base
+}: { current?: string | null; children: ReactNode; section?: Section; base?: 'Marcos' | 'Lemuel' | null }) {
+  const [all, a, viewer, avulsos] = await Promise.all([listClients().catch(() => []), alerts(), currentViewer().catch(() => null), listAvulsos().catch(() => [])]);
   const canFinance = viewer?.role === 'admin' && viewer.finance;
   const clients = all.filter((c) => !c.cancelled);
   const gone = all.filter((c) => c.cancelled);
@@ -99,6 +100,18 @@ export default async function AdminShell({
               <span className="mini-logo ghost" aria-hidden="true"><Icon name="plus" size={14} /></span>
               <span className="client-name">Novo cliente</span>
             </Link>
+            <p className="label side-sub">Avulsos / freelancers · {avulsos.filter((x) => x.ativo).length}</p>
+            {avulsos.filter((x) => x.ativo).map((x) => (
+              <Link key={x.id} href={`/admin/avulsos/${x.id}`} className="client" aria-current={sameId(current, x.id) ? 'page' : undefined}>
+                <span className="mini-logo ghost" aria-hidden="true"><span>{x.name.charAt(0)}</span></span>
+                <span className="client-name">{x.name}</span>
+                <small className="side-kind">{x.tipo}</small>
+              </Link>
+            ))}
+            <Link href="/admin/avulsos" className="client add-client">
+              <span className="mini-logo ghost" aria-hidden="true"><Icon name="plus" size={14} /></span>
+              <span className="client-name">Cadastrar avulso</span>
+            </Link>
             {gone.length > 0 && (
               <details style={{ marginTop: 14 }}>
                 <summary className="label" style={{ color: '#a8a5a0', padding: '8px', cursor: 'pointer' }}>Removidos · {gone.length}</summary>
@@ -116,11 +129,23 @@ export default async function AdminShell({
         </div>
 
         <div className="side-fill" />
+        {viewer?.role === 'admin' && (
+          <div className="side-me" aria-label="Conta conectada">
+            <span className="pav sm" aria-hidden="true">{(viewer.name || viewer.email).charAt(0).toUpperCase()}</span>
+            <span className="side-me-t">
+              <b>{viewer.name.replace(/ \(admin\)$/, '')}</b>
+              <small>{viewer.email}</small>
+            </span>
+          </div>
+        )}
         <form action="/sair" method="post" className="side-out">
           <button type="submit" className="side-link"><Icon name="logout" size={16} /> <span>Sair</span></button>
         </form>
       </aside>
-      <main>{children}</main>
+      <main>
+        {base && <span className="base-tag" title="Base responsável pelo cliente">Base {base}</span>}
+        {children}
+      </main>
     </div>
   );
 }

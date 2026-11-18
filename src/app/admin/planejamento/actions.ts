@@ -4,7 +4,7 @@ import { isShortLink, splitLinks } from '@/lib/embed';
 import { isOwnMediaUrl } from '@/lib/media';
 
 import { requireAdmin } from '@/lib/access';
-import { getClientFresh, createContent, updateClient } from '@/lib/notion';
+import { getClientFresh, contentsOfPlanning, createContent, updateClient } from '@/lib/notion';
 import { parseDay, todayIn } from '@/lib/domain';
 import { env } from '@/lib/env';
 import {
@@ -18,10 +18,12 @@ import { setTaskCard, tasksOfCard, type CardTask } from '@/lib/vinculo';
 import { logHistory } from '@/lib/historico';
 
 import { logActivity } from '@/lib/registro';
+import { proximaVaga, vagaOcupada, type Vaga } from '@/lib/cota';
+import { MONTHS, formatoDe } from '@/lib/domain';
 
 const FIELD: Record<string, string> = {
   title: 'título', day: 'data', time: 'horário', status: 'status', kind: 'tipo', note: 'observação', owner: 'com quem está', done: 'finalizado',
-  month: 'mês', briefBy: 'gravado por', designBy: 'editado por', postedBy: 'postado por', recMonth: 'gravado quando', editMonth: 'editado quando',
+  month: 'mês', copyBy: 'roteiro/copy por', briefBy: 'gravado por', designBy: 'editado por', postedBy: 'postado por', recMonth: 'gravado quando', editMonth: 'editado quando',
   objetivo: 'objetivo', legenda: 'legenda', referencia: 'referência', imagens: 'imagens', roteiro: 'roteiro'
 };
 // edição salva sozinha a cada tecla: no registro entra no máximo 1 linha por card e pessoa a cada 10 min
@@ -65,8 +67,9 @@ async function clean(x: PlanPatch): Promise<PlanPatch | string> {
     out[f] = v;
   }
   if (x.briefBy !== undefined) {
-    if (!Array.isArray(x.briefBy) || x.briefBy.some((v) => !names('briefBy').includes(v))) return 'Opção inválida.';
-    out.briefBy = [...new Set(x.briefBy)];
+    // "Nenhum": o conteúdo não teve gravação (o Notion cria a opção na primeira vez)
+    if (!Array.isArray(x.briefBy) || x.briefBy.some((v) => v !== 'Nenhum' && !names('briefBy').includes(v))) return 'Opção inválida.';
+    out.briefBy = x.briefBy.includes('Nenhum') ? ['Nenhum'] : [...new Set(x.briefBy)];
   }
   if (x.day !== undefined) {
     if (x.day === null || x.day === '') out.day = null;
@@ -96,6 +99,16 @@ export async function createIdeaAction(
   const strip = Object.fromEntries(Object.entries(x).filter(([, v]) => v !== null && v !== undefined && !(Array.isArray(v) && !v.length)));
   const p = await clean({ status: 'Ideia', ...strip, title: x.title });
   if (typeof p === 'string') return { ok: false, error: p };
+  // saldo de conteúdo: cada card ocupa uma vaga só. Vaga já ocupada (ou sem mês) → a próxima livre.
+  const today = todayIn(env.timeZone);
+  const f = formatoDe(p.kind ?? null);
+  if (f && f !== 'foto' && /\d+$/.test(p.kind ?? '')) {
+    const busy = !p.month || (await vagaOcupada(c.calName, p.kind!, p.month, p.day ?? today).catch(() => false));
+    if (busy) {
+      const v = await proximaVaga(c.calName, p.kind!, today).catch(() => null);
+      if (v) { p.kind = v.kind; p.month = v.month; }
+    }
+  }
   try {
     const id = await createPlanItem(c.calName, { ...p, title: p.title! });
     await logActivity({ area: 'Planejamento', who: who.name, action: `${who.name} criou o card`, item: p.title!, itemId: id, detail: c.calName });
@@ -113,6 +126,18 @@ export async function updatePlanAction(clientId: string, planId: string, x: Plan
   if (!c || !item || item.cal !== c.calName) return { ok: false, error: 'Card não encontrado.' };
   const p = await clean(x);
   if (typeof p === 'string') return { ok: false, error: p };
+  // a data agendada só preenche o mês de referência quando o card ainda não tem um
+  if (p.day && p.month === undefined && !item.month) p.month = MONTHS[Number(p.day.slice(5, 7)) - 1];
+  // uma vaga da cota por card: não deixa dois cards no mesmo "Reels 3 · Outubro"
+  if (p.kind !== undefined || p.month !== undefined) {
+    const kind = p.kind !== undefined ? p.kind : item.kind;
+    const month = p.month !== undefined ? p.month : item.month;
+    if (kind !== item.kind || month !== item.month) {
+      if (await vagaOcupada(c.calName, kind, month, p.day ?? item.day ?? item.created, planId).catch(() => false)) {
+        return { ok: false, error: `${kind} · ${month} já está com outro card. Cada vaga do contrato é de um card só.` };
+      }
+    }
+  }
   try {
     await updatePlanItem(planId, p);
     if (p.title !== undefined && p.title !== item.title) {
@@ -130,12 +155,23 @@ export async function updatePlanAction(clientId: string, planId: string, x: Plan
   }
 }
 
+/** Próxima vaga do contrato para um formato (Reels/Post/Storys): a mais antiga em aberto. */
+export async function nextSlotAction(clientId: string, formato: string, exclude?: string | null): Promise<Vaga | null> {
+  await requireAdmin();
+  const c = await clientCal(clientId);
+  if (!c) return null;
+  return proximaVaga(c.calName, String(formato).slice(0, 30), todayIn(env.timeZone), exclude ?? null).catch(() => null);
+}
+
 /** Leva o card do planejamento para a aprovação: cria o conteúdo (rascunho) já ligado. */
 export async function sendToApprovalAction(clientId: string, planId: string): Promise<R<{ contentId: string }>> {
   const who = await requireAdmin();
   const c = await clientCal(clientId);
   const item = await getPlanItem(planId);
   if (!c || !item || item.cal !== c.calName) return { ok: false, error: 'Card não encontrado.' };
+  // já está na aprovação: abre o mesmo conteúdo (não cria outro, nem ocupa outra vaga)
+  const existing = (await contentsOfPlanning(item.id).catch(() => [])).find((x) => x.clientId && x.clientId.replace(/-/g, '') === c.id.replace(/-/g, ''));
+  if (existing) return { ok: true, contentId: existing.id };
   try {
     const contentId = await createContent({
       clientId: c.id,

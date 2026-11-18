@@ -55,7 +55,8 @@ export async function requireAdmin(): Promise<Viewer & { role: 'admin' }> {
 /** Pode ver o Financeiro (antes da senha). */
 export async function requireFinanceAccess(): Promise<Viewer & { role: 'admin' }> {
   const v = await requireAdmin();
-  if (!v.finance) notFound();
+  // sem permissão: nem aviso, volta para o início (a aba nem aparece no menu)
+  if (!v.finance) redirect('/admin');
   return v;
 }
 

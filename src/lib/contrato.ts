@@ -16,7 +16,7 @@ export type Combinado = Record<Entrega, number>;
 
 const idFrom = (s: string) => (s.replace(/-/g, '').match(/[0-9a-f]{32}/i)?.[0] ?? null);
 
-async function clientPageId(c: { name: string; calName: string; notionPage: string }): Promise<string | null> {
+export async function clientPageId(c: { name: string; calName: string; notionPage: string }): Promise<string | null> {
   const direct = idFrom(c.notionPage || '');
   if (direct) return direct;
   const pages = await memo('contrato:gestao-pages', 600_000, () => gestaoClientPages()).catch(() => []);

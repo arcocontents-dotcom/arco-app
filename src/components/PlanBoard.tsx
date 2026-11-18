@@ -8,9 +8,9 @@ import CardTasks from './CardTasks';
 import CardHistory from './CardHistory';
 import Icon, { type IconName } from './Icon';
 import TagSelect, { Tag, type Opt } from './TagSelect';
-import { MONTHS, WEEKDAYS_SHORT, dayLabel, dayNum, monthGrid } from '@/lib/domain';
+import { MONTHS, WEEKDAYS_SHORT, dayLabel, dayNum, formatoDe, monthGrid } from '@/lib/domain';
 import type { PlanItem, PlanOptions, PlanPatch, PlanStatus, SelectField } from '@/lib/planning';
-import { createIdeaAction, getBriefAction, saveBriefAction, sendToApprovalAction, trashPlanAction, updatePlanAction } from '@/app/admin/planejamento/actions';
+import { createIdeaAction, nextSlotAction, getBriefAction, saveBriefAction, sendToApprovalAction, trashPlanAction, updatePlanAction } from '@/app/admin/planejamento/actions';
 import type { PlanBrief, BriefField } from '@/lib/planning';
 import { useEffect } from 'react';
 import RefPreview from './RefPreview';
@@ -36,26 +36,33 @@ const TABS: { key: string; label: string; test: (k: string) => boolean }[] = [
 ];
 
 /** Propriedades na mesma ordem e com os mesmos nomes do Notion. */
-const PROPS: ({ kind: 'select'; field: SelectField; label: string; icon: IconName } | { kind: 'status' | 'date' | 'month' | 'deadline' | 'done' | 'brief' | 'client'; label: string; icon: IconName })[] = [
+const PROPS: ({ kind: 'select'; field: SelectField; label: string; icon: IconName } | { kind: 'status' | 'date' | 'month' | 'deadline' | 'done' | 'brief' | 'client' | 'created' | 'vaga'; label: string; icon: IconName })[] = [
   { kind: 'client', label: 'Cliente', icon: 'users' },
   { kind: 'select', field: 'owner', label: 'Demanda atual está com', icon: 'users' },
   { kind: 'status', label: 'Status', icon: 'clock' },
   { kind: 'select', field: 'note', label: 'Observação', icon: 'bell' },
   { kind: 'select', field: 'kind', label: 'Tipo de demanda', icon: 'video' },
-  { kind: 'date', label: 'Data de postagem', icon: 'calendar' },
   { kind: 'select', field: 'month', label: 'Referente ao mês', icon: 'calendar' },
+  { kind: 'vaga', label: 'Vaga do contrato', icon: 'check' },
+  { kind: 'created', label: 'Lançado em', icon: 'plus' },
+  { kind: 'date', label: 'Data agendada (postagem)', icon: 'calendar' },
   { kind: 'select', field: 'recMonth', label: 'Gravado quando', icon: 'video' },
   { kind: 'select', field: 'editMonth', label: 'Editado quando', icon: 'pencil' },
   { kind: 'deadline', label: 'Prazo', icon: 'clock' },
   { kind: 'done', label: 'Finalizado', icon: 'check' },
+  { kind: 'select', field: 'copyBy', label: 'Roteiro/Copy por', icon: 'pencil' },
   { kind: 'brief', label: 'Gravado/Briefing por', icon: 'users' },
   { kind: 'select', field: 'designBy', label: 'Editado/Design por', icon: 'image' },
   { kind: 'select', field: 'postedBy', label: 'Postado por', icon: 'send' }
 ];
 
 export default function PlanBoard({
-  clientId, cal, month, items: initial, links, options, openId, today
+  clientId, cal, month, items: initial, links, options, openId, today, cota, thumbs
 }: {
+  /** Cota contratada por mês (Combinado com a marca). */
+  cota?: { reels: number; post: number; story: number } | null;
+  /** Miniatura de cada card (a mesma da Aprovação). */
+  thumbs?: Record<string, string>;
   openId?: string | null;
   today?: string;
   clientId: string;
@@ -137,6 +144,8 @@ export default function PlanBoard({
   /** Na aba Reels/Post/Storys, a nova task já nasce com o próximo número livre (Reels 3, Post 2…). */
   function nextKind(): string | null {
     if (tab === 'todos') return null;
+    // com cota no contrato, a vaga certa (tipo + mês) vem do servidor logo depois
+    if (vagaDe(tab)) return null;
     const group = options.kind.filter((o) => TABS.find((t) => t.key === tab)!.test(o.name.toLowerCase()) && !/freelancer/i.test(o.name));
     const used = new Set(items.map((i) => i.kind));
     return (group.find((o) => !used.has(o.name)) ?? group[0])?.name ?? null;
@@ -156,11 +165,40 @@ export default function PlanBoard({
   const isNew = open === NEW;
   const linkOf = (id: string) => links[id.replace(/-/g, '')] ?? null;
 
+  /** Vaga do contrato do card: "Vídeo 4 de 4 · Outubro". */
+  function vagaDe(fmt: string | null): number {
+    const f = formatoDe(fmt);
+    return f && f !== 'foto' ? cota?.[f] ?? 0 : 0;
+  }
+  function vagaLabel(it: Pick<PlanItem, 'kind' | 'month'>): string | null {
+    const total = vagaDe(it.kind);
+    const n = Number(it.kind?.match(/(\d+)$/)?.[1] ?? 0);
+    if (!total || !n || !it.month) return null;
+    const nome = formatoDe(it.kind) === 'reels' ? 'Vídeo' : formatoDe(it.kind) === 'story' ? 'Story' : 'Post';
+    return `${nome} ${n} de ${total} · ${it.month}`;
+  }
+  /** Card novo: busca a vaga mais antiga em aberto do formato e preenche tipo e mês de referência. */
+  function fillSlot(fmt: string) {
+    if (!vagaDe(fmt)) return;
+    nextSlotAction(clientId, fmt).then((v) => {
+      if (!v) return;
+      setDraft((d) => {
+        if (!d || formatoDe(d.kind) && formatoDe(d.kind) !== formatoDe(fmt)) return d;
+        const n = { ...d, kind: v.kind, month: v.month };
+        draftRef.current = n;
+        return n;
+      });
+    });
+  }
+
   function patch(id: string, x: PlanPatch) {
     const before = items;
-    // Igual ao servidor: a data já preenche o "Referente ao mês".
+    const cur = id === NEW ? draftRef.current : items.find((i) => i.id === id);
+    // Igual ao servidor: a data agendada só preenche o "Referente ao mês" se ainda não tiver um.
     const local: Partial<PlanItem> = { ...(x as Partial<PlanItem>) };
-    if (x.day && x.month === undefined) local.month = MONTHS[Number(x.day.slice(5, 7)) - 1];
+    if (x.day && x.month === undefined && !cur?.month) local.month = MONTHS[Number(x.day.slice(5, 7)) - 1];
+    // card novo mudou de formato (reels → post): pega a vaga do novo formato
+    if (id === NEW && x.kind && formatoDe(x.kind) !== formatoDe(cur?.kind ?? null)) setTimeout(() => fillSlot(x.kind!), 0);
     if (id === NEW) {
       // Ainda não existe no Notion: guarda no formulário até ganhar título.
       setDraft((d) => {
@@ -187,11 +225,13 @@ export default function PlanBoard({
     const d: PlanItem = {
       id: NEW, url: '', title: '', cal, day, time: null, status, kind: nextKind(), note: null, owner: null,
       month: day ? MONTHS[Number(day.slice(5, 7)) - 1] : null,
-      recMonth: null, editMonth: null, designBy: null, postedBy: null, briefBy: [], deadline: null, done: false
+      recMonth: null, editMonth: null, designBy: null, postedBy: null, copyBy: null, briefBy: [], deadline: null, done: false,
+      created: today ?? new Date().toISOString().slice(0, 10)
     };
     draftRef.current = d;
     setDraft(d);
     setOpen(NEW);
+    if (tab !== 'todos') fillSlot(tab);
   }
 
   function trash(item: PlanItem) {
@@ -248,7 +288,7 @@ export default function PlanBoard({
       }
       const latest = draftRef.current ?? sent;
       const diff: PlanPatch = {};
-      for (const k of ['title', 'status', 'day', 'kind', 'note', 'owner', 'month', 'recMonth', 'editMonth', 'designBy', 'postedBy', 'done'] as const) {
+      for (const k of ['title', 'status', 'day', 'kind', 'note', 'owner', 'month', 'recMonth', 'editMonth', 'designBy', 'postedBy', 'copyBy', 'done'] as const) {
         if (JSON.stringify(latest[k]) !== JSON.stringify(sent[k])) (diff as Record<string, unknown>)[k] = k === 'title' ? latest.title.trim() || title : latest[k];
       }
       if (JSON.stringify(latest.briefBy) !== JSON.stringify(sent.briefBy)) diff.briefBy = latest.briefBy;
@@ -343,14 +383,17 @@ export default function PlanBoard({
                       onDragEnd={() => { setDrag(null); setOver(null); }}
                       onClick={() => setOpen(it.id)}
                     >
+                      {thumbs?.[it.id.replace(/-/g, '')] && <img className="plan-thumb" src={thumbs[it.id.replace(/-/g, '')]} alt="" loading="lazy" />}
                       <span className="plan-title">{it.title}</span>
+                      {vagaLabel(it) && <span className="plan-vaga">{vagaLabel(it)}</span>}
                       <span className="plan-tags">
                         {it.kind && <Tag name={it.kind} color={colorOf(options.kind, it.kind)} />}
                         {it.note && <Tag name={it.note} color={colorOf(options.note, it.note)} />}
                         {it.done && <Tag name="Finalizado" color="green" />}
                       </span>
                       <span className="plan-meta">
-                        {it.day ? <span className="ic-inline"><Icon name="calendar" size={13} />{dayLabel(it.day)}</span> : <span className="muted">Sem data</span>}
+                        {it.day ? <span className="ic-inline" title="Data agendada"><Icon name="calendar" size={13} />{dayLabel(it.day)}</span> : <span className="muted">Sem data</span>}
+                        {it.month && !vagaLabel(it) && <span className="muted" title="Referente ao mês">ref. {it.month}</span>}
                         {it.deadline && <span className="muted">{it.deadline}</span>}
                         {l && <span className={`status s-${l.status}`}>{l.status === 'Rascunho' ? 'Na aprovação' : l.status}</span>}
                         {it.owner && <span className="owner" title={`Demanda atual está com ${it.owner}`}>{it.owner.charAt(0)}</span>}
@@ -407,8 +450,21 @@ export default function PlanBoard({
                       <TagSelect label={p.label} options={options[p.field]} value={current[p.field]} onChange={(v) => patch(current.id, { [p.field]: (v as string | null) ?? null })} />
                     )}
                     {p.kind === 'brief' && (
-                      <TagSelect label={p.label} multiple options={options.briefBy} value={current.briefBy} onChange={(v) => patch(current.id, { briefBy: v as string[] })} />
+                      <TagSelect
+                        label={p.label}
+                        multiple
+                        options={[...options.briefBy.filter((o) => o.name !== 'Nenhum'), { name: 'Nenhum', color: 'gray' }]}
+                        value={current.briefBy}
+                        onChange={(v) => {
+                          // "Nenhum" não combina com quem gravou: escolher um tira o outro
+                          const list = v as string[];
+                          const added = list.find((x) => !current.briefBy.includes(x));
+                          patch(current.id, { briefBy: added === 'Nenhum' ? ['Nenhum'] : list.filter((x) => x !== 'Nenhum') });
+                        }}
+                      />
                     )}
+                    {p.kind === 'created' && <span className="nreadonly">{isNew ? 'Hoje (ao salvar)' : `${current.created.slice(8, 10)}/${current.created.slice(5, 7)}/${current.created.slice(0, 4)}`}</span>}
+                    {p.kind === 'vaga' && <span className="nreadonly">{vagaLabel(current) ?? (vagaDe(current.kind) ? 'Escolha o tipo e o mês' : 'Sem cota no contrato para este formato')}</span>}
                     {p.kind === 'status' && (
                       <TagSelect
                         label={p.label}

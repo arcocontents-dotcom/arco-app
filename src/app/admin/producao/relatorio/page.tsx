@@ -152,7 +152,16 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
         {d && (
           <section className="rp-card rise" aria-label="Captações agendadas" style={{ ['--d' as string]: '220ms' }}>
             <h2 className="label">Captações agendadas no mês · {d.agendamentos.total} no total</h2>
-            <p className="hint" style={{ margin: 0 }}>Cada captação marcada na aba Captação conta como produção de quem agendou, sem precisar lançar tarefa.</p>
+            <div className="ag-bases" role="list" aria-label="Agendamentos por base">
+              <div role="listitem"><strong>{d.agendamentos.porBase.Marcos}</strong><span className="label">Base Marcos</span></div>
+              <div role="listitem"><strong>{d.agendamentos.porBase.Lemuel}</strong><span className="label">Base Lemuel</span></div>
+              {d.agendamentos.porBase.Outros > 0 && <div role="listitem"><strong>{d.agendamentos.porBase.Outros}</strong><span className="label">Avulsos / sem base</span></div>}
+              <div role="listitem" className="ag-total"><strong>{d.agendamentos.total}</strong><span className="label">Total da Arco</span></div>
+            </div>
+            <p className="hint" style={{ margin: 0 }}>
+              Contados pela data agendada, cada agendamento uma vez: captações da aba Captação{d.agendamentos.agenda === 'ok' ? ' + eventos da agenda' : ''}. Cada captação marcada no app conta como produção de quem agendou.
+              {d.agendamentos.agenda === 'erro' && ' A agenda não respondeu agora: o total mostra só as captações do app.'}
+            </p>
             <ul className="ag-rank">
               {d.agendamentos.porPessoa.map((x) => (
                 <li key={x.name}>
@@ -169,16 +178,17 @@ export default async function RelatorioProducao({ searchParams }: { searchParams
                 <summary className="label">Histórico de agendamentos da agência · {d.agendamentos.lista.length}</summary>
                 <table className="ag-table">
                   <thead>
-                    <tr><th>Agendou em</th><th>Quem agendou</th><th>Cliente</th><th>Captação</th><th>Dia</th><th>Situação</th></tr>
+                    <tr><th>Dia agendado</th><th>Base</th><th>Quem agendou</th><th>Cliente</th><th>Captação</th><th>Agendou em</th><th>Situação</th></tr>
                   </thead>
                   <tbody>
                     {d.agendamentos.lista.map((x) => (
                       <tr key={x.id} className={x.status === 'Cancelada' ? 'cancel' : ''}>
-                        <td>{x.createdAt.slice(8, 10)}/{x.createdAt.slice(5, 7)}</td>
+                        <td>{x.day ? `${x.day.slice(8, 10)}/${x.day.slice(5, 7)}` : '—'}</td>
+                        <td>{x.base ? `Base ${x.base}` : 'Avulso / sem base'}</td>
                         <td>{x.by}</td>
                         <td>{x.client ?? '—'}</td>
-                        <td><a href={x.url} target="_blank" rel="noreferrer">{x.title}</a></td>
-                        <td>{x.day ? `${x.day.slice(8, 10)}/${x.day.slice(5, 7)}` : '—'}</td>
+                        <td>{x.url ? <a href={x.url} target="_blank" rel="noreferrer">{x.title}</a> : x.title}</td>
+                        <td>{x.fonte === 'app' ? `${x.createdAt.slice(8, 10)}/${x.createdAt.slice(5, 7)}` : 'agenda'}</td>
                         <td>{x.status}</td>
                       </tr>
                     ))}

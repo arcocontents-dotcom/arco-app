@@ -45,7 +45,7 @@ export default function CommandPalette({ clients, current }: { clients: C[]; cur
       { key: 'cal', label: 'Aprovação', hint: 'Calendário editorial', href: '/admin', icon: 'calendar', words: 'aprovacao calendario editorial mes' },
       { key: 'pend', label: 'Pendências', hint: 'Ir para', href: '/admin/pendencias', icon: 'bell', words: 'pendencias atrasados ajustes reprovados alertas' },
       { key: 'gest', label: 'Gestão · Clientes', hint: 'Ir para', href: '/admin/gestao', icon: 'grid', words: 'gestao clientes todos' },
-      { key: 'dash', label: 'Dashboard de produção', hint: 'Ir para', href: '/admin/gestao/dashboard', icon: 'chart', words: 'dashboard producao relatorio pdf porcentagem' },
+      { key: 'dash', label: 'Dashboard de produção', hint: 'Ir para', href: '/admin/producao/relatorio', icon: 'chart', words: 'dashboard producao relatorio pdf porcentagem' },
       { key: 'newc', label: 'Novo cliente', hint: 'Criar', href: '/admin/clientes/novo', icon: 'users', words: 'novo cliente cadastrar' }
     ];
     for (const c of clients) {

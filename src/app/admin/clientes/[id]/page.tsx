@@ -53,7 +53,7 @@ export default async function ClienteAcessos({
   const posted = history.filter((x) => x.status === 'Postado').length;
 
   return (
-    <AdminShell current={c.id} section="gestao">
+    <AdminShell current={c.id} section="gestao" base={c.base}>
       <div className="toolbar">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <Link href="/admin/gestao" className="label rise ic-inline" style={{ textDecoration: 'none' }}><Icon name="left" size={14} />Gestão</Link>

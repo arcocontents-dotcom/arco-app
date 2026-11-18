@@ -53,6 +53,15 @@ export interface ClientRecord {
   notionPage: string;
   /** Combinado com a marca por mês (cópia do toggle da página do cliente). null = não preenchido. */
   combinado: { reels: number; post: number; story: number } | null;
+  /** Base responsável (coluna Base; vazia → regra da Arco). */
+  base: Base;
+}
+
+export type Base = 'Marcos' | 'Lemuel';
+/** Base Marcos: Simonetto, Hiperbáricas e Amanda Gatto. Os demais, Base Lemuel. */
+export function baseDoCliente(name: string, calName = ''): Base {
+  const s = `${name} ${calName}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return /simonetto|hiperbaric|amanda gatto/.test(s) ? 'Marcos' : 'Lemuel';
 }
 
 export interface PushSub {
@@ -159,6 +168,10 @@ function toClient(p: PageObjectResponse): ClientRecord {
       };
       const r = n(C.reelsM), po = n(C.postM), st = n(C.storyM);
       return r === null && po === null && st === null ? null : { reels: r ?? 0, post: po ?? 0, story: st ?? 0 };
+    })(),
+    base: (() => {
+      const b = select(pr[C.base]);
+      return b === 'Marcos' || b === 'Lemuel' ? b : baseDoCliente(text(pr[C.name]), text(pr[C.calName]));
     })()
   };
 }

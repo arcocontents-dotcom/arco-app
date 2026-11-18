@@ -7,6 +7,7 @@ import { diffLine, logHistory } from '@/lib/historico';
 import { logActivity } from '@/lib/registro';
 import { linkTaskToPlanning, openCards, planCardKind, setTaskCard, type OpenCard } from '@/lib/vinculo';
 import { mesmoFormato } from '@/lib/domain';
+import { ensureAvulso, listAvulsos } from '@/lib/avulsos';
 import {
   FORMATS, ROUTINE_TYPES, TEAM, URGENCY_LABEL, WEEKDAYS, createRoutine, getRoutine, passContent, setContentDone, setRoutineDone, trashRoutine, updateRoutine,
   type RoutineInput
@@ -82,6 +83,9 @@ export async function saveRoutineAction(
     } else {
       await logHistory(rid, `${who.name} lançou para ${v.person}${v.date ? ` · entrega ${br(v.date)}` : ''}`);
     }
+    // cliente avulso/freelancer: guarda (ou reaproveita) o cadastro
+    const av = v.client.match(/^(Freelancer|Casamento) · (.+)$/);
+    if (av) await ensureAvulso(av[2], av[1] as 'Freelancer' | 'Casamento', who.name).catch(() => undefined);
     let planId: string | null = null;
     if (link === 'desligar') {
       if (id) {
@@ -147,6 +151,12 @@ export async function toggleContentAction(id: string, done: boolean): Promise<R>
 }
 
 /** Cards abertos do cliente no Planejamento, para ligar a task a um conteúdo que já existe. */
+/** Nomes dos clientes avulsos cadastrados (para sugerir na Produção). */
+export async function avulsoNamesAction(): Promise<{ name: string; tipo: string }[]> {
+  await requireAdmin();
+  return (await listAvulsos().catch(() => [])).map((a) => ({ name: a.name, tipo: a.tipo }));
+}
+
 export async function openCardsAction(client: string, format?: string | null): Promise<OpenCard[]> {
   await requireAdmin();
   return openCards(String(client).slice(0, 120), format ? String(format).slice(0, 40) : null).catch(() => []);

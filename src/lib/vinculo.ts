@@ -3,9 +3,10 @@ import type { PageObjectResponse } from '@notionhq/client/build/src/api-endpoint
 import schema from './schema.json';
 import { env } from './env';
 import { invalidate } from './cache';
-import { MONTHS, formatoDe, mesmoFormato } from './domain';
+import { MONTHS, formatoDe, mesmoFormato, todayIn } from './domain';
 import { isPage, listClients, normId, notion, queryAll, select, text, titleProp } from './notion';
 import { planOptions } from './planning';
+import { proximaVaga } from './cota';
 import type { Produto } from './produtos';
 
 // Tudo em um: captação, tasks da Produção e Planejamento (Calendário mensal) ligados.
@@ -59,7 +60,19 @@ async function nextKind(cal: string, month: string, base: string | null, taken: 
   return names.includes(`${base} ${n}`) ? `${base} ${n}` : numbered[numbered.length - 1] ?? null;
 }
 
-async function opt(field: 'note' | 'month' | 'recMonth' | 'editMonth' | 'designBy', name: string | null): Promise<string | null> {
+/** Com cota no contrato: a vaga mais antiga em aberto (tipo + mês). Sem cota: o próximo número do mês. */
+async function vagaOuKind(cal: string, month: string, base: string | null, taken: Map<string, number>, skip: Set<string>): Promise<{ kind: string | null; month: string }> {
+  if (base && base !== 'Fotos') {
+    const v = await proximaVaga(cal, base, todayIn(env.timeZone), null, skip).catch(() => null);
+    if (v) {
+      skip.add(`${v.kind}|${v.month}`);
+      return { kind: v.kind, month: v.month };
+    }
+  }
+  return { kind: await nextKind(cal, month, base, taken), month };
+}
+
+async function opt(field: 'note' | 'month' | 'recMonth' | 'editMonth' | 'designBy' | 'copyBy', name: string | null): Promise<string | null> {
   if (!name) return null;
   const opts = await planOptions();
   return typeof opts !== 'string' && opts[field].some((o) => o.name === name) ? name : null;
@@ -131,16 +144,18 @@ export async function linkShootToPlanning(shootId: string, x: {
   const month = monthOf(x.day);
   const briefBy = await briefByOpts(x.crew);
   const taken = new Map<string, number>();
+  const skip = new Set<string>();
   const created: string[] = [];
   const when = `${x.day.slice(8, 10)}/${x.day.slice(5, 7)}${x.time ? ` às ${x.time}` : ''}`;
   for (const pr of x.products) {
     for (let i = (have.get(pr.name) ?? 0) + 1; i <= pr.qty; i++) {
+      const vaga = await vagaOuKind(cal, month, baseOf(pr.name), taken, skip);
       const id = await createCard({
         cal,
         title: `${pr.name} ${i} · ${x.title}`,
         status: 'Ideia',
-        kind: await nextKind(cal, month, baseOf(pr.name), taken),
-        month,
+        kind: vaga.kind,
+        month: vaga.month,
         recMonth: x.status === 'Realizada' ? month : null,
         note: x.status === 'Realizada' ? 'Falta edição' : 'Falta captação',
         briefBy,
@@ -264,6 +279,9 @@ export async function taskDoneOnPlanning(cardId: string, format: string | null, 
   } else if (format === 'Fazer roteiro') {
     const n = await opt('note', 'Aprovação briefing');
     if (n) props[P.note] = { select: { name: n } };
+    // quem desenvolveu o roteiro/copy fica registrado no card, igual edição e captação
+    const by = await opt('copyBy', EDITOR[person] ?? person);
+    if (by && P.copyBy) props[P.copyBy] = { select: { name: by } };
   }
   if (Object.keys(props).length) {
     await notion().pages.update({ page_id: cardId, properties: props as never });

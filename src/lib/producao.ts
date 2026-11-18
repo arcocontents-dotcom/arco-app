@@ -6,9 +6,10 @@ import schema from './schema.json';
 import { env } from './env';
 import { invalidate, memo } from './cache';
 import { MONTHS, addDays, addMonths, localParts, weekdayMon } from './domain';
-import { checkbox, date, isPage, normId, notion, queryAll, select, text, titleProp } from './notion';
+import { checkbox, date, isPage, listClients, normId, notion, queryAll, select, text, titleProp } from './notion';
 import { matchCalName, multi } from './planning';
 import { listShoots, type Shoot } from './captacao';
+import { listAgenda } from './agenda';
 import { produtosToText } from './produtos';
 
 // Produção da equipe: o que cada pessoa precisa fazer na semana.
@@ -511,7 +512,10 @@ export interface TeamDashboard {
     total: number;
     porPessoa: { name: string; n: number }[];
     /** Histórico unificado da agência: cada captação agendada no mês, quem agendou e quando. */
-    lista: { id: string; title: string; client: string | null; by: string; createdAt: string; day: string | null; status: string; url: string }[];
+    lista: { id: string; title: string; client: string | null; by: string; createdAt: string; day: string | null; status: string; url: string; base: 'Marcos' | 'Lemuel' | null; fonte: 'app' | 'agenda' }[];
+    /** Por base (Base Marcos / Base Lemuel); "Outros" = sem cliente identificado. Total da Arco = soma. */
+    porBase: { Marcos: number; Lemuel: number; Outros: number };
+    agenda: 'ok' | 'erro' | 'sem-agenda';
   };
 }
 
@@ -553,10 +557,11 @@ export async function teamDashboard(first: string, today: string): Promise<TeamD
         }
       }),
       listShoots(first, last).catch(() => [] as Shoot[]),
-      // agendadas neste mês (a captação pode ser em outro mês)
-      listShoots(addDays(first, -60), addDays(last, 120)).catch(() => [] as Shoot[]),
+      // agendamentos do mês: pela data agendada (a captação marcada para este mês)
+      listShoots(first, last).catch(() => [] as Shoot[]),
       listRoutines().catch(() => [] as Routine[])
     ]);
+    const [agenda, clientes] = await Promise.all([listAgenda(first, last).catch(() => null), listClients().catch(() => [])]);
     const people = TEAM.map((name) => ({ name, m: zeroM(), items: [] as DashItem[], posted: { reels: 0, post: 0, story: 0, outro: 0 }, dupla: 0 }));
     const postedT: PostedTotals = { total: 0, reels: 0, post: 0, story: 0, outro: 0, equipe: 0, cliente: 0, semQuem: 0 };
     const team = zeroM();
@@ -670,19 +675,50 @@ export async function teamDashboard(first: string, today: string): Promise<TeamD
       bump(r.person, k, { title: r.title, client: r.client || null, day: r.date, url: `https://www.notion.so/${normId(r.id)}` });
     }
     for (const p of people) p.items.sort((a, b) => (b.day ?? '').localeCompare(a.day ?? ''));
-    // Agendamentos: quem marcou a captação pelo app (vale como produção, sem lançar tarefa)
+    // Agendamentos do mês, pela data agendada, cada um contado uma vez: as captações do app + a agenda (Notion Calendar).
+    // Separados por base (Base Marcos / Base Lemuel) e somados no total geral da Arco.
+    const nrm = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const cliNorm = clientes.filter((c) => !c.cancelled).map((c) => ({ c, keys: [nrm(c.name), nrm(c.calName || '')].filter((k) => k.length >= 3) }));
+    const baseOf = (txt: string): 'Marcos' | 'Lemuel' | null => {
+      const t = ` ${nrm(txt)} `;
+      const hit = cliNorm.find((x) => x.keys.some((k) => t.includes(` ${k} `) || t.includes(k)));
+      return hit ? hit.c.base : null;
+    };
     const ag = new Map<string, number>();
     let agTotal = 0;
     const agList: TeamDashboard['agendamentos']['lista'] = [];
+    const porBase = { Marcos: 0, Lemuel: 0, Outros: 0 };
+    const agSeen = new Set<string>();
     for (const sh of scheduled) {
-      if (sh.createdAt < first || sh.createdAt > last) continue;
+      if (!sh.day || sh.day < first || sh.day > last) continue;
       const who = (sh.scheduledBy ?? 'Sem registro').replace(/ \(admin\)$/, '');
-      agList.push({ id: sh.id, title: sh.title, client: sh.client || null, by: who, createdAt: sh.createdAt, day: sh.day, status: sh.status, url: sh.url });
+      const base = baseOf(sh.client || sh.title);
+      agList.push({ id: sh.id, title: sh.title, client: sh.client || null, by: who, createdAt: sh.createdAt, day: sh.day, status: sh.status, url: sh.url, base, fonte: 'app' });
       if (sh.status === 'Cancelada') continue;
+      agSeen.add(`${sh.day}|${nrm(sh.client || '')}`);
+      agSeen.add(`${sh.day}|${nrm(sh.title)}`);
       agTotal++;
+      porBase[base ?? 'Outros']++;
       ag.set(who, (ag.get(who) ?? 0) + 1);
       const person = TEAM.find((t) => t.toLowerCase() === who.toLowerCase());
       if (person) bump(person, 'agendou', { title: sh.title, client: sh.client || null, day: sh.day, url: sh.url });
+    }
+    // agenda: um evento de vários dias conta uma vez; o que já é captação do app no mesmo dia não conta de novo
+    const uids = new Set<string>();
+    for (const ev of agenda ?? []) {
+      const uid = ev.id.split('|')[0];
+      if (uids.has(uid)) continue;
+      uids.add(uid);
+      const t = nrm(ev.title);
+      const dup = [...agSeen].some((k) => {
+        const [d, n] = [k.slice(0, 10), k.slice(11)];
+        return d === ev.day && n.length >= 3 && (t.includes(n) || n.includes(t));
+      });
+      if (dup) continue;
+      const base = baseOf(`${ev.title} ${ev.note}`);
+      agTotal++;
+      porBase[base ?? 'Outros']++;
+      agList.push({ id: `agenda:${uid}`, title: ev.title, client: null, by: 'Agenda', createdAt: ev.day, day: ev.day, status: 'Agendada', url: '', base, fonte: 'agenda' });
     }
     team.agendou = agTotal;
     return {
@@ -690,7 +726,9 @@ export async function teamDashboard(first: string, today: string): Promise<TeamD
       agendamentos: {
         total: agTotal,
         porPessoa: [...ag.entries()].map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n),
-        lista: agList.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || (b.day ?? '').localeCompare(a.day ?? ''))
+        lista: agList.sort((a, b) => (a.day ?? '').localeCompare(b.day ?? '')),
+        porBase,
+        agenda: (agenda === null ? 'erro' : env.captacaoIcs ? 'ok' : 'sem-agenda') as 'ok' | 'erro' | 'sem-agenda'
       }
     };
   }).catch((e) => {

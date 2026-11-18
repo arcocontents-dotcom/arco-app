@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
 import { SignJWT } from 'jose';
 import { chromium } from 'playwright';
-import { ACCESS_DB, CLIENTS_DB, CONTENTS_DB, FINACC_DB, FIN_DB, LOG_DB, PLANNING_DB, ROUTINE_DB, SHOOTS_DB, blocks, seedBlocks, seedPage, startMock, store } from './mock-notion.mjs';
+import { ACCESS_DB, AVULSOS_DB, CLIENTS_DB, CONTENTS_DB, FINACC_DB, FIN_DB, LOG_DB, PLANNING_DB, ROUTINE_DB, SHOOTS_DB, blocks, seedBlocks, seedPage, startMock, store } from './mock-notion.mjs';
 
 const MOCK_PORT = 4010;
 const APP_PORT = 3100;
@@ -52,7 +52,16 @@ blocks.set(gBast.id.replace(/-/g, ''), [gb('child_page', { child_page: { title: 
 // página do Studio Alfa: "Combinado com a marca" (entregas do mês no Planejamento)
 const para = (t) => gb('paragraph', { paragraph: { rich_text: [{ type: 'text', plain_text: t, text: { content: t } }] } });
 const gComb = gb('toggle', { has_children: true, toggle: { rich_text: [{ type: 'text', plain_text: 'Combinado com a marca', text: { content: 'Combinado com a marca' } }] } });
-blocks.set(gClients[0].id.replace(/-/g, ''), [gComb]);
+// Bastidores → página "Marca" com a identidade visual
+const gBastCli = gb('toggle', { has_children: true, toggle: { rich_text: [{ type: 'text', plain_text: 'Bastidores', text: { content: 'Bastidores' } }] } });
+const gMarca = gb('child_page', { child_page: { title: 'Marca ' } });
+const gPal = gb('toggle', { has_children: true, toggle: { rich_text: [{ type: 'text', plain_text: 'Paleta de cores: ', text: { content: 'Paleta de cores: ' } }] } });
+const gFon = gb('toggle', { has_children: true, toggle: { rich_text: [{ type: 'text', plain_text: 'Fontes', text: { content: 'Fontes' } }] } });
+blocks.set(gClients[0].id.replace(/-/g, ''), [gComb, gBastCli]);
+blocks.set(gBastCli.id.replace(/-/g, ''), [gMarca]);
+blocks.set(gMarca.id.replace(/-/g, ''), [gPal, gFon]);
+blocks.set(gPal.id.replace(/-/g, ''), [para('Branco: #ffffff\nVerde Alfa: #1f7a4d')]);
+blocks.set(gFon.id.replace(/-/g, ''), [para('Fonte título: Prumo\nFonte secundária: Radiano'), para('Tamanho legenda: 8 com sombra')]);
 blocks.set(gComb.id.replace(/-/g, ''), [para('Reels mensal: 4'), para('Post mensal: 2'), para('Story mensal: 0')]);
 // produção da equipe (cliente fora do app, para não mexer nos testes do planejamento)
 const PRODA = seedPage(PLANNING_DB, { 'Título do assunto': title('Editar vídeo da obra'), Cliente: sel('Outro Cliente'), Status: stat('Realizando'), 'Data de postagem': { date: { start: '2026-11-19' } }, 'Tipo de demanda': sel('Reels 2'), 'Observação': sel('Falta edição'), 'Demanda atual está com': sel('Marcos') });
@@ -80,6 +89,7 @@ const app = spawn('npx', ['next', 'start', '-p', String(APP_PORT)], {
     NOTION_SHOOTS_DB: SHOOTS_DB,
     NOTION_GESTAO_PAGE: GESTAO,
     NOTION_ACCESS_DB: ACCESS_DB,
+    NOTION_AVULSOS_DB: AVULSOS_DB,
     NOTION_FIN_DB: FIN_DB,
     NOTION_FIN_ACCOUNTS_DB: FINACC_DB,
     NOTION_LOG_DB: LOG_DB,
@@ -394,37 +404,20 @@ try {
     await pd.goto(`${APP}/admin/gestao`);
     await pd.getByRole('heading', { name: 'Gestão' }).waitFor();
     await pd.getByRole('link', { name: /Studio Alfa/ }).first().waitFor();
-    await pd.getByRole('link', { name: 'Clientes', exact: true }).waitFor();
     await pd.getByText(/Todos os clientes/).waitFor();
     await pd.waitForTimeout(800);
     await shot(pd, '10-gestao');
   });
 
-  await step('Dashboard de produção conta por formato e guarda o histórico de ajuste', async () => {
+  await step('histórico de ajuste e dashboard fora da Gestão', async () => {
     assert.equal(page(REELS).properties['Teve ajuste'].checkbox, true);
     assert.equal(page(REELS).properties['Rodadas de ajuste'].number, 1);
     assert.equal(page(CARR).properties['Teve ajuste'].checkbox, false);
+    // o dashboard saiu da Gestão: o endereço antigo leva ao relatório da Produção
+    await pd.goto(`${APP}/admin/gestao`);
+    assert.equal(await pd.getByRole('link', { name: 'Dashboard', exact: true }).count(), 0, 'sem aba Dashboard na Gestão');
     await pd.goto(`${APP}/admin/gestao/dashboard?m=2026-11-01`);
-    await pd.getByRole('link', { name: 'Dashboard', exact: true }).waitFor();
-    await pd.getByRole('heading', { name: 'Novembro 2026', level: 2 }).waitFor();
-    const num = (label) => pd.locator('.dash-nums div', { has: pd.getByText(label, { exact: true }) }).locator('strong').innerText();
-    assert.equal(await num('Planejados'), '4');
-    await pd.getByRole('img', { name: '0% postado' }).waitFor();
-    assert.equal(await pd.getByText('Aprovados sem ajuste').count(), 0);
-    await pd.getByRole('navigation', { name: 'Categoria' }).getByRole('link', { name: 'Post', exact: true }).click();
-    await pd.waitForURL(/t=Post/, { waitUntil: 'commit' });
-    await pd.locator('.seg a[aria-current="page"]', { hasText: 'Post' }).waitFor();
-    assert.equal(await num('Planejados'), '2');
-    await pd.getByLabel('Cliente', { exact: true }).selectOption({ label: 'Beta Ltda' });
-    await pd.waitForURL(/c=[^&]+.*t=Post|t=Post.*c=[^&]+/, { waitUntil: 'commit' });
-    await pd.waitForFunction(() => document.querySelector('.dash-nums div:nth-child(2) strong')?.textContent === '1');
-    assert.equal(await num('Planejados'), '1');
-    const [dl] = await Promise.all([pd.waitForEvent('download'), pd.getByRole('button', { name: 'Baixar PDF' }).click()]);
-    assert.equal(dl.suggestedFilename(), 'producao-novembro-2026-beta-ltda-post.pdf');
-    if (SHOTS) await dl.saveAs(`${SHOTS}/10c-dashboard.pdf`);
-    await pd.goto(`${APP}/admin/gestao/dashboard?m=2026-11-01`);
-    await pd.waitForTimeout(800);
-    await shot(pd, '10b-dashboard');
+    await pd.waitForURL(/\/admin\/producao\/relatorio/);
   });
 
   await step('Planejamento: quadro do Calendário mensal, ideias, edição e envio para aprovação', async () => {
@@ -446,7 +439,7 @@ try {
     await nd.getByRole('listbox', { name: 'Observação' }).getByRole('option', { name: 'Falta copy' }).click();
     assert.equal([...store.values()].filter((x) => x.properties['Título do assunto']?.title?.[0]?.plain_text === 'Ideia nova do app').length, 0, 'sem título ainda não cria');
     await nd.getByLabel('Título do assunto').fill('Ideia nova do app');
-    await nd.getByLabel('Data de postagem').fill('2026-11-27');
+    await nd.getByLabel('Data agendada (postagem)').fill('2026-11-27');
     await shot(pd, '14b-nova-task');
     await pd.getByRole('dialog', { name: 'Ideia nova do app' }).getByLabel('Objetivo').waitFor();
     await pd.waitForTimeout(900);
@@ -478,7 +471,7 @@ try {
     const drawer = pd.getByRole('dialog', { name: 'Ideia de bastidores' });
     await drawer.waitFor();
     // propriedades iguais às do Notion, com as mesmas opções
-    for (const n of ['Cliente', 'Demanda atual está com', 'Status', 'Observação', 'Tipo de demanda', 'Data de postagem', 'Referente ao mês', 'Gravado quando', 'Editado quando', 'Prazo', 'Finalizado', 'Gravado/Briefing por', 'Editado/Design por', 'Postado por']) {
+    for (const n of ['Cliente', 'Demanda atual está com', 'Status', 'Observação', 'Tipo de demanda', 'Referente ao mês', 'Lançado em', 'Data agendada (postagem)', 'Gravado quando', 'Editado quando', 'Prazo', 'Finalizado', 'Roteiro/Copy por', 'Gravado/Briefing por', 'Editado/Design por', 'Postado por']) {
       await drawer.locator('.nprop dt', { hasText: n }).first().waitFor();
     }
     const pickTag = async (label, option) => {
@@ -486,7 +479,7 @@ try {
       await pd.getByRole('listbox', { name: label }).getByRole('option', { name: option }).click();
     };
     await pickTag('Tipo de demanda', 'Post 1');
-    await drawer.getByLabel('Data de postagem').fill('2026-11-25');
+    await drawer.getByLabel('Data agendada (postagem)').fill('2026-11-25');
     await pickTag('Status', 'Realizando');
     await pickTag('Gravado/Briefing por', 'Yan');
     await pd.getByRole('listbox', { name: 'Gravado/Briefing por' }).getByRole('option', { name: 'Cliente' }).click();
@@ -528,7 +521,9 @@ try {
     await pd.waitForTimeout(600);
     const task = [...store.values()].find((x) => x.properties['Título do assunto']?.title?.[0]?.plain_text === 'Bastidores da obra');
     assert.equal(task.properties['Status'].status.name, 'Realizando');
-    assert.equal(task.properties['Tipo de demanda'].select.name, 'Reels 2');
+    // cota do contrato (Reels 4/mês): a vaga mais antiga em aberto é a de outubro (início da contagem)
+    assert.equal(task.properties['Tipo de demanda'].select.name, 'Reels 1');
+    assert.equal(task.properties['Referente ao mês'].select.name, 'Outubro');
     await tabs.getByRole('button', { name: /^Todos/ }).click();
     // briefing que vai no PDF: lido e gravado dentro do card no Notion
     await col('Realizando').getByRole('button', { name: /Reels do lançamento/ }).click();
@@ -1090,6 +1085,50 @@ try {
     await shot(pd, '31-vinculos-aprovacao');
   });
 
+  await step('cota do contrato, base do cliente, identidade visual e clientes avulsos', async () => {
+    const txt = (x, n) => (x.properties[n]?.title ?? x.properties[n]?.rich_text ?? []).map((t) => t.plain_text).join('');
+    await pd.goto(`${APP}/admin/planejamento?c=${A}&m=2026-11-01`);
+    await pd.locator('.base-tag', { hasText: 'Base Lemuel' }).waitFor();
+    const mk = pd.getByRole('region', { name: 'Identidade visual de Studio Alfa' });
+    await mk.getByText('Prumo').waitFor();
+    await mk.getByText('#1f7a4d').waitFor();
+    await mk.getByText('Radiano').waitFor();
+    await mk.getByText('8 com sombra').waitFor();
+    // card novo de Reels: vaga mais antiga em aberto do contrato (tipo + mês de referência)
+    const slots = [];
+    for (const t of ['Reels da cota A', 'Reels da cota B']) {
+      await pd.getByRole('navigation', { name: 'Formato' }).getByRole('button', { name: /^Reels/ }).click();
+      await pd.getByRole('button', { name: 'Nova task em Ideia' }).click();
+      const nd = pd.getByRole('dialog', { name: 'Nova task' });
+      await nd.locator('.nprop', { hasText: 'Vaga do contrato' }).getByText(/Vídeo \d de 4 · (Outubro|Novembro)/).waitFor();
+      await nd.getByLabel('Título do assunto').fill(t);
+      await nd.getByLabel('Título do assunto').press('Enter');
+      const dlg = pd.getByRole('dialog', { name: t });
+      await dlg.getByLabel('Objetivo').waitFor();
+      await pd.waitForTimeout(700);
+      const card = [...store.values()].find((x) => txt(x, 'Título do assunto') === t);
+      slots.push(`${card.properties['Tipo de demanda'].select?.name}|${card.properties['Referente ao mês'].select?.name}`);
+      await dlg.getByRole('button', { name: 'Fechar' }).click();
+    }
+    assert.ok(slots.every((x) => /^Reels \d\|(Outubro|Novembro)$/.test(x)), `vagas: ${slots}`);
+    assert.notEqual(slots[0], slots[1], 'cada card ocupa uma vaga só');
+    await pd.locator('.plan-card', { hasText: 'Reels da cota A' }).locator('.plan-vaga').waitFor();
+    await shot(pd, '32-planejamento-cota-marca');
+    // clientes avulsos: cadastra, aparece na barra lateral e não duplica
+    await pd.goto(`${APP}/admin/avulsos`);
+    const f = pd.getByRole('region', { name: 'Cadastrar cliente avulso' });
+    await f.getByLabel('Nome').fill('Noiva Teste');
+    await f.getByLabel('Tipo').selectOption('Casamento');
+    await f.getByRole('button', { name: 'Cadastrar' }).click();
+    await pd.getByText('Cliente avulso cadastrado.').waitFor();
+    await pd.getByRole('navigation', { name: 'Clientes' }).getByRole('link', { name: /Noiva Teste/ }).waitFor();
+    await pd.goto(`${APP}/admin/avulsos`);
+    await f.getByLabel('Nome').fill('noiva teste');
+    await f.getByRole('button', { name: 'Cadastrar' }).click();
+    await pd.getByText(/já tinha cadastro/).waitFor();
+    await shot(pd, '33-avulso');
+  });
+
   await step('dashboard da produção: o que cada um captou, editou e postou', async () => {
     await pd.goto(`${APP}/admin/producao/relatorio`);
     await pd.getByText('Captações feitas').waitFor();
@@ -1099,6 +1138,10 @@ try {
     await ag.getByText(/Captações agendadas no mês · \d+ no total/).waitFor();
     await ag.locator('.ag-name', { hasText: 'Arco' }).waitFor();
     await ag.getByText(/Histórico de agendamentos da agência · \d+/).waitFor();
+    const bases = ag.getByRole('list', { name: 'Agendamentos por base' });
+    await bases.getByText('Base Marcos', { exact: true }).waitFor();
+    await bases.getByText('Base Lemuel', { exact: true }).waitFor();
+    await bases.getByText('Total da Arco').waitFor();
     const hist = ag.locator('.ag-table tbody tr');
     assert.ok((await hist.count()) >= 1, 'histórico unificado de agendamentos');
     await hist.first().getByRole('cell', { name: /Arco/ }).first().waitFor();
@@ -1135,6 +1178,8 @@ try {
     await p.waitForURL(/\/admin/);
     await p.goto(`${APP}/admin/producao`);
     assert.equal(await p.getByRole('link', { name: 'Financeiro' }).count(), 0, 'sem Financeiro no menu');
+    // menu da conta: quem está logado
+    await p.locator('.side-me', { hasText: 'lemuel@x.com' }).getByText('Lemuel', { exact: true }).waitFor();
     const col = p.locator('section.pcol[aria-label="Marcos"]');
     await col.getByRole('button', { name: 'Adicionar task para Marcos' }).click();
     const f = p.getByRole('dialog', { name: 'Novo lembrete ou tarefa' });
@@ -1152,8 +1197,10 @@ try {
     await e.getByRole('button', { name: 'Salvar' }).click();
     await p.waitForTimeout(800);
     assert.match(row.properties['Histórico'].rich_text.map((t) => t.plain_text).join(''), /Lemuel editou: urgência Média → Alta/);
-    const r = await p.goto(`${APP}/admin/financeiro`);
-    assert.equal(r.status(), 404, 'Financeiro fechado por link direto');
+    // sem permissão: sem aviso, volta para o início (a aba nem aparece)
+    await p.goto(`${APP}/admin/financeiro`);
+    assert.ok(!/\/admin\/financeiro/.test(p.url()), `Financeiro fechado por link direto: ${p.url()}`);
+    assert.equal(await p.getByText(/Financeiro/).count(), 0, 'sem aviso nem aba do Financeiro');
     await ctx.close();
   });
 

@@ -13,6 +13,14 @@ import { invalidate } from '@/lib/cache';
 // Vínculos entre Planejamento, Produção e Aprovação.
 // Regra: mesmo cliente e mesmo formato (reels com reels, post com post, story com story, foto com foto).
 
+/** "Vídeo 4 de 4 · Outubro": a vaga do contrato que o card ocupa (a mesma no Planejamento e na Aprovação). */
+function vagaTexto(kind: string | null, month: string | null, cota: { reels: number; post: number; story: number } | null): string | null {
+  const f = formatoDe(kind);
+  const n = Number(kind?.match(/(\d+)$/)?.[1] ?? 0);
+  if (!f || f === 'foto' || !n || !month || !cota?.[f]) return null;
+  return `${f === 'reels' ? 'Vídeo' : f === 'story' ? 'Story' : 'Post'} ${n} de ${cota[f]} · ${month}`;
+}
+
 type R<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 const fmtErr = (a: string | null, b: string | null) =>
   `Formatos diferentes: ${a ?? '—'} não liga com ${b ?? '—'}. Reels só com reels, post só com post.`;
@@ -104,7 +112,7 @@ export async function linkTaskAction(taskId: string, planId: string | null): Pro
 
 /** Na aprovação: o card ligado, as tasks dele e os cards que dá para escolher (mesmo cliente, mesmo formato). */
 export async function contentLinksAction(contentId: string): Promise<R<{
-  card: { id: string; title: string; kind: string | null } | null;
+  card: { id: string; title: string; kind: string | null; vaga: string | null } | null;
   tasks: CardTask[];
   cards: OpenCard[];
 }>> {
@@ -120,7 +128,7 @@ export async function contentLinksAction(contentId: string): Promise<R<{
     ]);
     return {
       ok: true,
-      card: item ? { id: item.id, title: item.title, kind: item.kind } : null,
+      card: item ? { id: item.id, title: item.title, kind: item.kind, vaga: vagaTexto(item.kind, item.month, client?.combinado ?? null) } : null,
       tasks,
       cards: cards.filter((x) => x.id !== item?.id)
     };
