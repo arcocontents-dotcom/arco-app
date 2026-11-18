@@ -540,7 +540,7 @@ export async function teamDashboard(first: string, today: string): Promise<TeamD
   const monthName = MONTHS[Number(first.slice(5, 7)) - 1];
   return memo(`prod:dash:${first}:${today}`, 30_000, async () => {
     const near = [{ property: P.date, date: { on_or_after: addDays(first, -75) } }, { property: P.date, date: { on_or_before: addDays(last, 75) } }];
-    const [edited, editedNoMonth, recordedDated, recordedNoDate, posted, shoots, scheduled, routines] = await Promise.all([
+    const [edited, editedNoMonth, recordedDated, recordedNoDate, posted, shoots, routines] = await Promise.all([
       queryAll(env.planningDb!, { filter: { and: [{ property: P.editMonth, select: { equals: monthName } }, ...near] } }),
       queryAll(env.planningDb!, {
         filter: {
@@ -565,10 +565,10 @@ export async function teamDashboard(first: string, today: string): Promise<TeamD
         }
       }),
       listShoots(first, last).catch(() => [] as Shoot[]),
-      // agendamentos do mês: pela data agendada (a captação marcada para este mês)
-      listShoots(first, last).catch(() => [] as Shoot[]),
       listRoutines().catch(() => [] as Routine[])
     ]);
+    // agendamentos do mês: pela data agendada (as mesmas captações do mês)
+    const scheduled = shoots;
     const [agenda, clientes] = await Promise.all([listAgenda(first, last).catch(() => null), listClients().catch(() => [])]);
     const people = TEAM.map((name) => ({ name, m: zeroM(), items: [] as DashItem[], posted: { reels: 0, post: 0, story: 0, outro: 0 }, dupla: 0 }));
     const postedT: PostedTotals = { total: 0, reels: 0, post: 0, story: 0, outro: 0, equipe: 0, cliente: 0, semQuem: 0 };
@@ -712,16 +712,18 @@ export async function teamDashboard(first: string, today: string): Promise<TeamD
       if (person) bump(person, 'agendou', { title: sh.title, client: sh.client || null, day: sh.day, url: sh.url });
     }
     // agenda: um evento de vários dias conta uma vez; o que já é captação do app no mesmo dia não conta de novo
+    const seenByDay = new Map<string, string[]>();
+    for (const k of agSeen) {
+      const d = k.slice(0, 10);
+      seenByDay.set(d, [...(seenByDay.get(d) ?? []), k.slice(11)]);
+    }
     const uids = new Set<string>();
     for (const ev of agenda ?? []) {
       const uid = ev.id.split('|')[0];
       if (uids.has(uid)) continue;
       uids.add(uid);
       const t = nrm(ev.title);
-      const dup = [...agSeen].some((k) => {
-        const [d, n] = [k.slice(0, 10), k.slice(11)];
-        return d === ev.day && n.length >= 3 && (t.includes(n) || n.includes(t));
-      });
+      const dup = (seenByDay.get(ev.day) ?? []).some((n) => n.length >= 3 && (t.includes(n) || n.includes(t)));
       if (dup) continue;
       const base = baseOf(`${ev.title} ${ev.note}`);
       agTotal++;

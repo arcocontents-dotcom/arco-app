@@ -165,19 +165,22 @@ export function dayLabel(day: string): string {
 }
 
 /** Converte um instante ISO para dia e hora locais no fuso informado. */
+// Criar um Intl.DateTimeFormat custa caro (CPU): um por fuso, reaproveitado em todas as datas.
+const FMT = new Map<string, Intl.DateTimeFormat>();
+function fmtFor(timeZone: string): Intl.DateTimeFormat {
+  let f = FMT.get(timeZone);
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    FMT.set(timeZone, f);
+  }
+  return f;
+}
+
 export function localParts(iso: string, timeZone: string): { day: string; time: string | null } {
   if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return { day: iso, time: null };
   const dt = new Date(iso);
   if (isNaN(dt.getTime())) return { day: iso.slice(0, 10), time: null };
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23'
-  });
+  const fmt = fmtFor(timeZone);
   const p = Object.fromEntries(fmt.formatToParts(dt).map((x) => [x.type, x.value]));
   return { day: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}` };
 }

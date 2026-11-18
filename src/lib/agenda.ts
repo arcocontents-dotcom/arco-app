@@ -42,11 +42,26 @@ function unfold(ics: string): Raw[] {
 
 const unescape = (s: string) => s.replace(/\\n/gi, '\n').replace(/\\([,;\\])/g, '$1').trim();
 
+// Um formatador por fuso, reaproveitado (criar Intl.DateTimeFormat por evento estourava a CPU do Worker).
+const TZF = new Map<string, Intl.DateTimeFormat | null>();
+function tzFmt(tz: string): Intl.DateTimeFormat | null {
+  if (!TZF.has(tz)) {
+    try {
+      TZF.set(tz, new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }));
+    } catch {
+      TZF.set(tz, null);
+    }
+  }
+  return TZF.get(tz) ?? null;
+}
+
 /** Horário de parede num fuso → instante UTC. */
 function wallToUtc(y: number, mo: number, d: number, h: number, mi: number, tz: string): Date {
   const guess = new Date(Date.UTC(y, mo - 1, d, h, mi));
   try {
-    const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(guess);
+    const f = tzFmt(tz);
+    if (!f) return guess;
+    const parts = f.formatToParts(guess);
     const g = (t: string) => Number(parts.find((x) => x.type === t)?.value);
     const asLocal = Date.UTC(g('year'), g('month') - 1, g('day'), g('hour') % 24, g('minute'));
     return new Date(guess.getTime() - (asLocal - guess.getTime()));
@@ -82,8 +97,12 @@ function occurrences(start: string, rrule: string | undefined, exdates: Set<stri
   const byday: number[] = r.BYDAY ? r.BYDAY.split(',').map((x: string) => WD.indexOf(x.slice(-2))).filter((x: number) => x >= 0) : [];
   const out: string[] = [];
   let n = 0;
+  if (until && until < from) return out;
   const startMon = addDays(start, -weekdayMon(start));
-  for (let d = start, guard = 0; guard < 3000; d = addDays(d, 1), guard++) {
+  // sem COUNT não precisa contar desde o começo: pula direto para perto do período pedido
+  // (antes andava dia a dia desde a criação do evento, até 3000 dias por evento repetido)
+  const begin = count === Infinity && start < from ? addDays(from, -1) : start;
+  for (let d = begin, guard = 0, max = count === Infinity ? 800 : 4000; guard < max; d = addDays(d, 1), guard++) {
     if (until && d > until) break;
     if (d > to || n >= count) break;
     let hit = false;
@@ -123,13 +142,30 @@ export function parseIcs(ics: string, from: string, to: string): AgendaEvent[] {
   }
   // ocorrências editadas (RECURRENCE-ID) substituem a original daquele dia
   for (const b of blocks) {
+    const r = b.find((x) => x.name === 'RECURRENCE-ID');
+    if (!r) continue;
     const uid = b.find((x) => x.name === 'UID')?.value ?? '';
-    const rid = when(b.find((x) => x.name === 'RECURRENCE-ID'));
+    const rid = when(r);
     if (rid) overridden.add(`${uid}|${rid.day}`);
   }
+  // corte rápido por data, antes de qualquer conversão de fuso (agendas antigas têm milhares de eventos)
+  const fromKey = addDays(from, -40).replace(/-/g, '');
+  const toKey = addDays(to, 1).replace(/-/g, '');
   for (const b of blocks) {
     const get = (n: string) => b.find((x) => x.name === n);
     if ((get('STATUS')?.value ?? '').toUpperCase() === 'CANCELLED') continue;
+    const rawStart = (get('DTSTART')?.value ?? '').slice(0, 8);
+    const rrule = get('RRULE')?.value;
+    if (rawStart > toKey) continue;
+    if (!rrule && rawStart && rawStart < fromKey) {
+      // evento único que começou bem antes: só entra se terminar dentro do período
+      const rawEnd = (get('DTEND')?.value ?? '').slice(0, 8);
+      if (!rawEnd || rawEnd < fromKey) continue;
+    }
+    if (rrule) {
+      const u = rrule.match(/UNTIL=(\d{8})/)?.[1];
+      if (u && u < fromKey) continue;
+    }
     const s = when(get('DTSTART'));
     if (!s) continue;
     const e = when(get('DTEND'));
@@ -165,7 +201,8 @@ export function listAgenda(from: string, to: string): Promise<AgendaEvent[] | nu
     const texts = await Promise.all(
       urls.map((u) => fetch(u, { headers: { accept: 'text/calendar' }, signal: AbortSignal.timeout(6000) }).then((r) => (r.ok ? r.text() : Promise.reject(new Error(`ics ${r.status}`)))))
     );
-    return texts.flatMap((t) => parseIcs(t, from, to));
+    // agenda gigante: lê só os primeiros 6 MB (proteção de memória do Worker)
+    return texts.flatMap((t) => parseIcs(t.length > 6_000_000 ? t.slice(0, 6_000_000) : t, from, to));
   }).catch((e) => {
     console.error('[agenda] ics', e);
     return null;
