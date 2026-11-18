@@ -8,7 +8,7 @@ import { normalizeEmail } from './domain';
 import { listTeamAdmins } from './acessos';
 
 export type Viewer =
-  | { email: string; role: 'admin'; name: string; master: boolean; finance: boolean; pause: boolean }
+  | { email: string; role: 'admin'; name: string; master: boolean; finance: boolean; pause: boolean; staff: boolean; person: string | null }
   | { email: string; role: 'client'; clients: { id: string; name: string; canApprove: boolean }[] };
 
 export function isAdminEmail(email: string): boolean {
@@ -18,10 +18,15 @@ export function isAdminEmail(email: string): boolean {
 /** Quem pode entrar e o que pode ver. Nunca confia no navegador: sempre consulta o Notion. */
 export async function resolveViewer(email: string): Promise<Viewer | null> {
   const e = normalizeEmail(email);
-  if (isAdminEmail(e)) return { email: e, role: 'admin', name: 'Arco (admin)', master: true, finance: true, pause: true };
+  if (isAdminEmail(e)) return { email: e, role: 'admin', name: 'Arco (admin)', master: true, finance: true, pause: true, staff: false, person: null };
   // Outros administradores: tabela "🔑 Acessos do app" no Notion
   const team = (await listTeamAdmins()).find((a) => a.email === e);
-  if (team) return { email: e, role: 'admin', name: team.name, master: false, finance: team.finance, pause: team.pause };
+  if (team) {
+    // nome na Produção (Rafael → Rafa)
+    const first = team.name.trim().split(/\s+/)[0] ?? '';
+    const person = (['Lemuel', 'Marcos', 'Yan', 'Rafa'] as const).find((t) => first.toLowerCase().startsWith(t.toLowerCase())) ?? null;
+    return { email: e, role: 'admin', name: team.name, master: false, finance: team.finance && !team.staff, pause: team.pause && !team.staff, staff: team.staff, person };
+  }
   const pick = (clients: ClientRecord[]) =>
     clients
       .filter((c) => !c.cancelled && (c.approvers.includes(e) || c.viewers.includes(e)))
@@ -45,7 +50,15 @@ export async function requireViewer(): Promise<Viewer> {
   return v;
 }
 
+/** Administrador (perfil "Equipe" não passa: volta para a Produção). */
 export async function requireAdmin(): Promise<Viewer & { role: 'admin' }> {
+  const v = await requireTeam();
+  if (v.staff) redirect('/admin/producao');
+  return v;
+}
+
+/** Administrador ou equipe (perfil "Equipe" só usa a Produção). */
+export async function requireTeam(): Promise<Viewer & { role: 'admin' }> {
   const v = await requireViewer();
   if (v.role !== 'admin') notFound();
   return v;

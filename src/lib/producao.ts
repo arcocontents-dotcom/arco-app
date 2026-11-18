@@ -409,6 +409,14 @@ export async function updateRoutine(id: string, x: RoutineInput): Promise<Routin
   return before;
 }
 
+/** Passa a tarefa para outra pessoa (só a coluna Pessoa). */
+export async function setRoutinePerson(id: string, person: Who): Promise<Routine> {
+  const before = toRoutine(await routinePage(id));
+  await notion().pages.update({ page_id: id, properties: { [R.person]: { select: { name: person } } } as never });
+  invalidate('prod:');
+  return before;
+}
+
 export async function getRoutine(id: string): Promise<Routine> {
   return toRoutine(await routinePage(id));
 }

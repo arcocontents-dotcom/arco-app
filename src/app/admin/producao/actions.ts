@@ -1,6 +1,6 @@
 'use server';
 
-import { requireAdmin } from '@/lib/access';
+import { requireAdmin, requireTeam } from '@/lib/access';
 import { parseDay, todayIn } from '@/lib/domain';
 import { env } from '@/lib/env';
 import { diffLine, logHistory } from '@/lib/historico';
@@ -9,7 +9,7 @@ import { linkTaskToPlanning, openCards, planCardKind, setTaskCard, type OpenCard
 import { mesmoFormato } from '@/lib/domain';
 import { ensureAvulso, listAvulsos } from '@/lib/avulsos';
 import {
-  FORMATS, ROUTINE_TYPES, TEAM, URGENCY_LABEL, WEEKDAYS, createRoutine, getRoutine, passContent, setContentDone, setRoutineDone, trashRoutine, updateRoutine,
+  FORMATS, ROUTINE_TYPES, TEAM, URGENCY_LABEL, WEEKDAYS, createRoutine, getRoutine, passContent, setContentDone, setRoutineDone, setRoutinePerson, trashRoutine, updateRoutine,
   type RoutineInput
 } from '@/lib/producao';
 
@@ -36,7 +36,7 @@ function clean(x: Partial<RoutineInput>): RoutineInput | string {
 const br = (d: string | null | undefined) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : '');
 
 export async function toggleRoutineAction(id: string, day: string, done: boolean): Promise<R> {
-  const v = await requireAdmin();
+  const v = await requireTeam();
   const d = parseDay(day);
   if (!d) return { ok: false, error: 'Dia inválido.' };
   try {
@@ -120,9 +120,13 @@ export async function trashRoutineAction(id: string): Promise<R> {
   }
 }
 
+/** A equipe (perfil Equipe) transfere só entre Yan e Rafa (e finaliza o que é seu). */
+const STAFF_TO = ['Yan', 'Rafa'];
+
 export async function passContentAction(id: string, to: string, editedBy?: string | null): Promise<R> {
-  const who = await requireAdmin();
+  const who = await requireTeam();
   if (!(TEAM as readonly string[]).includes(to) && to !== 'Finalizado') return { ok: false, error: 'Pessoa inválida.' };
+  if (who.staff && to !== 'Finalizado' && !STAFF_TO.includes(to)) return { ok: false, error: 'Você pode transferir só entre Yan e Rafa.' };
   const by = editedBy && (TEAM as readonly string[]).includes(editedBy) ? (editedBy as (typeof TEAM)[number]) : null;
   try {
     const b = await passContent(id, to as (typeof TEAM)[number] | 'Finalizado', by, todayIn(env.timeZone));
@@ -139,13 +143,32 @@ export async function passContentAction(id: string, to: string, editedBy?: strin
 }
 
 export async function toggleContentAction(id: string, done: boolean): Promise<R> {
-  const who = await requireAdmin();
+  const who = await requireTeam();
   try {
     await setContentDone(id, done);
     await logActivity({ area: 'Produção', who: who.name, action: `${who.name} ${done ? 'marcou como entregue' : 'desmarcou entregue'}`, itemId: id });
     return { ok: true };
   } catch (e) {
     console.error('[producao] entregue', e);
+    return { ok: false, error: 'Não foi possível salvar no Notion.' };
+  }
+}
+
+/** Transfere uma tarefa da Produção para outra pessoa (equipe: só entre Yan e Rafa). */
+export async function transferRoutineAction(id: string, to: string): Promise<R> {
+  const who = await requireTeam();
+  if (!(TEAM as readonly string[]).includes(to)) return { ok: false, error: 'Pessoa inválida.' };
+  if (who.staff && !STAFF_TO.includes(to)) return { ok: false, error: 'Você pode transferir só entre Yan e Rafa.' };
+  try {
+    const r = await getRoutine(id);
+    if (r.type !== 'Tarefa') return { ok: false, error: 'Só tarefas com data podem ser transferidas.' };
+    if (r.person === to) return { ok: true };
+    if (who.staff && !STAFF_TO.includes(r.person)) return { ok: false, error: 'Essa tarefa não é do Yan nem do Rafa.' };
+    await setRoutinePerson(id, to as (typeof TEAM)[number]);
+    await logHistory(id, `${who.name} transferiu de ${r.person} para ${to}`);
+    return { ok: true };
+  } catch (e) {
+    console.error('[producao] transferir', e);
     return { ok: false, error: 'Não foi possível salvar no Notion.' };
   }
 }

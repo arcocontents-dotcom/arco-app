@@ -24,6 +24,7 @@ const sel = (s) => ({ select: { name: s } });
 const A = seedPage(CLIENTS_DB, { Nome: title('Studio Alfa'), 'E-mails que aprovam': rt('a@x.com'), 'E-mails que só visualizam': rt('v@x.com'), Instagram: rt('studioalfa') });
 const B = seedPage(CLIENTS_DB, { Nome: title('Beta Ltda'), 'E-mails que aprovam': rt('b@x.com') });
 seedPage(ACCESS_DB, { Nome: title('Lemuel'), 'E-mail': { email: 'lemuel@x.com' }, Ativo: { checkbox: true }, Financeiro: { checkbox: false } });
+seedPage(ACCESS_DB, { Nome: title('Yan'), 'E-mail': { email: 'yan@x.com' }, Ativo: { checkbox: true }, Financeiro: { checkbox: false }, Perfil: { select: { name: 'Equipe' } } });
 const rel = (id) => ({ relation: [{ id }] });
 const date = (s) => ({ date: { start: s, time_zone: 'America/Cuiaba' } });
 const REELS = seedPage(CONTENTS_DB, { 'Título': title('Depoimento de cliente'), Cliente: rel(A), Data: date('2026-11-12T18:00:00'), Tipo: sel('Reels'), Status: sel('Aguardando'), 'Vídeo': { url: 'https://midia.test/v.mp4' }, Capa: { url: 'https://midia.test/capa.jpg' }, Legenda: rt('Legenda do reels #teste') });
@@ -71,6 +72,11 @@ blocks.set(gComb.id.replace(/-/g, ''), [para('Reels mensal: 4'), para('Post mens
 // produção da equipe (cliente fora do app, para não mexer nos testes do planejamento)
 const PRODA = seedPage(PLANNING_DB, { 'Título do assunto': title('Editar vídeo da obra'), Cliente: sel('Outro Cliente'), Status: stat('Realizando'), 'Data de postagem': { date: { start: '2026-11-19' } }, 'Tipo de demanda': sel('Reels 2'), 'Observação': sel('Falta edição'), 'Demanda atual está com': sel('Marcos') });
 seedPage(PLANNING_DB, { 'Título do assunto': title('Capa atrasada'), Cliente: sel('Outro Cliente'), Status: stat('Realizando'), 'Data de postagem': { date: { start: '2026-11-03' } }, 'Tipo de demanda': sel('Post 1'), 'Observação': sel('Falta design'), 'Demanda atual está com': sel('Lemuel') });
+// tarefas do Yan (perfil Equipe) para o guia e o teste de transferência
+const TODAY0 = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Cuiaba', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+const TOMORROW0 = new Date(Date.parse(TODAY0) + 86400000).toISOString().slice(0, 10);
+const YAN_T1 = seedPage(ROUTINE_DB, { Tarefa: title('Editar reels da Simone'), Pessoa: sel('Yan'), Tipo: sel('Tarefa'), Data: { date: { start: TODAY0 } }, 'Urgência': sel('Alta'), Cliente: { rich_text: [{ type: 'text', plain_text: 'Studio Alfa', text: { content: 'Studio Alfa' } }] }, Formato: sel('Editar reels'), Ativo: { checkbox: true } });
+seedPage(ROUTINE_DB, { Tarefa: title('Arte do carrossel Beta'), Pessoa: sel('Yan'), Tipo: sel('Tarefa'), Data: { date: { start: TOMORROW0 } }, 'Urgência': sel('Média'), Cliente: { rich_text: [{ type: 'text', plain_text: 'Beta Ltda', text: { content: 'Beta Ltda' } }] }, Formato: sel('Editar post'), Ativo: { checkbox: true } });
 const ROUT = seedPage(ROUTINE_DB, { Tarefa: title('Alimentar o Notion'), Pessoa: sel('Rafa'), Tipo: sel('Tarefa fixa'), Dias: { multi_select: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((name) => ({ name })) }, 'Urgência': sel('Média'), Ativo: { checkbox: true } });
 const PLANX = seedPage(PLANNING_DB, { 'Título do assunto': title('De outro cliente'), Cliente: sel('Outro Cliente'), Status: stat('Ideia') });
 const page = (id) => store.get(id.replace(/-/g, ''));
@@ -1238,6 +1244,65 @@ try {
     await p.goto(`${APP}/admin/financeiro`);
     assert.ok(!/\/admin\/financeiro/.test(p.url()), `Financeiro fechado por link direto: ${p.url()}`);
     assert.equal(await p.getByText(/Financeiro/).count(), 0, 'sem aviso nem aba do Financeiro');
+    await ctx.close();
+  });
+
+  await step('equipe (perfil Equipe): só a Produção, sem criar tarefa, transfere entre Yan e Rafa', async () => {
+    const el = async (loc, name) => SHOTS && loc.screenshot({ path: `${SHOTS}/${name}.png` });
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Cuiaba', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const tomorrow = new Date(Date.parse(today) + 86400000).toISOString().slice(0, 10);
+    const t1 = YAN_T1;
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 }, deviceScaleFactor: 2 });
+    const p = await ctx.newPage();
+    p.on('console', (m) => m.type() === 'error' && console.log('YANCONSOLE', m.text()));
+    p.on('pageerror', (e) => console.log('YANERR', e.message));
+    await p.goto(`${APP}/entrar`);
+    await shot(p, 'guia-01-entrar');
+    await el(p.locator('form').first(), 'guia-el-login');
+    await p.fill('#email', 'yan@x.com');
+    await p.click('button[type=submit]');
+    await p.getByText('Confira seu e-mail').waitFor();
+    await shot(p, 'guia-02-confira');
+    await new Promise((r) => setTimeout(r, 300));
+    const link = logs.match(/\[login\] link para yan@x\.com: (\S+)/)?.[1];
+    assert.ok(link, 'equipe recebe link');
+    await p.goto(link);
+    await shot(p, 'guia-03-confirmar');
+    await p.click('button:has-text("Entrar")');
+    await p.waitForURL(/\/admin\/producao/);
+    // só a Produção
+    const nav = p.getByRole('navigation', { name: 'Áreas' });
+    await nav.getByRole('link', { name: 'Produção' }).waitFor();
+    assert.equal(await nav.getByRole('link').count(), 1, 'só Produção no menu');
+    assert.equal(await p.getByRole('button', { name: /Adicionar task/ }).count(), 0, 'sem criar tarefa');
+    assert.equal(await p.getByRole('button', { name: 'Lembrete ou tarefa' }).count(), 0, 'sem lançar');
+    await p.locator('article.pt', { hasText: 'Editar reels da Simone' }).waitFor();
+    await shot(p, 'guia-04-quadro');
+    await el(p.locator('section.pcol[aria-label="Yan"]'), 'guia-el-coluna');
+    await el(p.locator('.prod-filters'), 'guia-el-filtros');
+    await el(p.locator('aside'), 'guia-el-menu');
+    // transfere do Yan para o Rafa
+    const card = p.locator('article.pt', { hasText: 'Editar reels da Simone' });
+    await card.getByRole('button', { name: 'Transferir' }).click();
+    const tx = card.getByRole('group', { name: /Transferir/ });
+    assert.equal(await tx.getByRole('button').count(), 1, 'só para o Rafa');
+    await shot(p, 'guia-05-transferir');
+    await el(card, 'guia-el-transferir');
+    await tx.getByRole('button', { name: /Rafa/ }).click();
+    await p.waitForTimeout(800);
+    assert.equal(page(t1).properties.Pessoa.select.name, 'Rafa');
+    assert.match(page(t1).properties['Histórico'].rich_text.map((t) => t.plain_text).join(''), /Yan transferiu de Yan para Rafa/);
+    // outras áreas fechadas: volta para a Produção
+    await p.goto(`${APP}/admin/planejamento`);
+    await p.waitForURL(/\/admin\/producao/);
+    await p.goto(`${APP}/admin/financeiro`);
+    await p.waitForURL(/\/admin\/producao/);
+    // celular
+    await p.setViewportSize({ width: 390, height: 844 });
+    await p.goto(`${APP}/admin/producao`);
+    await p.locator('article.pt').first().waitFor();
+    await p.waitForTimeout(500);
+    if (SHOTS) await p.screenshot({ path: `${SHOTS}/guia-06-celular.png` });
     await ctx.close();
   });
 

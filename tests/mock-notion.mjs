@@ -41,7 +41,7 @@ const TYPES = {
     'Captação': 'title', Data: 'date', Cliente: 'rich_text', 'Quem vai': 'multi_select', Tipo: 'select', Status: 'select', Local: 'rich_text', 'Observação': 'rich_text', Produtos: 'rich_text', 'Conteúdos': 'relation', 'Histórico': 'rich_text'
   },
   [LOG_DB]: { 'Ação': 'title', Quem: 'rich_text', 'Área': 'select', Item: 'rich_text', 'Item ID': 'rich_text', Quando: 'date', Detalhe: 'rich_text' },
-  [ACCESS_DB]: { Nome: 'title', 'E-mail': 'email', Ativo: 'checkbox', Financeiro: 'checkbox', 'Pausa clientes': 'checkbox' },
+  [ACCESS_DB]: { Nome: 'title', 'E-mail': 'email', Ativo: 'checkbox', Financeiro: 'checkbox', 'Pausa clientes': 'checkbox', Perfil: 'select' },
   [AVULSOS_DB]: { Nome: 'title', Tipo: 'select', Contato: 'rich_text', Instagram: 'rich_text', 'Observação': 'rich_text', Ativo: 'checkbox', 'Histórico': 'rich_text' },
   [FIN_DB]: {
     'Descrição': 'title', Tipo: 'select', Categoria: 'select', Grupo: 'rich_text', Valor: 'number', Vencimento: 'date', 'Pago em': 'date',

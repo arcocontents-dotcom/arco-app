@@ -3,7 +3,7 @@
 import { isShortLink, splitLinks } from '@/lib/embed';
 import { isOwnMediaUrl } from '@/lib/media';
 
-import { requireAdmin } from '@/lib/access';
+import { requireAdmin, requireTeam } from '@/lib/access';
 import { getClientFresh, contentsOfPlanning, createContent, updateClient } from '@/lib/notion';
 import { parseDay, todayIn } from '@/lib/domain';
 import { env } from '@/lib/env';
@@ -313,7 +313,7 @@ export async function createTaskFromCardAction(
 
 /** Histórico do card (Registro do app). */
 export async function planHistoryAction(planId: string): Promise<R<{ history: string }>> {
-  await requireAdmin();
+  await requireTeam();
   try {
     const { listActivity, asHistoryLines } = await import('@/lib/registro');
     return { ok: true, history: asHistoryLines(await listActivity({ itemId: planId, limit: 50 }), env.timeZone) };

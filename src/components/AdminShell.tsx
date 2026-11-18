@@ -27,6 +27,8 @@ export default async function AdminShell({
 }: { current?: string | null; children: ReactNode; section?: Section; client?: ClientRecord | null }) {
   const [all, a, viewer, avulsos] = await Promise.all([listClients().catch(() => []), alerts(), currentViewer().catch(() => null), listAvulsos().catch(() => [])]);
   const canFinance = viewer?.role === 'admin' && viewer.finance;
+  // perfil Equipe: só a Produção (sem clientes, busca e outras áreas)
+  const staff = viewer?.role === 'admin' && viewer.staff;
   const clients = all.filter((c) => !c.cancelled);
   const gone = all.filter((c) => c.cancelled);
   const active = (id: string | null) => clients.some((c) => sameId(c.id, id));
@@ -40,13 +42,18 @@ export default async function AdminShell({
     <div className="admin">
       <aside>
         <div className="side-top">
-          <Link href="/admin" aria-label="Calendário" className="side-logo"><img src="/logo-white.png" alt="Arco Contents" className="logo" /></Link>
-          <CommandPalette
+          <Link href={staff ? '/admin/producao' : '/admin'} aria-label={staff ? 'Produção' : 'Calendário'} className="side-logo"><img src="/logo-white.png" alt="Arco Contents" className="logo" /></Link>
+          {!staff && <CommandPalette
             clients={clients.map((c) => ({ id: c.id, name: c.name, logo: c.logoUrl }))}
             current={current ?? null}
-          />
+          />}
         </div>
 
+        {staff ? (
+          <nav className="side-nav" aria-label="Áreas">
+            <Link href="/admin/producao" aria-current="page"><Icon name="users" /> <span>Produção</span></Link>
+          </nav>
+        ) : (<>
         <nav className="side-nav" aria-label="Áreas">
           <Link href={current ? `/admin/planejamento?c=${current}` : '/admin/planejamento'} aria-current={section === 'planejamento' ? 'page' : undefined}>
             <Icon name="bulb" /> <span>Planejamento</span>
@@ -129,6 +136,7 @@ export default async function AdminShell({
             )}
           </nav>
         </div>
+        </>)}
 
         <div className="side-fill" />
         {viewer?.role === 'admin' && (

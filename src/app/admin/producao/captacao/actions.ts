@@ -1,6 +1,6 @@
 'use server';
 
-import { requireAdmin } from '@/lib/access';
+import { requireAdmin, requireTeam } from '@/lib/access';
 import { diffLine, logHistory } from '@/lib/historico';
 import { produtosToText } from '@/lib/produtos';
 import { parseDay } from '@/lib/domain';
@@ -69,7 +69,7 @@ export async function saveShootAction(id: string | null, x: Partial<ShootInput>)
 }
 
 export async function shootStatusAction(id: string, status: string): Promise<R> {
-  const who = await requireAdmin();
+  const who = await requireTeam();
   if (!(SHOOT_STATUS as readonly string[]).includes(status)) return { ok: false, error: 'Status inválido.' };
   try {
     await setShootStatus(id, status as ShootInput['status']);

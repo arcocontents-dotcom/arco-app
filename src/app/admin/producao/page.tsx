@@ -1,4 +1,4 @@
-import { requireAdmin } from '@/lib/access';
+import { requireTeam } from '@/lib/access';
 import { env } from '@/lib/env';
 import { listClients } from '@/lib/notion';
 import { MONTHS, addDays, addMonths, monthGrid, parseDay, startOfWeek, todayIn } from '@/lib/domain';
@@ -11,7 +11,8 @@ import ProdTabs from '@/components/ProdTabs';
 export const dynamic = 'force-dynamic';
 
 export default async function Producao({ searchParams }: { searchParams: Promise<{ w?: string; r?: string }> }) {
-  await requireAdmin();
+  const viewer = await requireTeam();
+  const staff = viewer.staff ? (viewer.person ?? viewer.name) : null;
   const sp = await searchParams;
   const today = todayIn(env.timeZone);
   const mode = sp.r === 'mes' ? 'mes' : 'semana';
@@ -32,7 +33,7 @@ export default async function Producao({ searchParams }: { searchParams: Promise
           <h1 className="display rise" style={{ fontSize: 'clamp(40px, 6vw, 80px)', ['--d' as string]: '60ms' }}>Produção</h1>
         </div>
       </div>
-      <ProdTabs active="quadro" />
+      {!staff && <ProdTabs active="quadro" />}
       {week.error && <p className="error">{week.error}</p>}
       {!routineConfigured() && <p className="hint">Falta a variável NOTION_ROUTINE_DB para as tarefas fixas e lembretes.</p>}
       <ProducaoBoard
@@ -49,8 +50,9 @@ export default async function Producao({ searchParams }: { searchParams: Promise
         prevHref={mode === 'mes' ? q(addMonths(first, -1)) : q(addDays(start, -7))}
         nextHref={mode === 'mes' ? q(addMonths(first, 1)) : q(addDays(start, 7))}
         todayHref={mode === 'mes' ? '/admin/producao?r=mes' : '/admin/producao'}
-        tvUrl={`/tv/producao?k=${tvKey()}`}
-        teamLinks={TEAM.map((p) => ({ person: p, url: `/equipe/${p.toLowerCase()}?k=${teamKey(p)}` }))}
+        tvUrl={staff ? undefined : `/tv/producao?k=${tvKey()}`}
+        teamLinks={staff ? undefined : TEAM.map((p) => ({ person: p, url: `/equipe/${p.toLowerCase()}?k=${teamKey(p)}` }))}
+        staff={staff}
       />
     </AdminShell>
   );

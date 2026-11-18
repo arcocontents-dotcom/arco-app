@@ -10,7 +10,7 @@ import Icon from './Icon';
 import { FORMATO_LABEL, addDays, dayNum, formatoDe, weekdayMon } from '@/lib/domain';
 import { shootStatusAction } from '@/app/admin/producao/captacao/actions';
 import { teamToggleAction } from '@/app/equipe/actions';
-import { avulsoNamesAction, openCardsAction, passContentAction, saveRoutineAction, toggleContentAction, toggleRoutineAction, trashRoutineAction } from '@/app/admin/producao/actions';
+import { avulsoNamesAction, openCardsAction, passContentAction, saveRoutineAction, toggleContentAction, toggleRoutineAction, transferRoutineAction, trashRoutineAction } from '@/app/admin/producao/actions';
 
 // Tipos copiados de lib/producao (não dá para importar lib server-only aqui).
 type Person = 'Lemuel' | 'Marcos' | 'Yan' | 'Rafa';
@@ -94,7 +94,7 @@ const sortTasks = (a: Task, b: Task) =>
   a.title.localeCompare(b.title);
 
 export default function ProducaoBoard({
-  start, end: endProp, today, tasks: initial, routines, clients, tv = false, member, teamLinks, prevHref, nextHref, todayHref, tvUrl, mode = 'semana', monthLabel, weekHref, monthHref
+  start, end: endProp, today, tasks: initial, routines, clients, tv = false, member, teamLinks, prevHref, nextHref, todayHref, tvUrl, mode = 'semana', monthLabel, weekHref, monthHref, staff
 }: {
   start: string;
   today: string;
@@ -108,6 +108,8 @@ export default function ProducaoBoard({
   tvUrl?: string;
   /** Link pessoal da equipe: só as tarefas dessa pessoa, pode marcar como feito. */
   member?: { person: Person; k: string };
+  /** Perfil Equipe (nome na Produção): acompanha, marca e transfere entre Yan e Rafa; não cria nem edita. */
+  staff?: string | null;
   teamLinks?: { person: Person; url: string }[];
   end?: string;
   mode?: 'semana' | 'mes';
@@ -117,9 +119,14 @@ export default function ProducaoBoard({
 }) {
   const router = useRouter();
   const admin = !tv && !member;
+  // administrador de verdade (a equipe só acompanha, marca e transfere)
+  const manage = admin && !staff;
+  const STAFF_TEAM: Person[] = ['Yan', 'Rafa'];
+  const canTransfer = (t: Task) => !staff || STAFF_TEAM.includes(t.person as Person);
+  const txTargets = (t: Task) => (staff ? STAFF_TEAM : [...TEAM]).filter((p) => p !== t.person);
   const [tasks, setTasks] = useState(initial);
   const [view, setView] = useState<'pessoas' | 'semana'>('pessoas');
-  const [who, setWho] = useState<Person | 'todos'>(member?.person ?? 'todos');
+  const [who, setWho] = useState<Person | 'todos'>(member?.person ?? ((TEAM as readonly string[]).includes(staff ?? '') ? (staff as Person) : 'todos'));
   const [client, setClient] = useState('');
   const [when, setWhen] = useState<'hoje' | 'amanha' | 'semana'>('semana');
   const [transfer, setTransfer] = useState<string | null>(null);
@@ -183,6 +190,20 @@ export default function ProducaoBoard({
     });
   }
 
+  /** Tarefa da Produção (não é card do Calendário): só troca a pessoa. */
+  function passRoutine(t: Task, to: Person) {
+    const before = tasks;
+    setTransfer(null);
+    setTasks((l) => l.map((x) => (x.key === t.key ? { ...x, person: to } : x)));
+    start2(async () => {
+      const r = await transferRoutineAction(t.id, to);
+      if (!r.ok) {
+        setErr(r.error);
+        setTasks(before);
+      } else router.refresh();
+    });
+  }
+
   function pass(t: Task, to: string, edited: boolean) {
     const before = tasks;
     setTransfer(null);
@@ -229,7 +250,7 @@ export default function ProducaoBoard({
             {t.client && <span className="pt-client">{t.client}</span>}
             {showWho && <span className={`pt-who w-${t.person.toLowerCase()}`}>{t.person}</span>}
           </div>
-          {t.source === 'rotina' && admin ? (
+          {t.source === 'rotina' && manage ? (
             <button type="button" className="pt-title as-link" onClick={() => { const r = routines.find((x) => x.id === t.id); if (r) setEditing(r); }}>
               {t.title}
             </button>
@@ -246,18 +267,27 @@ export default function ProducaoBoard({
               {t.launched && t.type !== 'Tarefa fixa' && <span className="pt-day">Lançada {t.launched.slice(8, 10)}/{t.launched.slice(5, 7)}{t.by ? ` por ${t.by}` : ''}</span>}
             </div>
           )}
-          {admin && t.source === 'rotina' && t.planId && (
+          {manage && t.source === 'rotina' && t.planId && (
             <div className="pt-actions">
               <span className="pt-linked"><Icon name="bulb" size={11} />No planejamento</span>
               {t.clientId && <Link className="pt-open" href={`/admin/planejamento?c=${t.clientId}&open=${t.planId}`}>Abrir</Link>}
             </div>
           )}
-          {admin && t.source === 'conteudo' && !t.done && (
+          {staff && t.source === 'rotina' && t.type === 'Tarefa' && !t.done && canTransfer(t) && (
             <div className="pt-actions">
-              <button type="button" className="pt-transfer" aria-expanded={transfer === t.key} onClick={() => { setTransfer(transfer === t.key ? null : t.key); setEdited(true); }}>
+              <button type="button" className="pt-transfer" aria-expanded={transfer === t.key} onClick={() => setTransfer(transfer === t.key ? null : t.key)}>
                 <Icon name="send" size={12} />Transferir
               </button>
-              {t.clientId && (
+            </div>
+          )}
+          {admin && t.source === 'conteudo' && !t.done && (
+            <div className="pt-actions">
+              {canTransfer(t) && (
+                <button type="button" className="pt-transfer" aria-expanded={transfer === t.key} onClick={() => { setTransfer(transfer === t.key ? null : t.key); setEdited(true); }}>
+                  <Icon name="send" size={12} />Transferir
+                </button>
+              )}
+              {manage && t.clientId && (
                 <Link className="pt-open" href={`/admin/planejamento?c=${t.clientId}&m=${(t.day ?? today).slice(0, 7)}-01&open=${t.id}`}>Abrir</Link>
               )}
               <button type="button" className="pt-open pt-hist-btn" aria-expanded={hist === t.key} onClick={() => setHist(hist === t.key ? null : t.key)}>
@@ -271,11 +301,11 @@ export default function ProducaoBoard({
             </button>
           )}
           {admin && hist === t.key && <div className="pt-hist"><CardHistory planId={t.id} empty="Ainda não há registros desta tarefa." /></div>}
-          {admin && transfer === t.key && (
+          {admin && transfer === t.key && t.source === 'conteudo' && (
             <div className="pt-tx" role="group" aria-label={`Transferir ${t.title}`}>
               <span className="pt-tx-l">Para quem vai agora?</span>
               <div className="pt-tx-row">
-                {TEAM.filter((p) => p !== t.person).map((p) => (
+                {txTargets(t).map((p) => (
                   <button key={p} type="button" onClick={() => pass(t, p, edited)}><span className="pav sm">{p.charAt(0)}</span>{p}</button>
                 ))}
                 <button type="button" className="fin" onClick={() => pass(t, 'Finalizado', edited)}><Icon name="check" size={12} />Finalizado</button>
@@ -284,6 +314,16 @@ export default function ProducaoBoard({
                 <input type="checkbox" checked={edited} onChange={(e) => setEdited(e.target.checked)} />
                 <span>{t.person} editou (conta no relatório)</span>
               </label>
+            </div>
+          )}
+          {admin && transfer === t.key && t.source === 'rotina' && (
+            <div className="pt-tx" role="group" aria-label={`Transferir ${t.title}`}>
+              <span className="pt-tx-l">Para quem vai agora?</span>
+              <div className="pt-tx-row">
+                {txTargets(t).map((p) => (
+                  <button key={p} type="button" onClick={() => passRoutine(t, p)}><span className="pav sm">{p.charAt(0)}</span>{p}</button>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -313,7 +353,7 @@ export default function ProducaoBoard({
           <h3>{p}</h3>
           <b title="Para fazer">{pending(mine)}</b>
         </header>
-        {admin && (
+        {manage && (
           <button type="button" className="pcol-add" onClick={() => { setNewWho(p); setEditing('novo'); }} aria-label={`Adicionar task para ${p}`}>
             <Icon name="plus" size={14} />Adicionar task
           </button>
@@ -407,7 +447,7 @@ export default function ProducaoBoard({
             <div className="tv-clock" aria-label="Hora">{clock}</div>
           </div>
         )}
-        {admin && (
+        {manage && (
           <div className="prod-tools">
             <button type="button" className="btn small" onClick={() => { setNewWho(null); setEditing('novo'); }}><Icon name="plus" size={15} />Lembrete ou tarefa</button>
             {tvUrl && <a className="btn outline small" href={tvUrl} target="_blank" rel="noreferrer"><Icon name="external" size={15} />Abrir na TV</a>}
@@ -502,7 +542,7 @@ export default function ProducaoBoard({
         </>
       )}
 
-      {editing && admin && (
+      {editing && manage && (
         <RoutineForm
           row={editing === 'novo' ? null : editing}
           clients={clients.map((c) => c.name)}
